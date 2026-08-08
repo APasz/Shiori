@@ -1,0 +1,74 @@
+{
+	"light": {
+		"surface": {
+			"page": "#fafafa",
+			"raised": "#ffffff",
+			"subtle": "#f0f0ed"
+		},
+		"text": {
+			"primary": "#1a1a19",
+			"secondary": "#4a4a46",
+			"muted": "#666660",
+			"on-accent": "#ffffff"
+		},
+		"border": {
+			"default": "#e1e1dc",
+			"strong": "#31312f",
+			"subtle": "#ecece8"
+		},
+		"itemType": {
+			"transport": "#9a5b5b",
+			"accommodation": "#55755d",
+			"activity": "#58789f"
+		},
+		"state": {
+			"success": "#16803c",
+			"warning": "#c66a00",
+			"error": "#d62929",
+			"focus": "#155eef",
+			"selection": "#1769d8"
+		},
+		"overlay": {
+			"backdrop": "#000000"
+		}
+	},
+	"dark": {
+		"surface": {
+			"page": "#000000",
+			"raised": "#000000",
+			"subtle": "#101010"
+		},
+		"text": {
+			"primary": "#f5f5f0",
+			"secondary": "#d5d5cf",
+			"muted": "#b8b8b2",
+			"on-accent": "#000000"
+		},
+		"border": {
+			"default": "#4a4a46",
+			"strong": "#7a7a73",
+			"subtle": "#3a3a36"
+		},
+		"itemType": {
+			"transport": "#bf7d7d",
+			"accommodation": "#7ca887",
+			"activity": "#7fa8d8"
+		},
+		"state": {
+			"success": "#54d36b",
+			"warning": "#ffc233",
+			"error": "#ff7166",
+			"focus": "#77a9ff",
+			"selection": "#5c9dff"
+		},
+		"overlay": {
+			"backdrop": "#000000"
+		}
+	},
+	"reservationStatus": {
+		"confirmed": "success",
+		"pending": "warning",
+		"waitlisted": "warning",
+		"cancelled": "error"
+	}
+}

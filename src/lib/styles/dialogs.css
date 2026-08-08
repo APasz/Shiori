@@ -1,0 +1,39 @@
+dialog,
+[data-dialog-scroll-area] {
+	scrollbar-color: var(--color-border-strong) transparent;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+}
+
+dialog::-webkit-scrollbar,
+[data-dialog-scroll-area]::-webkit-scrollbar {
+	width: 0.5rem;
+}
+
+dialog::-webkit-scrollbar-track,
+[data-dialog-scroll-area]::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+dialog::-webkit-scrollbar-thumb,
+[data-dialog-scroll-area]::-webkit-scrollbar-thumb {
+	background-clip: content-box;
+	background-color: var(--color-border-strong);
+	border: 0.125rem solid transparent;
+	min-height: 2rem;
+}
+
+dialog::-webkit-scrollbar-thumb:hover,
+[data-dialog-scroll-area]::-webkit-scrollbar-thumb:hover {
+	background-color: var(--color-text-muted);
+}
+
+dialog.is-draggable [data-dialog-drag-handle] {
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+}
+
+dialog.is-draggable.is-dragging [data-dialog-drag-handle] {
+	cursor: grabbing;
+}

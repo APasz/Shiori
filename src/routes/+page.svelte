@@ -1,0 +1,821 @@
+<script lang="ts">
+	import { goto, invalidateAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import ItineraryItemDetails from '$lib/components/ItineraryItemDetails.svelte';
+	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
+	import ItineraryItemEditor from '$lib/components/ItineraryItemEditor.svelte';
+	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
+	import TripEditor from '$lib/components/TripEditor.svelte';
+	import TripSwitcher from '$lib/components/TripSwitcher.svelte';
+	import {
+		apiErrorSchema,
+		editSaveResponseSchema,
+		type ItineraryItemImport
+	} from '$lib/editing/contracts';
+	import { addCalendarDays, calendarMonthForDate } from '$lib/itinerary/calendar';
+	import { createEmptyItineraryItem, createItineraryItemFromImport } from '$lib/itinerary/draft';
+	import {
+		defaultItemTimestamp,
+		formatLocalDay,
+		getItineraryDateRange,
+		getLocalItineraryDays
+	} from '$lib/itinerary/presentation';
+	import type { ItineraryItem, ItineraryItemType } from '$lib/itinerary/schema';
+	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
+	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
+	import type {
+		AuthenticatedUser,
+		DetailedTripView,
+		TripSwitchOption,
+		TripView
+	} from '$lib/server/store';
+	import { itemTypeAccentStyle } from '$lib/theme/palette';
+	import { onMount } from 'svelte';
+
+	type TripPageData = {
+		currentUser: AuthenticatedUser | null;
+		setupRequired: boolean;
+		trip: TripView;
+		trips: TripSwitchOption[];
+	};
+
+	let { data }: { data: TripPageData } = $props();
+	let selectedItemId = $state<string | null>(null);
+	type EditingItem = {
+		item: ItineraryItem;
+		mode: 'create' | 'edit';
+		suggestedStartDate?: string;
+		timingNeedsConfirmation: boolean;
+	};
+
+	let editingItem = $state<EditingItem | null>(null);
+	let creatingItem = $state(false);
+	let itemCreationLocalDay = $state<string | undefined>(undefined);
+	let editingTripMode = $state<'create' | 'edit' | null>(null);
+	let switchingTrips = $state(false);
+	let tripOverflowOpen = $state(false);
+	let mutationError = $state<string | null>(null);
+	let pendingMutationItemId = $state<string | null>(null);
+	let localScheduleReady = $state(false);
+	let dayDisclosureReady = $state(false);
+	let openDayDates = $state<string[]>([]);
+	let appliedViewerRevision = $state(0);
+
+	const itemTypeLabels: Record<ItineraryItem['type'], string> = {
+		transport: 'Transport',
+		activity: 'Activity',
+		accommodation: 'Accommodation'
+	};
+
+	const detailedTrip = $derived(getDetailedTrip(data.trip));
+	const itinerary = $derived(data.trip.itinerary);
+	const localDays = $derived(
+		localScheduleReady ? getLocalItineraryDays(itinerary.items, viewerContext.timeZone) : []
+	);
+	const dateRange = $derived(
+		localScheduleReady ? getItineraryDateRange(itinerary.items, viewerContext.timeZone) : null
+	);
+
+	function getDetailedTrip(trip: TripView): DetailedTripView | null {
+		return trip.access === 'visitor' ? null : trip;
+	}
+
+	function dayDisclosureStorageKey(): string {
+		return `shiori:open-day-cards:${data.trip.id}`;
+	}
+
+	function beginItemCreation(localDay?: string): void {
+		mutationError = null;
+		itemCreationLocalDay = localDay;
+		creatingItem = true;
+	}
+
+	function beginCreatingItem(type: ItineraryItemType): void {
+		mutationError = null;
+		editingItem = {
+			item: createEmptyItineraryItem(
+				type,
+				crypto.randomUUID(),
+				defaultItemTimestamp(
+					itemCreationLocalDay,
+					viewerContext.timeZone,
+					viewerContext.currentTimestamp
+				)
+			),
+			mode: 'create',
+			timingNeedsConfirmation: false
+		};
+	}
+
+	function beginImportedItem(itemImport: ItineraryItemImport): void {
+		const suggestedStartDate = itemImport.suggestedStartDate ?? itemCreationLocalDay;
+		mutationError = null;
+		editingItem = {
+			item: createItineraryItemFromImport(
+				itemImport,
+				crypto.randomUUID(),
+				defaultItemTimestamp(
+					suggestedStartDate,
+					viewerContext.timeZone,
+					viewerContext.currentTimestamp
+				)
+			),
+			mode: 'create',
+			...(suggestedStartDate ? { suggestedStartDate } : {}),
+			timingNeedsConfirmation: true
+		};
+	}
+
+	function defaultOpenDayDates(): string[] {
+		const currentDate = formatTimestampInTimeZone(
+			viewerContext.currentTimestamp,
+			viewerContext.timeZone
+		)?.date;
+		const followingDate = currentDate ? addCalendarDays(currentDate, 1) : null;
+		return localDays
+			.filter((day) => day.date === currentDate || day.date === followingDate)
+			.map((day) => day.date);
+	}
+
+	function restoredOpenDayDates(): string[] | null {
+		try {
+			const stored = sessionStorage.getItem(dayDisclosureStorageKey());
+			if (stored === null) {
+				return null;
+			}
+			const parsed: unknown = JSON.parse(stored);
+			return Array.isArray(parsed) &&
+				parsed.every((date) => typeof date === 'string' && calendarMonthForDate(date) !== null)
+				? [...new Set(parsed)]
+				: null;
+		} catch {
+			return null;
+		}
+	}
+
+	function saveOpenDayDates(): void {
+		try {
+			sessionStorage.setItem(dayDisclosureStorageKey(), JSON.stringify(openDayDates));
+		} catch {
+			// Day-card state is an optional browser convenience.
+		}
+	}
+
+	function isDayOpen(date: string): boolean {
+		return openDayDates.includes(date);
+	}
+
+	function changeDayDisclosure(date: string, event: Event): void {
+		if (!dayDisclosureReady) {
+			return;
+		}
+		const target = event.currentTarget;
+		if (!(target instanceof HTMLDetailsElement)) {
+			return;
+		}
+		openDayDates = target.open
+			? [...new Set([...openDayDates, date])]
+			: openDayDates.filter((openDate) => openDate !== date);
+		saveOpenDayDates();
+	}
+
+	function toggleAllDayDisclosures(): void {
+		const dayDates = localDays.map((day) => day.date);
+		const allDaysAreOpen = dayDates.every((date) => isDayOpen(date));
+		openDayDates = allDaysAreOpen ? [] : dayDates;
+		saveOpenDayDates();
+	}
+
+	$effect(() => {
+		const revision = viewerContext.revision;
+		if (!dayDisclosureReady || revision === 0 || revision === appliedViewerRevision) {
+			return;
+		}
+		openDayDates = defaultOpenDayDates();
+		appliedViewerRevision = revision;
+		saveOpenDayDates();
+	});
+
+	function beginEditingItem(item: ItineraryItem): void {
+		mutationError = null;
+		editingItem = { item, mode: 'edit', timingNeedsConfirmation: false };
+	}
+
+	function beginEditingTrip(mode: 'create' | 'edit'): void {
+		tripOverflowOpen = false;
+		editingTripMode = mode;
+	}
+
+	function beginSwitchingTrips(): void {
+		tripOverflowOpen = false;
+		switchingTrips = true;
+	}
+
+	function itemsEndpoint(): string | null {
+		return detailedTrip ? `/api/trips/${encodeURIComponent(detailedTrip.id)}/items` : null;
+	}
+
+	function mutationMessage(responseData: unknown, fallback: string): string {
+		const parsed = apiErrorSchema.safeParse(responseData);
+		return parsed.success ? parsed.data.message : fallback;
+	}
+
+	async function deleteItem(item: ItineraryItem): Promise<void> {
+		const endpoint = itemsEndpoint();
+		if (!endpoint || !detailedTrip || !window.confirm(`Delete “${item.title}”?`)) {
+			return;
+		}
+
+		pendingMutationItemId = item.id;
+		mutationError = null;
+		try {
+			const response = await fetch(endpoint, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action: 'delete', itemId: item.id, revision: detailedTrip.revision })
+			});
+			const responseData: unknown = await response.json().catch(() => null);
+			if (!response.ok || !editSaveResponseSchema.safeParse(responseData).success) {
+				mutationError = mutationMessage(responseData, 'The itinerary item could not be deleted.');
+				return;
+			}
+			if (selectedItemId === item.id) {
+				selectedItemId = null;
+			}
+			await invalidateAll();
+		} catch {
+			mutationError = 'The itinerary item could not be deleted because the server is unavailable.';
+		} finally {
+			pendingMutationItemId = null;
+		}
+	}
+
+	async function finishEditing(): Promise<void> {
+		editingItem = null;
+		await invalidateAll();
+	}
+
+	async function finishTripEditing(): Promise<void> {
+		editingTripMode = null;
+		await invalidateAll();
+	}
+
+	async function visitCreatedTrip(slug: string): Promise<void> {
+		editingTripMode = null;
+		await goto(resolve('/trips/[slug]', { slug }));
+	}
+
+	onMount(() => {
+		appliedViewerRevision = viewerContext.revision;
+		localScheduleReady = true;
+		queueMicrotask(() => {
+			openDayDates = restoredOpenDayDates() ?? defaultOpenDayDates();
+			dayDisclosureReady = true;
+		});
+	});
+</script>
+
+<svelte:head>
+	<title>Shiori · Travel itineraries</title>
+	<meta
+		name="description"
+		content="A server-authoritative travel itinerary, validated by Shiori."
+	/>
+</svelte:head>
+
+<main>
+	<header>
+		<nav aria-label="Account">
+			{#if data.currentUser}
+				<span>Signed as {data.currentUser.username}</span>
+				{#if data.trip.access === 'sudo'}
+					<a href={resolve(`/settings/access?trip=${encodeURIComponent(data.trip.slug)}`)}>Access</a
+					>
+				{/if}
+				<form action="/logout" method="POST"><button type="submit">Sign out</button></form>
+			{:else if data.setupRequired}
+				<a href={resolve('/setup')}>Set up Shiori</a>
+			{:else}
+				<a href={resolve('/login')}>Sign in</a>
+			{/if}
+			{#if detailedTrip?.canEdit}
+				<details bind:open={tripOverflowOpen} class="trip-overflow">
+					<summary aria-label="Trip options" title="Trip options">•••</summary>
+					<div class="trip-overflow-menu">
+						<button onclick={beginSwitchingTrips} type="button">Switch trip</button>
+						<button onclick={() => beginEditingTrip('create')} type="button">New trip</button>
+						<button onclick={() => beginEditingTrip('edit')} type="button">Edit trip</button>
+					</div>
+				</details>
+			{/if}
+		</nav>
+		<h1>{itinerary.title}</h1>
+	</header>
+
+	<div class="itinerary-content">
+		<div class="itinerary-summary">
+			{#if !localScheduleReady || !dayDisclosureReady}
+				<p class="dates">Localizing itinerary…</p>
+			{:else if dateRange}
+				<p class="dates">
+					{formatLocalDay(dateRange[0])} – {formatLocalDay(dateRange[1])}
+				</p>
+			{/if}
+
+			{#if dayDisclosureReady && localDays.length > 0}
+				{@const allDaysAreOpen = localDays.every((day) => isDayOpen(day.date))}
+				<button class="day-disclosure-toggle" onclick={toggleAllDayDisclosures} type="button">
+					{allDaysAreOpen ? 'Collapse all' : 'Expand all'}
+				</button>
+			{/if}
+		</div>
+
+		<section aria-labelledby="itinerary-heading">
+			{#if !localScheduleReady || !dayDisclosureReady}
+				<p class="detail-prompt">Localizing your schedule…</p>
+			{:else if itinerary.items.length === 0}
+				<p class="empty-day">No items planned yet.</p>
+				{#if detailedTrip?.canEdit}
+					<div class="add-item-actions" aria-label="Add an itinerary item">
+						<button onclick={() => beginItemCreation()} type="button">Add item</button>
+					</div>
+				{/if}
+			{:else}
+				<div class="days">
+					{#each localDays as day, index (day.date)}
+						<details
+							class="day"
+							open={isDayOpen(day.date)}
+							ontoggle={(event) => changeDayDisclosure(day.date, event)}
+						>
+							<summary><h3>Day {index + 1}: {formatLocalDay(day.date)}</h3></summary>
+							<div class="day-content">
+								{#if day.items.length === 0}
+									<p class="empty-day">No items planned for this day.</p>
+								{:else}
+									<ul>
+										{#each day.items as item (item.id)}
+											<li class="item-row">
+												{#if detailedTrip}
+													<button
+														type="button"
+														class="item-button"
+														class:selected={selectedItemId === item.id}
+														aria-haspopup="dialog"
+														aria-pressed={selectedItemId === item.id}
+														onclick={() => (selectedItemId = item.id)}
+														style={itemTypeAccentStyle(item.type)}
+													>
+														<ItineraryTiming
+															timing={item.timing}
+															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
+														/>
+														<span class="item-type">{itemTypeLabels[item.type]}</span>
+														<span class="item-title">{item.title}</span>
+													</button>
+												{:else}
+													<div class="item-summary" style={itemTypeAccentStyle(item.type)}>
+														<ItineraryTiming
+															timing={item.timing}
+															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
+														/>
+														<span class="item-type">{itemTypeLabels[item.type]}</span>
+														<span class="item-title">{item.title}</span>
+													</div>
+												{/if}
+											</li>
+										{/each}
+									</ul>
+								{/if}
+								{#if detailedTrip?.canEdit}
+									<div
+										class="add-item-actions"
+										aria-label={`Add an item on ${formatLocalDay(day.date)}`}
+									>
+										<button onclick={() => beginItemCreation(day.date)} type="button">
+											Add item
+										</button>
+									</div>
+								{/if}
+							</div>
+						</details>
+					{/each}
+				</div>
+			{/if}
+
+			{#if detailedTrip && selectedItemId !== null}
+				{@const selectedItem = detailedTrip.itinerary.items.find(
+					(item) => item.id === selectedItemId
+				)}
+				{#if selectedItem}
+					<ItineraryItemDetails
+						item={selectedItem}
+						tripTimeZone={itinerary.timeZone}
+						canEdit={detailedTrip.canEdit}
+						deleteError={mutationError}
+						isDeleting={pendingMutationItemId === selectedItem.id}
+						onDelete={() => void deleteItem(selectedItem)}
+						onDismiss={() => {
+							mutationError = null;
+							selectedItemId = null;
+						}}
+						onEdit={() => {
+							beginEditingItem(selectedItem);
+							selectedItemId = null;
+						}}
+					/>
+				{/if}
+			{/if}
+		</section>
+	</div>
+
+	{#if detailedTrip && editingItem}
+		<ItineraryItemEditor
+			item={editingItem.item}
+			mode={editingItem.mode}
+			tripTimeZone={itinerary.timeZone}
+			tripId={detailedTrip.id}
+			revision={detailedTrip.revision}
+			suggestedStartDate={editingItem.suggestedStartDate}
+			timingNeedsConfirmation={editingItem.timingNeedsConfirmation}
+			onDismiss={() => (editingItem = null)}
+			onSaved={finishEditing}
+		/>
+	{/if}
+
+	{#if detailedTrip && creatingItem}
+		<ItineraryItemCreator
+			tripId={detailedTrip.id}
+			onDismiss={() => (creatingItem = false)}
+			onImported={beginImportedItem}
+			onManual={beginCreatingItem}
+		/>
+	{/if}
+
+	{#if detailedTrip && editingTripMode}
+		<TripEditor
+			mode={editingTripMode}
+			trip={detailedTrip}
+			onCreated={visitCreatedTrip}
+			onDismiss={() => (editingTripMode = null)}
+			onSaved={finishTripEditing}
+		/>
+	{/if}
+
+	{#if detailedTrip && switchingTrips}
+		<TripSwitcher
+			currentSlug={detailedTrip.slug}
+			onDismiss={() => (switchingTrips = false)}
+			trips={data.trips}
+		/>
+	{/if}
+</main>
+
+<style>
+	main {
+		padding: clamp(0.75rem, 2vw, 1.5rem) 0 clamp(2rem, 5vw, 4rem);
+	}
+
+	header {
+		border-bottom: 1px solid var(--color-border-default);
+		padding: clamp(3rem, 5vw, 4rem) 1rem 0.75rem;
+	}
+
+	.itinerary-content {
+		margin: 0 auto;
+		width: min(100% - 2rem, 48rem);
+	}
+
+	nav {
+		align-items: center;
+		background: var(--color-surface-page);
+		display: flex;
+		flex-wrap: wrap;
+		font-size: 0.8125rem;
+		gap: 0.375rem;
+		justify-content: end;
+		max-width: calc(100vw - 6.5rem);
+		position: fixed;
+		right: 5.75rem;
+		top: 1rem;
+		z-index: 1;
+	}
+
+	nav form {
+		margin: 0;
+	}
+
+	.trip-overflow {
+		position: relative;
+	}
+
+	.trip-overflow summary {
+		align-items: center;
+		background: transparent;
+		border: 1px solid var(--color-border-default);
+		cursor: pointer;
+		display: flex;
+		font-size: 1rem;
+		height: 1.875rem;
+		justify-content: center;
+		letter-spacing: 0.1em;
+		list-style: none;
+		padding: 0 0.5rem 0 0.6rem;
+	}
+
+	.trip-overflow summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.trip-overflow summary:hover,
+	.trip-overflow[open] summary {
+		border-color: var(--color-border-strong);
+	}
+
+	.trip-overflow summary:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 0.25rem;
+	}
+
+	.trip-overflow-menu {
+		background: var(--color-surface-raised);
+		border: 1px solid var(--color-border-strong);
+		display: grid;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		position: absolute;
+		right: 0;
+		top: calc(100% + 0.25rem);
+		width: max-content;
+		z-index: 2;
+	}
+
+	.trip-overflow-menu button {
+		background: transparent;
+		border: 0;
+		color: inherit;
+		cursor: pointer;
+		font: inherit;
+		padding: 0.5rem 0.625rem;
+		text-align: left;
+	}
+
+	.trip-overflow-menu button:hover {
+		background: var(--color-surface-subtle);
+	}
+
+	.trip-overflow-menu button:focus-visible {
+		outline: 2px solid var(--color-state-focus);
+		outline-offset: -2px;
+	}
+
+	nav a,
+	nav button {
+		background: transparent;
+		border: 1px solid var(--color-border-default);
+		color: inherit;
+		font: inherit;
+		padding: 0.25rem 0.5rem;
+		text-decoration: none;
+	}
+
+	nav button,
+	.add-item-actions button {
+		cursor: pointer;
+	}
+
+	h1,
+	h3,
+	p {
+		margin-top: 0;
+	}
+
+	h1 {
+		font-size: clamp(2.25rem, 8vw, 4.5rem);
+		letter-spacing: -0.045em;
+		line-height: 1;
+		margin-bottom: 0;
+		text-align: center;
+	}
+
+	.dates {
+		margin: 0.75rem 0 0;
+	}
+
+	.itinerary-summary {
+		align-items: center;
+		display: flex;
+		gap: 0.75rem;
+	}
+
+	.itinerary-summary .dates {
+		margin-bottom: 0;
+	}
+
+	.day-disclosure-toggle {
+		background: transparent;
+		border: 1px solid var(--color-border-default);
+		color: inherit;
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.8125rem;
+		margin-left: auto;
+		padding: 0.25rem 0.5rem;
+		white-space: nowrap;
+	}
+
+	.day-disclosure-toggle:hover {
+		border-color: var(--color-border-strong);
+	}
+
+	.day-disclosure-toggle:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 0.25rem;
+	}
+
+	section {
+		margin-top: 1.25rem;
+	}
+
+	.days {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.day {
+		background: var(--color-surface-raised);
+		border: 1px solid var(--color-border-default);
+	}
+
+	.day summary {
+		align-items: center;
+		cursor: pointer;
+		display: flex;
+		justify-content: space-between;
+		list-style: none;
+		padding: 0.625rem 0.875rem;
+	}
+
+	.day summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.day summary::after {
+		color: var(--color-text-muted);
+		content: '+';
+		font-size: 1.25rem;
+		font-weight: 400;
+		line-height: 1;
+	}
+
+	.day[open] summary {
+		border-bottom: 1px solid var(--color-border-subtle);
+	}
+
+	.day[open] summary::after {
+		content: '−';
+	}
+
+	.day summary:hover {
+		background: var(--color-surface-subtle);
+	}
+
+	.day summary:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 2px;
+	}
+
+	.day summary h3 {
+		margin: 0;
+	}
+
+	.day-content {
+		padding: 0.75rem 0.875rem 0.875rem;
+	}
+
+	h3 {
+		font-size: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	li {
+		padding: 0.5rem 0;
+	}
+
+	li + li {
+		border-top: 1px solid var(--color-border-subtle);
+	}
+
+	.item-button,
+	.item-summary {
+		align-items: center;
+		background: transparent;
+		border: 1px solid transparent;
+		color: inherit;
+		display: grid;
+		font: inherit;
+		gap: 0.25rem 0.75rem;
+		grid-template-columns: minmax(7.5rem, max-content) 7rem minmax(0, 1fr);
+		padding: 0.5rem;
+		text-align: left;
+		width: 100%;
+	}
+
+	.item-button:hover {
+		border-color: var(--item-accent);
+	}
+
+	.item-button:focus-visible,
+	nav a:focus-visible,
+	nav button:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 0.25rem;
+	}
+
+	.item-button.selected {
+		box-shadow: inset 3px 0 var(--color-state-selection);
+	}
+
+	.item-type {
+		color: var(--item-accent);
+		font-size: 0.6875rem;
+		line-height: 1.8;
+	}
+
+	.item-row {
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.add-item-actions {
+		align-items: center;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+	}
+
+	.add-item-actions button {
+		appearance: none;
+		background: transparent;
+		border: 1px solid var(--color-border-default);
+		color: inherit;
+		font: inherit;
+		font-size: 0.75rem;
+		padding: 0.25rem 0.5rem;
+	}
+
+	.add-item-actions button:hover {
+		border-color: var(--color-state-selection);
+	}
+
+	.add-item-actions button:focus-visible {
+		outline: 2px solid var(--color-state-focus);
+		outline-offset: 2px;
+	}
+
+	.add-item-actions {
+		border-top: 1px solid var(--color-border-subtle);
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		margin-top: 0.75rem;
+		padding-top: 0.75rem;
+	}
+
+	.empty-day,
+	.detail-prompt {
+		color: var(--color-text-muted);
+	}
+
+	.empty-day {
+		margin-bottom: 0;
+	}
+
+	.detail-prompt {
+		margin: 1.5rem 0 0;
+	}
+
+	@media (max-width: 32rem) {
+		nav {
+			right: 4.75rem;
+			top: 0.5rem;
+		}
+
+		.item-button,
+		.item-summary {
+			align-items: start;
+			grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr);
+		}
+
+		.item-type,
+		.item-title {
+			grid-column: 2;
+		}
+	}
+</style>

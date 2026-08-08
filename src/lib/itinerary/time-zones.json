@@ -1,0 +1,102 @@
+[
+	{
+		"timeZone": "UTC",
+		"aliases": ["UTC", "GMT"],
+		"places": ["Coordinated Universal Time"]
+	},
+	{
+		"timeZone": "Australia/Melbourne",
+		"aliases": ["AEST", "AEDT"],
+		"places": ["Melbourne, Australia"]
+	},
+	{
+		"timeZone": "Australia/Sydney",
+		"aliases": ["AEST", "AEDT"],
+		"places": ["Sydney, Australia"]
+	},
+	{
+		"timeZone": "Australia/Brisbane",
+		"aliases": ["AEST"],
+		"places": ["Brisbane, Australia"]
+	},
+	{
+		"timeZone": "Australia/Adelaide",
+		"aliases": ["ACST", "ACDT"],
+		"places": ["Adelaide, Australia"]
+	},
+	{
+		"timeZone": "Australia/Perth",
+		"aliases": ["AWST"],
+		"places": ["Perth, Australia"]
+	},
+	{
+		"timeZone": "Asia/Tokyo",
+		"aliases": ["JST"],
+		"places": ["Tokyo, Japan"]
+	},
+	{
+		"timeZone": "Asia/Shanghai",
+		"aliases": ["CST"],
+		"places": ["Shanghai, China"]
+	},
+	{
+		"timeZone": "Asia/Taipei",
+		"aliases": ["CST"],
+		"places": ["Taipei, Taiwan"]
+	},
+	{
+		"timeZone": "Asia/Singapore",
+		"aliases": ["SGT"],
+		"places": ["Singapore"]
+	},
+	{
+		"timeZone": "Asia/Kolkata",
+		"aliases": ["IST"],
+		"places": ["Kolkata, India"]
+	},
+	{
+		"timeZone": "America/New_York",
+		"aliases": ["EST", "EDT"],
+		"places": ["New York, United States"]
+	},
+	{
+		"timeZone": "America/Chicago",
+		"aliases": ["CST", "CDT"],
+		"places": ["Chicago, United States"]
+	},
+	{
+		"timeZone": "America/Winnipeg",
+		"aliases": ["CST", "CDT"],
+		"places": ["Winnipeg, Canada"]
+	},
+	{
+		"timeZone": "America/Regina",
+		"aliases": ["CST"],
+		"places": ["Regina, Canada"]
+	},
+	{
+		"timeZone": "America/Havana",
+		"aliases": ["CST", "CDT"],
+		"places": ["Havana, Cuba"]
+	},
+	{
+		"timeZone": "America/Los_Angeles",
+		"aliases": ["PST", "PDT"],
+		"places": ["Los Angeles, United States"]
+	},
+	{
+		"timeZone": "Europe/London",
+		"aliases": ["GMT", "BST"],
+		"places": ["London, United Kingdom"]
+	},
+	{
+		"timeZone": "Europe/Paris",
+		"aliases": ["CET", "CEST"],
+		"places": ["Paris, France"]
+	},
+	{
+		"timeZone": "Pacific/Auckland",
+		"aliases": ["NZST", "NZDT"],
+		"places": ["Auckland, New Zealand"]
+	}
+]
