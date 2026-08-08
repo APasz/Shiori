@@ -4,14 +4,12 @@
 	import ItineraryItemDetails from '$lib/components/ItineraryItemDetails.svelte';
 	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
 	import ItineraryItemEditor from '$lib/components/ItineraryItemEditor.svelte';
+	import ItineraryItemIllustration from '$lib/components/ItineraryItemIllustration.svelte';
+	import ItineraryNowNext from '$lib/components/ItineraryNowNext.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import TripEditor from '$lib/components/TripEditor.svelte';
 	import TripSwitcher from '$lib/components/TripSwitcher.svelte';
-	import {
-		apiErrorSchema,
-		editSaveResponseSchema,
-		type ItineraryItemImport
-	} from '$lib/editing/contracts';
+	import { apiErrorSchema, editSaveResponseSchema, type ItineraryItemImport } from '$lib/editing/contracts';
 	import { addCalendarDays, calendarMonthForDate } from '$lib/itinerary/calendar';
 	import { createEmptyItineraryItem, createItineraryItemFromImport } from '$lib/itinerary/draft';
 	import {
@@ -24,12 +22,7 @@
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
-	import type {
-		AuthenticatedUser,
-		DetailedTripView,
-		TripSwitchOption,
-		TripView
-	} from '$lib/server/store';
+	import type { AuthenticatedUser, DetailedTripView, TripSwitchOption, TripView } from '$lib/server/store';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import { onMount } from 'svelte';
 
@@ -70,9 +63,7 @@
 
 	const detailedTrip = $derived(getDetailedTrip(data.trip));
 	const itinerary = $derived(data.trip.itinerary);
-	const localDays = $derived(
-		localScheduleReady ? getLocalItineraryDays(itinerary.items, viewerContext.timeZone) : []
-	);
+	const localDays = $derived(localScheduleReady ? getLocalItineraryDays(itinerary.items, viewerContext.timeZone) : []);
 	const dateRange = $derived(
 		localScheduleReady ? getItineraryDateRange(itinerary.items, viewerContext.timeZone) : null
 	);
@@ -97,11 +88,7 @@
 			item: createEmptyItineraryItem(
 				type,
 				crypto.randomUUID(),
-				defaultItemTimestamp(
-					itemCreationLocalDay,
-					viewerContext.timeZone,
-					viewerContext.currentTimestamp
-				)
+				defaultItemTimestamp(itemCreationLocalDay, viewerContext.timeZone, viewerContext.currentTimestamp)
 			),
 			mode: 'create',
 			timingNeedsConfirmation: false
@@ -115,11 +102,7 @@
 			item: createItineraryItemFromImport(
 				itemImport,
 				crypto.randomUUID(),
-				defaultItemTimestamp(
-					suggestedStartDate,
-					viewerContext.timeZone,
-					viewerContext.currentTimestamp
-				)
+				defaultItemTimestamp(suggestedStartDate, viewerContext.timeZone, viewerContext.currentTimestamp)
 			),
 			mode: 'create',
 			...(suggestedStartDate ? { suggestedStartDate } : {}),
@@ -128,14 +111,9 @@
 	}
 
 	function defaultOpenDayDates(): string[] {
-		const currentDate = formatTimestampInTimeZone(
-			viewerContext.currentTimestamp,
-			viewerContext.timeZone
-		)?.date;
+		const currentDate = formatTimestampInTimeZone(viewerContext.currentTimestamp, viewerContext.timeZone)?.date;
 		const followingDate = currentDate ? addCalendarDays(currentDate, 1) : null;
-		return localDays
-			.filter((day) => day.date === currentDate || day.date === followingDate)
-			.map((day) => day.date);
+		return localDays.filter((day) => day.date === currentDate || day.date === followingDate).map((day) => day.date);
 	}
 
 	function restoredOpenDayDates(): string[] | null {
@@ -278,10 +256,7 @@
 
 <svelte:head>
 	<title>Shiori · Travel itineraries</title>
-	<meta
-		name="description"
-		content="A server-authoritative travel itinerary, validated by Shiori."
-	/>
+	<meta name="description" content="A server-authoritative travel itinerary, validated by Shiori." />
 </svelte:head>
 
 <main>
@@ -290,8 +265,7 @@
 			{#if data.currentUser}
 				<span>Signed as {data.currentUser.username}</span>
 				{#if data.trip.access === 'sudo'}
-					<a href={resolve(`/settings/access?trip=${encodeURIComponent(data.trip.slug)}`)}>Access</a
-					>
+					<a href={resolve(`/settings/access?trip=${encodeURIComponent(data.trip.slug)}`)}>Access</a>
 				{/if}
 				<form action="/logout" method="POST"><button type="submit">Sign out</button></form>
 			{:else if data.setupRequired}
@@ -311,6 +285,7 @@
 			{/if}
 		</nav>
 		<h1>{itinerary.title}</h1>
+		<ItineraryNowNext items={itinerary.items} tripTimeZone={itinerary.timeZone} />
 	</header>
 
 	<div class="itinerary-content">
@@ -344,11 +319,7 @@
 			{:else}
 				<div class="days">
 					{#each localDays as day, index (day.date)}
-						<details
-							class="day"
-							open={isDayOpen(day.date)}
-							ontoggle={(event) => changeDayDisclosure(day.date, event)}
-						>
+						<details class="day" open={isDayOpen(day.date)} ontoggle={(event) => changeDayDisclosure(day.date, event)}>
 							<summary><h3>Day {index + 1}: {formatLocalDay(day.date)}</h3></summary>
 							<div class="day-content">
 								{#if day.items.length === 0}
@@ -372,7 +343,10 @@
 															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
 														/>
 														<span class="item-type">{itemTypeLabels[item.type]}</span>
-														<span class="item-title">{item.title}</span>
+														<span class="item-title"
+															><span class="item-title-text" data-item-title-text>{item.title}</span></span
+														>
+														<ItineraryItemIllustration {item} />
 													</button>
 												{:else}
 													<div class="item-summary" style={itemTypeAccentStyle(item.type)}>
@@ -381,7 +355,10 @@
 															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
 														/>
 														<span class="item-type">{itemTypeLabels[item.type]}</span>
-														<span class="item-title">{item.title}</span>
+														<span class="item-title"
+															><span class="item-title-text" data-item-title-text>{item.title}</span></span
+														>
+														<ItineraryItemIllustration {item} />
 													</div>
 												{/if}
 											</li>
@@ -389,13 +366,8 @@
 									</ul>
 								{/if}
 								{#if detailedTrip?.canEdit}
-									<div
-										class="add-item-actions"
-										aria-label={`Add an item on ${formatLocalDay(day.date)}`}
-									>
-										<button onclick={() => beginItemCreation(day.date)} type="button">
-											Add item
-										</button>
+									<div class="add-item-actions" aria-label={`Add an item on ${formatLocalDay(day.date)}`}>
+										<button onclick={() => beginItemCreation(day.date)} type="button"> Add item </button>
 									</div>
 								{/if}
 							</div>
@@ -405,9 +377,7 @@
 			{/if}
 
 			{#if detailedTrip && selectedItemId !== null}
-				{@const selectedItem = detailedTrip.itinerary.items.find(
-					(item) => item.id === selectedItemId
-				)}
+				{@const selectedItem = detailedTrip.itinerary.items.find((item) => item.id === selectedItemId)}
 				{#if selectedItem}
 					<ItineraryItemDetails
 						item={selectedItem}
@@ -464,11 +434,7 @@
 	{/if}
 
 	{#if detailedTrip && switchingTrips}
-		<TripSwitcher
-			currentSlug={detailedTrip.slug}
-			onDismiss={() => (switchingTrips = false)}
-			trips={data.trips}
-		/>
+		<TripSwitcher currentSlug={detailedTrip.slug} onDismiss={() => (switchingTrips = false)} trips={data.trips} />
 	{/if}
 </main>
 
@@ -724,6 +690,7 @@
 		gap: 0.25rem 0.75rem;
 		grid-template-columns: minmax(7.5rem, max-content) 7rem minmax(0, 1fr);
 		padding: 0.5rem;
+		position: relative;
 		text-align: left;
 		width: 100%;
 	}
@@ -747,6 +714,20 @@
 		color: var(--item-accent);
 		font-size: 0.6875rem;
 		line-height: 1.8;
+		position: relative;
+		z-index: 1;
+	}
+
+	.item-title {
+		position: relative;
+		z-index: 1;
+	}
+
+	:global(.item-illustration-overlaps) {
+		text-shadow:
+			0 1px 2px var(--color-surface-raised),
+			1px 0 2px var(--color-surface-raised),
+			-1px 0 2px var(--color-surface-raised);
 	}
 
 	.item-row {
