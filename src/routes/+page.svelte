@@ -33,6 +33,11 @@
 		trip: TripView;
 		trips: TripSwitchOption[];
 	};
+	type ConnectivityStatus = 'checking' | 'reachable' | 'unreachable';
+
+	const connectionProbeIntervalMilliseconds = 30_000;
+	const connectionProbeTimeoutMilliseconds = 5_000;
+	const connectionProbeEndpoint = resolve('/api/health');
 
 	let { data }: { data: TripPageData } = $props();
 	let selectedItemId = $state<string | null>(null);
@@ -55,7 +60,8 @@
 	let dayDisclosureReady = $state(false);
 	let openDayDates = $state<string[]>([]);
 	let appliedViewerRevision = $state(0);
-	let offline = $state(false);
+	let connectivityStatus = $state<ConnectivityStatus>('checking');
+	let connectionProbeController: AbortController | null = null;
 
 	const itemTypeLabels: Record<ItineraryItem['type'], string> = {
 		transport: 'Transport',
@@ -64,6 +70,7 @@
 	};
 
 	const detailedTrip = $derived(getDetailedTrip(data.trip));
+	const canModifyItinerary = $derived(detailedTrip?.canEdit === true && connectivityStatus === 'reachable');
 	const itinerary = $derived(data.trip.itinerary);
 	const localDays = $derived(localScheduleReady ? getLocalItineraryDays(itinerary.items, viewerContext.timeZone) : []);
 	const dateRange = $derived(
@@ -79,12 +86,20 @@
 	}
 
 	function beginItemCreation(localDay?: string): void {
+		if (!canModifyItinerary) {
+			return;
+		}
+
 		mutationError = null;
 		itemCreationLocalDay = localDay;
 		creatingItem = true;
 	}
 
 	function beginCreatingItem(type: ItineraryItemType): void {
+		if (!canModifyItinerary) {
+			return;
+		}
+
 		mutationError = null;
 		editingItem = {
 			item: createEmptyItineraryItem(
@@ -98,6 +113,10 @@
 	}
 
 	function beginImportedItem(itemImport: ItineraryItemImport): void {
+		if (!canModifyItinerary) {
+			return;
+		}
+
 		const suggestedStartDate = itemImport.suggestedStartDate ?? itemCreationLocalDay;
 		mutationError = null;
 		editingItem = {
@@ -178,11 +197,19 @@
 	});
 
 	function beginEditingItem(item: ItineraryItem): void {
+		if (!canModifyItinerary) {
+			return;
+		}
+
 		mutationError = null;
 		editingItem = { item, mode: 'edit', timingNeedsConfirmation: false };
 	}
 
 	function beginEditingTrip(mode: 'create' | 'edit'): void {
+		if (!canModifyItinerary) {
+			return;
+		}
+
 		tripOverflowOpen = false;
 		editingTripMode = mode;
 	}
@@ -203,7 +230,7 @@
 
 	async function deleteItem(item: ItineraryItem): Promise<void> {
 		const endpoint = itemsEndpoint();
-		if (!endpoint || !detailedTrip || !window.confirm(`Delete “${item.title}”?`)) {
+		if (!canModifyItinerary || !endpoint || !detailedTrip || !window.confirm(`Delete “${item.title}”?`)) {
 			return;
 		}
 
@@ -249,13 +276,61 @@
 		await goto(resolve('/trips/[slug]', { slug }));
 	}
 
+	function markConnectionUnavailable(): void {
+		connectionProbeController?.abort();
+		connectionProbeController = null;
+		connectivityStatus = 'unreachable';
+	}
+
+	async function checkShioriConnection(): Promise<void> {
+		connectionProbeController?.abort();
+		const controller = new AbortController();
+		connectionProbeController = controller;
+		const timeoutId = window.setTimeout(() => controller.abort(), connectionProbeTimeoutMilliseconds);
+
+		try {
+			const response = await fetch(connectionProbeEndpoint, {
+				cache: 'no-store',
+				headers: { 'cache-control': 'no-store' },
+				signal: controller.signal
+			});
+			if (connectionProbeController === controller) {
+				connectivityStatus = response.ok ? 'reachable' : 'unreachable';
+			}
+		} catch {
+			if (connectionProbeController === controller) {
+				connectivityStatus = 'unreachable';
+			}
+		} finally {
+			window.clearTimeout(timeoutId);
+			if (connectionProbeController === controller) {
+				connectionProbeController = null;
+			}
+		}
+	}
+
+	$effect(() => {
+		if (connectivityStatus === 'reachable') {
+			return;
+		}
+
+		editingItem = null;
+		creatingItem = false;
+		editingTripMode = null;
+	});
+
 	onMount(() => {
-		const updateOfflineStatus = (): void => {
-			offline = !navigator.onLine;
+		const checkConnection = (): void => {
+			void checkShioriConnection();
 		};
-		updateOfflineStatus();
-		window.addEventListener('online', updateOfflineStatus);
-		window.addEventListener('offline', updateOfflineStatus);
+		if (navigator.onLine) {
+			checkConnection();
+		} else {
+			markConnectionUnavailable();
+		}
+		window.addEventListener('online', checkConnection);
+		window.addEventListener('offline', markConnectionUnavailable);
+		const probeIntervalId = window.setInterval(checkConnection, connectionProbeIntervalMilliseconds);
 		appliedViewerRevision = viewerContext.revision;
 		localScheduleReady = true;
 		queueMicrotask(() => {
@@ -264,8 +339,11 @@
 		});
 
 		return () => {
-			window.removeEventListener('online', updateOfflineStatus);
-			window.removeEventListener('offline', updateOfflineStatus);
+			connectionProbeController?.abort();
+			connectionProbeController = null;
+			window.clearInterval(probeIntervalId);
+			window.removeEventListener('online', checkConnection);
+			window.removeEventListener('offline', markConnectionUnavailable);
 		};
 	});
 </script>
@@ -277,15 +355,15 @@
 
 <main>
 	<header>
-		{#if offline}
+		{#if connectivityStatus === 'unreachable'}
 			<p class="offline-status" role="status">
-				Offline · showing the last saved itinerary. Changes require a connection.
+				Shiori is unreachable · showing the last saved itinerary. Changes require a connection.
 			</p>
 		{/if}
 		<nav aria-label="Account">
 			{#if data.currentUser}
 				<span>Signed as {data.currentUser.username}</span>
-				{#if data.trip.access === 'sudo'}
+				{#if data.trip.access === 'sudo' && canModifyItinerary}
 					<a href={resolve(`/settings/access?trip=${encodeURIComponent(data.trip.slug)}`)}>Access</a>
 				{/if}
 				<form action="/logout" method="POST" onsubmit={clearOfflineTripPages}>
@@ -301,8 +379,10 @@
 					<summary aria-label="Trip options" title="Trip options">•••</summary>
 					<div class="trip-overflow-menu">
 						<button onclick={beginSwitchingTrips} type="button">Switch trip</button>
-						<button onclick={() => beginEditingTrip('create')} type="button">New trip</button>
-						<button onclick={() => beginEditingTrip('edit')} type="button">Edit trip</button>
+						{#if canModifyItinerary}
+							<button onclick={() => beginEditingTrip('create')} type="button">New trip</button>
+							<button onclick={() => beginEditingTrip('edit')} type="button">Edit trip</button>
+						{/if}
 					</div>
 				</details>
 			{/if}
@@ -334,7 +414,7 @@
 				<p class="detail-prompt">Localizing your schedule…</p>
 			{:else if itinerary.items.length === 0}
 				<p class="empty-day">No items planned yet.</p>
-				{#if detailedTrip?.canEdit}
+				{#if canModifyItinerary}
 					<div class="add-item-actions" aria-label="Add an itinerary item">
 						<button onclick={() => beginItemCreation()} type="button">Add item</button>
 					</div>
@@ -388,7 +468,7 @@
 										{/each}
 									</ul>
 								{/if}
-								{#if detailedTrip?.canEdit}
+								{#if canModifyItinerary}
 									<div class="add-item-actions" aria-label={`Add an item on ${formatLocalDay(day.date)}`}>
 										<button onclick={() => beginItemCreation(day.date)} type="button"> Add item </button>
 									</div>
@@ -405,7 +485,7 @@
 					<ItineraryItemDetails
 						item={selectedItem}
 						tripTimeZone={itinerary.timeZone}
-						canEdit={detailedTrip.canEdit}
+						canEdit={canModifyItinerary}
 						deleteError={mutationError}
 						isDeleting={pendingMutationItemId === selectedItem.id}
 						onDelete={() => void deleteItem(selectedItem)}
@@ -423,7 +503,7 @@
 		</section>
 	</div>
 
-	{#if detailedTrip && editingItem}
+	{#if detailedTrip && canModifyItinerary && editingItem}
 		<ItineraryItemEditor
 			item={editingItem.item}
 			mode={editingItem.mode}
@@ -437,7 +517,7 @@
 		/>
 	{/if}
 
-	{#if detailedTrip && creatingItem}
+	{#if detailedTrip && canModifyItinerary && creatingItem}
 		<ItineraryItemCreator
 			tripId={detailedTrip.id}
 			onDismiss={() => (creatingItem = false)}
@@ -446,7 +526,7 @@
 		/>
 	{/if}
 
-	{#if detailedTrip && editingTripMode}
+	{#if detailedTrip && canModifyItinerary && editingTripMode}
 		<TripEditor
 			mode={editingTripMode}
 			trip={detailedTrip}

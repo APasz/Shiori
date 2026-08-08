@@ -5,6 +5,7 @@ const cacheName = `shiori:offline:${version}`;
 const cacheNamePrefix = 'shiori:offline:';
 const applicationAssets = new Set([...build, ...files]);
 const tripPathPrefix = `${base}/trips/`;
+const tripDataPathSuffix = '/__data.json';
 const logoutPath = `${base}/logout`;
 
 type CacheTripPageMessage = {
@@ -18,6 +19,15 @@ type ClearOfflineTripPagesMessage = {
 
 function isTripPage(url: URL): boolean {
 	return url.pathname.startsWith(tripPathPrefix) && url.pathname.length > tripPathPrefix.length;
+}
+
+function isTripDataRequest(url: URL): boolean {
+	if (!url.pathname.endsWith(tripDataPathSuffix)) {
+		return false;
+	}
+
+	const tripPath = url.pathname.slice(0, -tripDataPathSuffix.length);
+	return tripPath.startsWith(tripPathPrefix) && tripPath.length > tripPathPrefix.length;
 }
 
 function isCacheTripPageMessage(value: unknown): value is CacheTripPageMessage {
@@ -37,22 +47,22 @@ function isClearOfflineTripPagesMessage(value: unknown): value is ClearOfflineTr
 	);
 }
 
-function responseIsCacheableTripPage(response: Response): boolean {
+function responseIsCacheableTripResource(response: Response): boolean {
 	return response.ok && isTripPage(new URL(response.url));
 }
 
-async function cacheTripResponse(request: Request, response: Response): Promise<void> {
+async function cacheTripResourceResponse(request: Request, response: Response): Promise<void> {
 	const cache = await caches.open(cacheName);
-	if (responseIsCacheableTripPage(response)) {
+	if (responseIsCacheableTripResource(response)) {
 		await cache.put(request, response.clone());
 	} else {
 		await cache.delete(request);
 	}
 }
 
-async function fetchAndCacheTripPage(request: Request): Promise<Response> {
+async function fetchAndCacheTripResource(request: Request): Promise<Response> {
 	const response = await fetch(request);
-	await cacheTripResponse(request, response);
+	await cacheTripResourceResponse(request, response);
 	return response;
 }
 
@@ -70,9 +80,9 @@ function offlineResponse(): Response {
 	);
 }
 
-async function respondToTripNavigation(request: Request): Promise<Response> {
+async function respondToTripResource(request: Request): Promise<Response> {
 	try {
-		return await fetchAndCacheTripPage(request);
+		return await fetchAndCacheTripResource(request);
 	} catch {
 		const cache = await caches.open(cacheName);
 		return (await cache.match(request)) ?? offlineResponse();
@@ -140,7 +150,7 @@ worker.addEventListener('message', (event) => {
 		return;
 	}
 
-	event.waitUntil(fetchAndCacheTripPage(new Request(url, { credentials: 'same-origin' })).catch(() => undefined));
+	event.waitUntil(fetchAndCacheTripResource(new Request(url, { credentials: 'same-origin' })).catch(() => undefined));
 });
 
 worker.addEventListener('fetch', (event) => {
@@ -165,7 +175,12 @@ worker.addEventListener('fetch', (event) => {
 		return;
 	}
 
+	if (isTripDataRequest(url)) {
+		event.respondWith(respondToTripResource(event.request));
+		return;
+	}
+
 	if (event.request.mode === 'navigate' && isTripPage(url)) {
-		event.respondWith(respondToTripNavigation(event.request));
+		event.respondWith(respondToTripResource(event.request));
 	}
 });
