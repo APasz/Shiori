@@ -23,16 +23,10 @@ function toleranceLabel(minutes: number): string {
 }
 
 function formatTimestamp(timestamp: number, timeZone: string | undefined) {
-	return timeZone
-		? formatTimestampInTimeZone(timestamp, timeZone)
-		: formatLocalTimestamp(timestamp);
+	return timeZone ? formatTimestampInTimeZone(timestamp, timeZone) : formatLocalTimestamp(timestamp);
 }
 
-function timestampLabel(
-	timestamp: number,
-	includeDate: boolean,
-	timeZone: string | undefined
-): string | null {
+function timestampLabel(timestamp: number, includeDate: boolean, timeZone: string | undefined): string | null {
 	const formatted = formatTimestamp(timestamp, timeZone);
 	if (!formatted) {
 		return null;
@@ -65,11 +59,7 @@ function timestampRangeLabel(
 	return startDate && endDate ? `${startDate}, ${start.time} – ${endDate}, ${end.time}` : null;
 }
 
-export function formatItineraryTiming(
-	timing: ItineraryTiming,
-	includeDate = false,
-	timeZone?: string
-): string | null {
+export function formatItineraryTiming(timing: ItineraryTiming, includeDate = false, timeZone?: string): string | null {
 	switch (timing.kind) {
 		case 'exact':
 			return timing.endAt === undefined

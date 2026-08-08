@@ -198,19 +198,13 @@ function operatorsForMode(mode: TransportMode): readonly ServiceOperator[] {
 }
 
 /** Returns an operator name for an exact mode-specific carrier or service prefix. */
-export function operatorNameForServicePrefix(
-	mode: TransportMode,
-	prefix: string
-): string | undefined {
+export function operatorNameForServicePrefix(mode: TransportMode, prefix: string): string | undefined {
 	const normalizedPrefix = normalizedServicePrefix(prefix);
 	return operatorsForMode(mode).find((operator) => operator.code === normalizedPrefix)?.name;
 }
 
 /** Returns an operator name only when a complete, mode-specific service number is recognised. */
-export function operatorNameForServiceNumber(
-	mode: TransportMode,
-	serviceNumber: string
-): string | undefined {
+export function operatorNameForServiceNumber(mode: TransportMode, serviceNumber: string): string | undefined {
 	const compactNumber = compactServiceNumber(serviceNumber);
 	return operatorsForMode(mode).find((operator) => {
 		if (!compactNumber.startsWith(operator.code)) {

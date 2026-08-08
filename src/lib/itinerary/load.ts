@@ -3,8 +3,7 @@ import { formatValidationIssues } from '$lib/validation';
 import { itinerarySchema, type Itinerary } from './schema';
 
 export type ItineraryLoadResult =
-	| { readonly valid: true; readonly itinerary: Itinerary }
-	| { readonly valid: false; readonly error: string };
+	{ readonly valid: true; readonly itinerary: Itinerary } | { readonly valid: false; readonly error: string };
 
 /** Parses untrusted YAML and returns either a validated itinerary or a display-safe error. */
 export function loadItinerary(source: string): ItineraryLoadResult {

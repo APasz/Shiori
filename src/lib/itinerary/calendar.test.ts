@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	addCalendarDays,
-	addCalendarMonths,
-	calendarDays,
-	calendarMonthForDate,
-	formatCalendarDate
-} from './calendar';
+import { addCalendarDays, addCalendarMonths, calendarDays, calendarMonthForDate, formatCalendarDate } from './calendar';
 
 describe('calendar helpers', () => {
 	it('adds days across calendar month and year boundaries', () => {

@@ -89,17 +89,14 @@ export function searchTimeZoneOptions(
 	const query = normalized(queryInput);
 	const matches = query
 		? options.filter((option) =>
-				[option.timeZone, ...option.aliases, ...option.places].some((value) =>
-					normalized(value).includes(query)
-				)
+				[option.timeZone, ...option.aliases, ...option.places].some((value) => normalized(value).includes(query))
 			)
 		: options;
 
 	return [...matches]
 		.sort(
 			(left, right) =>
-				searchScore(left, query) - searchScore(right, query) ||
-				left.timeZone.localeCompare(right.timeZone)
+				searchScore(left, query) - searchScore(right, query) || left.timeZone.localeCompare(right.timeZone)
 		)
 		.slice(0, limit);
 }

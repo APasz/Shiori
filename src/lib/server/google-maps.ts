@@ -1,8 +1,4 @@
-import {
-	googleMapsUrlSchema,
-	isGoogleMapsUrl,
-	type ItineraryLocation
-} from '$lib/itinerary/schema';
+import { googleMapsUrlSchema, isGoogleMapsUrl, type ItineraryLocation } from '$lib/itinerary/schema';
 
 const maximumRedirects = 5;
 const requestTimeoutMilliseconds = 5_000;
@@ -37,9 +33,7 @@ function coordinateValue(latitude: string, longitude: string): ItineraryLocation
 }
 
 function coordinatesFromValue(value: string): ItineraryLocation['coordinates'] {
-	const match = value.match(
-		/^\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*,\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*$/
-	);
+	const match = value.match(/^\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*,\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*$/);
 	return match ? coordinateValue(match[1], match[2]) : undefined;
 }
 
@@ -71,9 +65,7 @@ function nameFromGoogleMapsUrl(url: URL): string | undefined {
 }
 
 function coordinatesFromGoogleMapsUrl(url: URL): ItineraryLocation['coordinates'] {
-	const directCoordinates = url
-		.toString()
-		.match(/!3d(-?(?:\d+(?:\.\d+)?|\.\d+))!4d(-?(?:\d+(?:\.\d+)?|\.\d+))/);
+	const directCoordinates = url.toString().match(/!3d(-?(?:\d+(?:\.\d+)?|\.\d+))!4d(-?(?:\d+(?:\.\d+)?|\.\d+))/);
 	if (directCoordinates) {
 		return coordinateValue(directCoordinates[1], directCoordinates[2]);
 	}
@@ -100,10 +92,7 @@ export function parseGoogleMapsLocationUrl(url: URL): GoogleMapsLocationImport {
 	const name = nameFromGoogleMapsUrl(url);
 	const coordinates = coordinatesFromGoogleMapsUrl(url);
 	if (!name && !coordinates) {
-		throw new GoogleMapsResolveError(
-			422,
-			'The Google Maps link did not include a place name or coordinates.'
-		);
+		throw new GoogleMapsResolveError(422, 'The Google Maps link did not include a place name or coordinates.');
 	}
 
 	return {
@@ -149,9 +138,7 @@ async function cancelResponseBody(response: Response): Promise<void> {
 	await response.body?.cancel().catch(() => undefined);
 }
 
-export async function resolveGoogleMapsLocation(
-	inputUrl: string
-): Promise<GoogleMapsLocationImport> {
+export async function resolveGoogleMapsLocation(inputUrl: string): Promise<GoogleMapsLocationImport> {
 	return parseGoogleMapsLocationUrl(await resolveGoogleMapsUrl(inputUrl));
 }
 

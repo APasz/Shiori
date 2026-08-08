@@ -29,11 +29,7 @@
 
 	<section>
 		<h2>Visitor access</h2>
-		<form
-			class="shiori-form"
-			action={`?trip=${encodeURIComponent(data.trip.slug)}&/visitorAccess`}
-			method="POST"
-		>
+		<form class="shiori-form" action={`?trip=${encodeURIComponent(data.trip.slug)}&/visitorAccess`} method="POST">
 			<label class="shiori-form-label">
 				<input checked={data.trip.isPublic} name="isPublic" type="checkbox" />
 				Allow public visitors to see the trip schedule
@@ -45,9 +41,7 @@
 	<section>
 		<h2>Edit session</h2>
 		<p class:active-edit-session={data.hasActiveEditSession} class="edit-session-status">
-			{data.hasActiveEditSession
-				? 'An edit session is currently active.'
-				: 'No edit session is active.'}
+			{data.hasActiveEditSession ? 'An edit session is currently active.' : 'No edit session is active.'}
 		</p>
 		<form
 			class="shiori-form"
@@ -63,9 +57,7 @@
 			>
 				Force close active edit session
 			</button>
-			<p id="force-close-description">
-				This closes any editor immediately. Unsaved changes in that session are lost.
-			</p>
+			<p id="force-close-description">This closes any editor immediately. Unsaved changes in that session are lost.</p>
 			{#if form?.editSessionReleased}
 				<p class="success" role="status">The active edit session was force closed.</p>
 			{:else if form?.editSessionReleased === false}
@@ -83,18 +75,9 @@
 		</ul>
 
 		<h3>Add a shared user</h3>
-		<form
-			class="shiori-form"
-			action={`?trip=${encodeURIComponent(data.trip.slug)}&/createUser`}
-			method="POST"
-		>
+		<form class="shiori-form" action={`?trip=${encodeURIComponent(data.trip.slug)}&/createUser`} method="POST">
 			<label class="shiori-form-label">
-				Username <input
-					class="shiori-form-control"
-					autocomplete="username"
-					name="username"
-					required
-				/>
+				Username <input class="shiori-form-control" autocomplete="username" name="username" required />
 			</label>
 			<label class="shiori-form-label">
 				Temporary password

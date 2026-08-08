@@ -57,9 +57,7 @@
 	let visibleMonth = $state<CalendarMonth>(currentCalendarMonth());
 
 	const days = $derived(calendarDays(visibleMonth));
-	const today = $derived(
-		formatTimestampForTimeZoneInput(viewerContext.currentTimestamp, timeZone)?.slice(0, 10) ?? ''
-	);
+	const today = $derived(formatTimestampForTimeZoneInput(viewerContext.currentTimestamp, timeZone)?.slice(0, 10) ?? '');
 
 	function datePart(value: string): string {
 		return value.slice(0, 10);
@@ -130,21 +128,11 @@
 
 		const controlsBounds = controls.getBoundingClientRect();
 		const dialogBounds = dialog.getBoundingClientRect();
-		const maximumLeft = Math.max(
-			dialogViewportInset,
-			window.innerWidth - dialogBounds.width - dialogViewportInset
-		);
-		const maximumTop = Math.max(
-			dialogViewportInset,
-			window.innerHeight - dialogBounds.height - dialogViewportInset
-		);
+		const maximumLeft = Math.max(dialogViewportInset, window.innerWidth - dialogBounds.width - dialogViewportInset);
+		const maximumTop = Math.max(dialogViewportInset, window.innerHeight - dialogBounds.height - dialogViewportInset);
 		dialogPosition = {
 			left: clamp(controlsBounds.left, dialogViewportInset, maximumLeft),
-			top: clamp(
-				controlsBounds.top - dialogBounds.height - developmentControlsGap,
-				dialogViewportInset,
-				maximumTop
-			)
+			top: clamp(controlsBounds.top - dialogBounds.height - developmentControlsGap, dialogViewportInset, maximumTop)
 		};
 	}
 
@@ -199,11 +187,7 @@
 			‹
 		</button>
 		<strong aria-live="polite">{formatCalendarMonth(visibleMonth)}</strong>
-		<button
-			aria-label="Next month"
-			onclick={() => (visibleMonth = addCalendarMonths(visibleMonth, 1))}
-			type="button"
-		>
+		<button aria-label="Next month" onclick={() => (visibleMonth = addCalendarMonths(visibleMonth, 1))} type="button">
 			›
 		</button>
 	</div>
@@ -250,11 +234,7 @@
 {/snippet}
 
 <div class="date-time-grid">
-	<div
-		bind:this={pickerElement}
-		class="date-time-picker shiori-form-label"
-		onfocusout={closeAfterFocusChange}
-	>
+	<div bind:this={pickerElement} class="date-time-picker shiori-form-label" onfocusout={closeAfterFocusChange}>
 		<span>{label}</span>
 		<button
 			aria-expanded={isOpen}
@@ -285,13 +265,7 @@
 					{@render pickerContent()}
 				</dialog>
 			{:else}
-				<div
-					aria-label={`Choose ${label}`}
-					class="picker-panel"
-					onkeydown={handleKeydown}
-					role="dialog"
-					tabindex="-1"
-				>
+				<div aria-label={`Choose ${label}`} class="picker-panel" onkeydown={handleKeydown} role="dialog" tabindex="-1">
 					{@render pickerContent()}
 				</div>
 			{/if}
@@ -299,12 +273,7 @@
 	</div>
 	<div class="shiori-form-label">
 		<label for={`${id}-time-zone`}>Time zone <span class="field-hint">{timeZoneHint}</span></label>
-		<TimeZonePicker
-			id={`${id}-time-zone`}
-			onSelect={onTimeZoneChange}
-			options={timeZoneOptions}
-			value={timeZone}
-		/>
+		<TimeZonePicker id={`${id}-time-zone`} onSelect={onTimeZoneChange} options={timeZoneOptions} value={timeZone} />
 	</div>
 </div>
 

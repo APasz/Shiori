@@ -2,14 +2,8 @@
 	import { onMount } from 'svelte';
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
-	import {
-		formatTimestampForTimeZoneInput,
-		zonedDateTimeToUnixMilliseconds
-	} from '$lib/itinerary/zoned-time';
-	import {
-		browserTimeZoneOptions,
-		type TimeZoneSearchOption
-	} from '$lib/itinerary/time-zone-search';
+	import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from '$lib/itinerary/zoned-time';
+	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 
 	let dateTime = $state('');
 	let timeZone = $state('UTC');
@@ -29,10 +23,7 @@
 	function changeTimeZone(value: string): void {
 		const timestamp = zonedDateTimeToUnixMilliseconds(dateTime, timeZone);
 		timeZone = value;
-		dateTime =
-			timestamp !== null
-				? (formatTimestampForTimeZoneInput(timestamp, timeZone) ?? dateTime)
-				: dateTime;
+		dateTime = timestamp !== null ? (formatTimestampForTimeZoneInput(timestamp, timeZone) ?? dateTime) : dateTime;
 		errorMessage = null;
 	}
 
@@ -63,8 +54,8 @@
 		<summary>Development viewer</summary>
 		<div class="controls">
 			<p>
-				Stage a viewer-local time and zone, then apply it. This changes only client-side
-				presentation and new-item defaults; persisted timestamps remain unchanged.
+				Stage a viewer-local time and zone, then apply it. This changes only client-side presentation and new-item
+				defaults; persisted timestamps remain unchanged.
 			</p>
 			<DateTimeInput
 				{dateTime}
@@ -81,9 +72,7 @@
 			<div class="actions">
 				<span>{viewerContext.isSimulated ? 'Simulation active' : 'Using browser settings'}</span>
 				<button onclick={apply} type="button">Apply viewer settings</button>
-				<button disabled={!viewerContext.isSimulated} onclick={reset} type="button">
-					Reset to browser
-				</button>
+				<button disabled={!viewerContext.isSimulated} onclick={reset} type="button"> Reset to browser </button>
 			</div>
 		</div>
 	</details>

@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import {
-		searchTimeZoneOptions,
-		type TimeZoneSearchOption
-	} from '$lib/itinerary/time-zone-search';
+	import { searchTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
 
 	let {
@@ -113,11 +110,7 @@
 			{:else}
 				{#each matches as option, index (option.timeZone)}
 					<li aria-selected={index === activeOptionIndex} role="option">
-						<button
-							onclick={() => select(option)}
-							onmousedown={(event) => event.preventDefault()}
-							type="button"
-						>
+						<button onclick={() => select(option)} onmousedown={(event) => event.preventDefault()} type="button">
 							<span class="time-zone">{option.timeZone}</span>
 							<span>{option.places.join(' · ')}</span>
 							{#if option.aliases.length > 0}

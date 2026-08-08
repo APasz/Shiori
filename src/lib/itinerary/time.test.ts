@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { itinerarySchema, unixTimestampSchema } from './schema';
-import {
-	formatLocalTimestamp,
-	formatTimestampInTimeZone,
-	localDateTimeToUnixMilliseconds
-} from './time';
+import { formatLocalTimestamp, formatTimestampInTimeZone, localDateTimeToUnixMilliseconds } from './time';
 
 describe('itinerary timestamps', () => {
 	it('converts browser-local editor input to a canonical Unix-millisecond timestamp', () => {

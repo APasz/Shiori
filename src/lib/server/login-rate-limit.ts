@@ -47,9 +47,7 @@ export class LoginRateLimiter {
 	check(attempt: LoginAttempt): LoginAttemptAllowance {
 		const currentTime = this.now();
 		this.prune(currentTime);
-		const blockedUntil = Math.max(
-			...identifierKeys(attempt).map((key) => this.#records.get(key)?.blockedUntil ?? 0)
-		);
+		const blockedUntil = Math.max(...identifierKeys(attempt).map((key) => this.#records.get(key)?.blockedUntil ?? 0));
 
 		if (blockedUntil <= currentTime) {
 			return { allowed: true };

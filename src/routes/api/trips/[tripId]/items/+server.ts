@@ -15,10 +15,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 	}
 
 	try {
-		return json(
-			await createItem({ ...payload.data, tripId: params.tripId, userId: locals.user.id }),
-			{ status: 201 }
-		);
+		return json(await createItem({ ...payload.data, tripId: params.tripId, userId: locals.user.id }), { status: 201 });
 	} catch (error: unknown) {
 		return storeErrorResponse(error);
 	}
@@ -35,9 +32,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 	}
 
 	try {
-		return json(
-			await deleteItem({ ...payload.data, tripId: params.tripId, userId: locals.user.id })
-		);
+		return json(await deleteItem({ ...payload.data, tripId: params.tripId, userId: locals.user.id }));
 	} catch (error: unknown) {
 		return storeErrorResponse(error);
 	}

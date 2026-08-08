@@ -21,10 +21,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
 	return Math.min(Math.max(value, minimum), maximum);
 }
 
-export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> = (
-	dialog,
-	initialOptions
-) => {
+export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> = (dialog, initialOptions) => {
 	let options = initialOptions;
 	let dragState: DragState | null = null;
 	let suppressDismissalClick = false;
@@ -64,10 +61,7 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 			return;
 		}
 
-		if (
-			Math.hypot(event.clientX - dragState.startClientX, event.clientY - dragState.startClientY) >=
-			dragThreshold
-		) {
+		if (Math.hypot(event.clientX - dragState.startClientX, event.clientY - dragState.startClientY) >= dragThreshold) {
 			suppressDismissalClick = true;
 		}
 

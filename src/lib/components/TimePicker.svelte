@@ -65,9 +65,7 @@
 		setTime(padded(hour), minutes);
 		clockSelection = 'minutes';
 		await tick();
-		const selectedMinute = clockFace.querySelector<HTMLButtonElement>(
-			'button[aria-pressed="true"]'
-		);
+		const selectedMinute = clockFace.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
 		(selectedMinute ?? clockFace.querySelector<HTMLButtonElement>('button'))?.focus();
 	}
 

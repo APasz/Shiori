@@ -29,10 +29,7 @@
 		isValidIanaTimeZone,
 		zonedDateTimeToUnixMilliseconds
 	} from '$lib/itinerary/zoned-time';
-	import {
-		browserTimeZoneOptions,
-		type TimeZoneSearchOption
-	} from '$lib/itinerary/time-zone-search';
+	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
@@ -41,12 +38,7 @@
 	type EditorMode = 'create' | 'edit';
 	type EditorState = 'acquiring' | 'editing' | 'error' | 'saving';
 	type EditorSectionId =
-		| 'editor-links'
-		| 'editor-overview'
-		| 'editor-places'
-		| 'editor-private'
-		| 'editor-schedule'
-		| 'editor-transport';
+		'editor-links' | 'editor-overview' | 'editor-places' | 'editor-private' | 'editor-schedule' | 'editor-transport';
 
 	type LocationDraft = {
 		address: string;
@@ -81,8 +73,7 @@
 	};
 
 	type ItemValidation =
-		| { readonly item: ItineraryItem; readonly valid: true }
-		| { readonly error: string; readonly valid: false };
+		{ readonly item: ItineraryItem; readonly valid: true } | { readonly error: string; readonly valid: false };
 
 	let {
 		item,
@@ -142,9 +133,7 @@
 	let initialDraftFingerprint = $state<string | null>(null);
 	let heartbeat: ReturnType<typeof setInterval> | undefined;
 	const draftFingerprint = $derived(JSON.stringify(itemCandidate()));
-	const hasUnsavedChanges = $derived(
-		initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint
-	);
+	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
 
 	const itemTypeOptions = itineraryItemTypeSchema.options;
 	const locationRoleOptions = locationRoleSchema.options;
@@ -177,9 +166,7 @@
 			inheritsTimingTimeZone: stop.timeZone === undefined,
 			locationId: stop.locationId,
 			platform: stop.platform ?? '',
-			scheduledAt: stop.scheduledAt
-				? (formatTimestampForTimeZoneInput(stop.scheduledAt, timeZone) ?? '')
-				: '',
+			scheduledAt: stop.scheduledAt ? (formatTimestampForTimeZoneInput(stop.scheduledAt, timeZone) ?? '') : '',
 			timeZone
 		};
 	}
@@ -225,14 +212,10 @@
 		reservationStatus = source.reservation?.status ?? 'pending';
 		transportMode = source.type === 'transport' ? source.transport.mode : 'other';
 		transportOperator = source.type === 'transport' ? (source.transport.operator ?? '') : '';
-		transportServiceNumber =
-			source.type === 'transport' ? (source.transport.serviceNumber ?? '') : '';
+		transportServiceNumber = source.type === 'transport' ? (source.transport.serviceNumber ?? '') : '';
 		transportSeat = source.type === 'transport' ? (source.transport.seat ?? '') : '';
 		fillMissingTransportOperator();
-		transportStops =
-			source.type === 'transport'
-				? source.transport.stops.map((stop) => stopDraft(stop, timeZone))
-				: [];
+		transportStops = source.type === 'transport' ? source.transport.stops.map((stop) => stopDraft(stop, timeZone)) : [];
 		if (timingNeedsConfirmation) {
 			timingKind = 'exact';
 			startAt = suggestedStartDate ? `${suggestedStartDate}T` : '';
@@ -314,19 +297,14 @@
 				googleMapsUrl: importedLocation.data.googleMapsUrl,
 				id: newIdentifier(),
 				isExpanded: true,
-				latitude: importedLocation.data.coordinates
-					? String(importedLocation.data.coordinates.latitude)
-					: '',
-				longitude: importedLocation.data.coordinates
-					? String(importedLocation.data.coordinates.longitude)
-					: '',
+				latitude: importedLocation.data.coordinates ? String(importedLocation.data.coordinates.latitude) : '',
+				longitude: importedLocation.data.coordinates ? String(importedLocation.data.coordinates.longitude) : '',
 				name: importedLocation.data.name ?? '',
 				role: 'primary'
 			});
 			googleMapsImportUrl = '';
 		} catch {
-			googleMapsImportError =
-				'The Google Maps link could not be imported because the server is unavailable.';
+			googleMapsImportError = 'The Google Maps link could not be imported because the server is unavailable.';
 		} finally {
 			isImportingGoogleMapsLocation = false;
 		}
@@ -461,8 +439,7 @@
 		stop.timeZone = timeZone;
 		stop.inheritsTimingTimeZone = timeZone === startAtTimeZone;
 		if (currentTimestamp !== null && isValidIanaTimeZone(timeZone)) {
-			stop.scheduledAt =
-				formatTimestampForTimeZoneInput(currentTimestamp, timeZone) ?? stop.scheduledAt;
+			stop.scheduledAt = formatTimestampForTimeZoneInput(currentTimestamp, timeZone) ?? stop.scheduledAt;
 		}
 	}
 
@@ -553,12 +530,8 @@
 		const reservation = reservationEnabled
 			? {
 					status: reservationStatus,
-					...(optionalText(reservationProvider)
-						? { provider: optionalText(reservationProvider) }
-						: {}),
-					...(optionalText(reservationReference)
-						? { reference: optionalText(reservationReference) }
-						: {})
+					...(optionalText(reservationProvider) ? { provider: optionalText(reservationProvider) } : {}),
+					...(optionalText(reservationReference) ? { reference: optionalText(reservationReference) } : {})
 				}
 			: undefined;
 		const common = {
@@ -589,18 +562,14 @@
 			transport: {
 				mode: transportMode,
 				...(optionalText(transportOperator) ? { operator: optionalText(transportOperator) } : {}),
-				...(optionalText(transportServiceNumber)
-					? { serviceNumber: optionalText(transportServiceNumber) }
-					: {}),
+				...(optionalText(transportServiceNumber) ? { serviceNumber: optionalText(transportServiceNumber) } : {}),
 				...(optionalText(transportSeat) ? { seat: optionalText(transportSeat) } : {}),
 				stops: transportStops.map((stop) => {
 					const scheduledAt = optionalText(stop.scheduledAt);
 					return {
 						locationId: stop.locationId.trim(),
 						...(scheduledAt ? { scheduledAt: timestampValue(scheduledAt, stop.timeZone) } : {}),
-						...(stop.inheritsTimingTimeZone
-							? {}
-							: timeZoneOverride(stop.timeZone, startAtTimeZone)),
+						...(stop.inheritsTimingTimeZone ? {} : timeZoneOverride(stop.timeZone, startAtTimeZone)),
 						...(optionalText(stop.platform) ? { platform: optionalText(stop.platform) } : {})
 					};
 				})
@@ -686,8 +655,7 @@
 
 		const editorBounds = editorElement.getBoundingClientRect();
 		const sectionBounds = section.getBoundingClientRect();
-		const targetTop =
-			editorElement.scrollTop + sectionBounds.top - editorBounds.top - header.offsetHeight - 16;
+		const targetTop = editorElement.scrollTop + sectionBounds.top - editorBounds.top - header.offsetHeight - 16;
 		editorElement.scrollTo({ behavior: 'smooth', top: Math.max(0, targetTop) });
 	}
 
@@ -806,10 +774,7 @@
 				return true;
 			}
 
-			errorMessage = errorFrom(
-				await responseData(response),
-				'The edit lock could not be released.'
-			);
+			errorMessage = errorFrom(await responseData(response), 'The edit lock could not be released.');
 			return false;
 		} catch {
 			errorMessage = 'The edit lock could not be released because the server is unavailable.';
@@ -896,26 +861,14 @@
 				<h2 id="item-editor-heading">{mode === 'create' ? 'Add item' : item.title}</h2>
 				{#if editorState === 'editing' || editorState === 'saving'}
 					<p class:changed={hasUnsavedChanges} class="editor-status">
-						{editorState === 'saving'
-							? 'Saving changes…'
-							: hasUnsavedChanges
-								? 'Unsaved changes'
-								: 'All changes saved'}
+						{editorState === 'saving' ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
 					</p>
 				{/if}
 			</div>
 			<div class="editor-actions">
 				{#if editorState === 'editing' || editorState === 'saving'}
-					<button
-						class="save-button shiori-form-button"
-						disabled={editorState === 'saving'}
-						type="submit"
-					>
-						{editorState === 'saving'
-							? 'Saving…'
-							: mode === 'create'
-								? 'Create item'
-								: 'Save changes'}
+					<button class="save-button shiori-form-button" disabled={editorState === 'saving'} type="submit">
+						{editorState === 'saving' ? 'Saving…' : mode === 'create' ? 'Create item' : 'Save changes'}
 					</button>
 				{/if}
 				<button
@@ -938,9 +891,7 @@
 					<button onclick={() => scrollToSection('editor-schedule')} type="button">Schedule</button>
 					<button onclick={() => scrollToSection('editor-places')} type="button">Places</button>
 					{#if itemType === 'transport'}
-						<button onclick={() => scrollToSection('editor-transport')} type="button"
-							>Transport</button
-						>
+						<button onclick={() => scrollToSection('editor-transport')} type="button">Transport</button>
 					{/if}
 					<button onclick={() => scrollToSection('editor-links')} type="button">Links</button>
 					<button onclick={() => scrollToSection('editor-private')} type="button">Private</button>
@@ -974,8 +925,7 @@
 						<legend>Schedule</legend>
 						{#if timingNeedsConfirmation}
 							<p class="timing-confirmation">
-								The imported link did not include a reliable time. Confirm the schedule before
-								saving.
+								The imported link did not include a reliable time. Confirm the schedule before saving.
 							</p>
 						{/if}
 						<label class="shiori-form-label">
@@ -1097,11 +1047,7 @@
 									</summary>
 									<div class="entry-body">
 										<div class="entry-heading">
-											<button
-												class="text-button"
-												onclick={() => removeLocation(location.id)}
-												type="button"
-											>
+											<button class="text-button" onclick={() => removeLocation(location.id)} type="button">
 												Remove
 											</button>
 										</div>
@@ -1125,28 +1071,16 @@
 										</label>
 										<label class="shiori-form-label">
 											Google Maps link <span class="field-hint">Shown with this location.</span>
-											<input
-												class="shiori-form-control"
-												bind:value={location.googleMapsUrl}
-												inputmode="url"
-											/>
+											<input class="shiori-form-control" bind:value={location.googleMapsUrl} inputmode="url" />
 										</label>
 										<div class="field-grid">
 											<label class="shiori-form-label">
 												Latitude
-												<input
-													class="shiori-form-control"
-													bind:value={location.latitude}
-													inputmode="decimal"
-												/>
+												<input class="shiori-form-control" bind:value={location.latitude} inputmode="decimal" />
 											</label>
 											<label class="shiori-form-label">
 												Longitude
-												<input
-													class="shiori-form-control"
-													bind:value={location.longitude}
-													inputmode="decimal"
-												/>
+												<input class="shiori-form-control" bind:value={location.longitude} inputmode="decimal" />
 											</label>
 										</div>
 									</div>
@@ -1192,9 +1126,7 @@
 								</label>
 							</div>
 							{#if locations.length === 0}
-								<p class="transport-empty">
-									Add locations under Places before adding stop details.
-								</p>
+								<p class="transport-empty">Add locations under Places before adding stop details.</p>
 							{:else}
 								<div class="transport-location-list">
 									{#each locations as location, locationIndex (location.id)}
@@ -1305,8 +1237,7 @@
 										<div class="entry-heading">
 											<button
 												class="text-button"
-												onclick={() =>
-													(documents = documents.filter((_, current) => current !== index))}
+												onclick={() => (documents = documents.filter((_, current) => current !== index))}
 												type="button"
 											>
 												Remove
@@ -1328,19 +1259,13 @@
 										</div>
 										<label class="shiori-form-label">
 											URL
-											<input
-												class="shiori-form-control"
-												bind:value={document.url}
-												inputmode="url"
-											/>
+											<input class="shiori-form-control" bind:value={document.url} inputmode="url" />
 										</label>
 									</div>
 								</details>
 							{/each}
 						</div>
-						<button class="text-button" onclick={addDocument} type="button"
-							>Add document reference</button
-						>
+						<button class="text-button" onclick={addDocument} type="button">Add document reference</button>
 					</fieldset>
 
 					{#if errorMessage}

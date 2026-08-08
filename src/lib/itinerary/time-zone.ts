@@ -12,9 +12,6 @@ export function resolveTimingTimeZone(timing: ItineraryTiming, tripTimeZone: str
 	return resolveTimeZone(tripTimeZone, timing);
 }
 
-export function resolveTransportStopTimeZone(
-	stop: TransportDetails['stops'][number],
-	timingTimeZone: string
-): string {
+export function resolveTransportStopTimeZone(stop: TransportDetails['stops'][number], timingTimeZone: string): string {
 	return resolveTimeZone(timingTimeZone, stop);
 }

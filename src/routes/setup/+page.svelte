@@ -32,11 +32,7 @@
 				required
 				type="password"
 			/>
-			<small
-				>Use at least {minimumPasswordLength} character{minimumPasswordLength === 1
-					? ''
-					: 's'}.</small
-			>
+			<small>Use at least {minimumPasswordLength} character{minimumPasswordLength === 1 ? '' : 's'}.</small>
 		</label>
 
 		<label class="shiori-form-label">
@@ -54,13 +50,7 @@
 		{#if data.setupTokenRequired}
 			<label class="shiori-form-label">
 				<span>Setup token</span>
-				<input
-					class="shiori-form-control"
-					autocomplete="off"
-					name="setupToken"
-					required
-					type="password"
-				/>
+				<input class="shiori-form-control" autocomplete="off" name="setupToken" required type="password" />
 				<small>Set through <code>SHIORI_SETUP_TOKEN</code> before starting Shiori.</small>
 			</label>
 		{/if}
@@ -72,11 +62,7 @@
 			<p class="error" role="alert">{data.setupTokenConfigurationError}</p>
 		{/if}
 
-		<button
-			class="shiori-form-button"
-			disabled={data.setupTokenConfigurationError !== null}
-			type="submit"
-		>
+		<button class="shiori-form-button" disabled={data.setupTokenConfigurationError !== null} type="submit">
 			Create sudo account
 		</button>
 	</form>

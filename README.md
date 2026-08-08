@@ -39,6 +39,12 @@ menu. New trips receive a readable URL at `/trips/<trip-name>` and can use the s
 their name and default time zone. The menu’s trip switcher shows empty trips first, then planned
 trips ordered by their latest item start.
 
+Previously opened trip pages are available read-only while offline. Shiori saves the app shell and
+the latest successful version of each opened trip on that browser profile; it refreshes that copy
+after an edit, and clears all offline itinerary copies when the user signs out. First open each trip
+while connected before relying on it offline. Offline copies may contain the details visible to the
+signed-in user, so sign out when using a shared device.
+
 Each item has one canonical `timing` value: `exact`, `approximate`, or `window`. Every timing uses
 Unix-millisecond timestamps; transport stops can use `scheduledAt` in the same format. Each trip
 also has a required default IANA time zone, with optional overrides on individual timings and

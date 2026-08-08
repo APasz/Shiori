@@ -13,11 +13,7 @@ describe('password policy', () => {
 	});
 
 	it('uses a grammatical validation message for each password minimum', () => {
-		expect(passwordMinimumMessage(developmentMinimumPasswordLength)).toBe(
-			'Use at least 1 character for a password.'
-		);
-		expect(passwordMinimumMessage(productionMinimumPasswordLength)).toBe(
-			'Use at least 12 characters for a password.'
-		);
+		expect(passwordMinimumMessage(developmentMinimumPasswordLength)).toBe('Use at least 1 character for a password.');
+		expect(passwordMinimumMessage(productionMinimumPasswordLength)).toBe('Use at least 12 characters for a password.');
 	});
 });

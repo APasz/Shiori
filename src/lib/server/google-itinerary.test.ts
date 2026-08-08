@@ -54,9 +54,7 @@ describe('Google itinerary import', () => {
 
 	it('rejects walking directions instead of creating an itinerary transport item', async () => {
 		await expect(
-			resolveGoogleItineraryUrl(
-				'https://www.google.com/maps/dir/Essendon/Flinders+Street?travelmode=walking'
-			)
+			resolveGoogleItineraryUrl('https://www.google.com/maps/dir/Essendon/Flinders+Street?travelmode=walking')
 		).rejects.toMatchObject({ status: 422 });
 	});
 
@@ -69,17 +67,16 @@ describe('Google itinerary import', () => {
 					new Response('redirect', {
 						status: 302,
 						headers: {
-							location:
-								'https://www.google.com/maps/dir/Essendon/Flinders+Street?travelmode=driving'
+							location: 'https://www.google.com/maps/dir/Essendon/Flinders+Street?travelmode=driving'
 						}
 					})
 				)
 				.mockResolvedValueOnce(new Response('map page', { status: 200 }))
 		);
 
-		await expect(
-			resolveGoogleItineraryUrl('https://maps.app.goo.gl/sLVj4QZsqzHRQThT6')
-		).resolves.toMatchObject([{ type: 'transport', transport: { mode: 'car' } }]);
+		await expect(resolveGoogleItineraryUrl('https://maps.app.goo.gl/sLVj4QZsqzHRQThT6')).resolves.toMatchObject([
+			{ type: 'transport', transport: { mode: 'car' } }
+		]);
 	});
 
 	it('imports separate flight legs from a selected Google Flights URL', async () => {
@@ -102,18 +99,12 @@ describe('Google itinerary import', () => {
 	it('follows a short Google Flights link to its selected itinerary', async () => {
 		vi.stubGlobal(
 			'fetch',
-			vi
-				.fn()
-				.mockResolvedValue(
-					new Response('redirect', { status: 302, headers: { location: selectedFlightUrl } })
-				)
+			vi.fn().mockResolvedValue(new Response('redirect', { status: 302, headers: { location: selectedFlightUrl } }))
 		);
 
 		await expect(
 			resolveGoogleItineraryUrl('https://www.google.com/travel/flights/s/5oteTevuZPUGQxy77')
-		).resolves.toEqual(
-			expect.arrayContaining([expect.objectContaining({ title: 'JQ13 from SYD to KIX' })])
-		);
+		).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ title: 'JQ13 from SYD to KIX' })]));
 	});
 
 	it('rejects unsupported and non-Google links', async () => {

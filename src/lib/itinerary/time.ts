@@ -5,8 +5,7 @@ export type FormattedLocalTimestamp = Readonly<{
 	time: string;
 }>;
 
-const localDateTimePattern =
-	/^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)$/;
+const localDateTimePattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)$/;
 
 /** Converts a browser-local datetime form value to a canonical Unix-millisecond timestamp. */
 export function localDateTimeToUnixMilliseconds(value: string): number | null {
@@ -16,13 +15,7 @@ export function localDateTimeToUnixMilliseconds(value: string): number | null {
 	}
 
 	const { day, hour, minute, month, year } = matched.groups;
-	const localDate = new Date(
-		Number(year),
-		Number(month) - 1,
-		Number(day),
-		Number(hour),
-		Number(minute)
-	);
+	const localDate = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
 
 	return localDate.getFullYear() === Number(year) &&
 		localDate.getMonth() === Number(month) - 1 &&
@@ -33,10 +26,7 @@ export function localDateTimeToUnixMilliseconds(value: string): number | null {
 		: null;
 }
 
-export function formatTimestampInTimeZone(
-	timestamp: number,
-	timeZone: string
-): FormattedLocalTimestamp | null {
+export function formatTimestampInTimeZone(timestamp: number, timeZone: string): FormattedLocalTimestamp | null {
 	if (!isValidIanaTimeZone(timeZone)) {
 		return null;
 	}

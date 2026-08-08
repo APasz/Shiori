@@ -1,16 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
-	import {
-		apiErrorSchema,
-		editSaveResponseSchema,
-		tripCreateResponseSchema
-	} from '$lib/editing/contracts';
+	import { apiErrorSchema, editSaveResponseSchema, tripCreateResponseSchema } from '$lib/editing/contracts';
 	import { tripDetailsSchema } from '$lib/itinerary/schema';
-	import {
-		browserTimeZoneOptions,
-		type TimeZoneSearchOption
-	} from '$lib/itinerary/time-zone-search';
+	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
 	import type { DetailedTripView } from '$lib/server/store';
 	import { formatValidationIssues } from '$lib/validation';
@@ -48,9 +41,7 @@
 	let initialDraftFingerprint = $state<string | null>(null);
 
 	const draftFingerprint = $derived(JSON.stringify(detailsCandidate()));
-	const hasUnsavedChanges = $derived(
-		initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint
-	);
+	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
 
 	function browserTimeZone(): string {
 		const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -184,24 +175,12 @@
 					{mode === 'create' ? 'Create a trip' : trip.itinerary.title}
 				</h2>
 				<p class:changed={hasUnsavedChanges} class="editor-status">
-					{editorState === 'saving'
-						? 'Saving changes…'
-						: hasUnsavedChanges
-							? 'Unsaved changes'
-							: 'All changes saved'}
+					{editorState === 'saving' ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
 				</p>
 			</div>
 			<div class="editor-actions">
-				<button
-					class="save-button shiori-form-button"
-					disabled={editorState === 'saving'}
-					type="submit"
-				>
-					{editorState === 'saving'
-						? 'Saving…'
-						: mode === 'create'
-							? 'Create trip'
-							: 'Save changes'}
+				<button class="save-button shiori-form-button" disabled={editorState === 'saving'} type="submit">
+					{editorState === 'saving' ? 'Saving…' : mode === 'create' ? 'Create trip' : 'Save changes'}
 				</button>
 				<button
 					class="close-button shiori-form-button"

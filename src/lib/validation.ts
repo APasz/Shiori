@@ -3,10 +3,7 @@ export type ValidationIssue = Readonly<{
 	path: readonly PropertyKey[];
 }>;
 
-export function formatValidationIssues(
-	issues: readonly ValidationIssue[],
-	root = 'document'
-): string {
+export function formatValidationIssues(issues: readonly ValidationIssue[], root = 'document'): string {
 	return issues
 		.map((issue) => {
 			const location = issue.path.map(String).join('.') || root;

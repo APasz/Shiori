@@ -6,8 +6,7 @@ type LocalDateTimeParts = {
 	year: number;
 };
 
-const localDateTimePattern =
-	/^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)$/;
+const localDateTimePattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)$/;
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
 function formatterFor(timeZone: string): Intl.DateTimeFormat {
@@ -58,11 +57,7 @@ function localParts(timestamp: number, timeZone: string): LocalDateTimeParts | n
 		}
 	}
 
-	return day === undefined ||
-		hour === undefined ||
-		minute === undefined ||
-		month === undefined ||
-		year === undefined
+	return day === undefined || hour === undefined || minute === undefined || month === undefined || year === undefined
 		? null
 		: { day, hour, minute, month, year };
 }
@@ -138,18 +133,13 @@ export function zonedDateTimeToUnixMilliseconds(value: string, timeZone: string)
 	return actual && matchingParts(actual, desired) ? timestamp : null;
 }
 
-export function formatTimestampForTimeZoneInput(
-	timestamp: number,
-	timeZone: string
-): string | null {
+export function formatTimestampForTimeZoneInput(timestamp: number, timeZone: string): string | null {
 	if (!Number.isSafeInteger(timestamp) || !isValidIanaTimeZone(timeZone)) {
 		return null;
 	}
 
 	const parts = localParts(timestamp, timeZone);
 	return parts
-		? `${parts.year}-${padded(parts.month)}-${padded(parts.day)}T${padded(parts.hour)}:${padded(
-				parts.minute
-			)}`
+		? `${parts.year}-${padded(parts.month)}-${padded(parts.day)}T${padded(parts.hour)}:${padded(parts.minute)}`
 		: null;
 }

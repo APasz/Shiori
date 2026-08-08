@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { dev } from '$app/environment';
+	import { afterNavigate } from '$app/navigation';
 	import { onMount, type Component } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
@@ -8,12 +9,22 @@
 	import '$lib/styles/forms.css';
 	import { themeStyleTag } from '$lib/theme/palette';
 	import { themeInitializationScript } from '$lib/theme/theme';
+	import { refreshOfflineTripPage, registerOfflineSupport } from '$lib/offline';
 
 	let { children } = $props();
 	let DevelopmentViewerControls = $state<Component | null>(null);
 
+	if (!dev) {
+		afterNavigate(() => {
+			refreshOfflineTripPage();
+		});
+	}
+
 	onMount(() => {
 		viewerContext.initialize();
+		if (!dev) {
+			registerOfflineSupport();
+		}
 		if (dev) {
 			void import('$lib/components/DevelopmentViewerControls.svelte').then((module) => {
 				DevelopmentViewerControls = module.default;

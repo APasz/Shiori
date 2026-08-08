@@ -15,9 +15,7 @@ function padded(value: number): string {
 	return String(value).padStart(2, '0');
 }
 
-function calendarDateParts(
-	value: string
-): Readonly<{ day: number; month: number; year: number }> | null {
+function calendarDateParts(value: string): Readonly<{ day: number; month: number; year: number }> | null {
 	const matched = calendarDatePattern.exec(value);
 	if (!matched?.groups) {
 		return null;
@@ -28,9 +26,7 @@ function calendarDateParts(
 	const year = Number(matched.groups.year);
 	const timestamp = Date.UTC(year, month - 1, day);
 	const date = new Date(timestamp);
-	return date.getUTCFullYear() === year &&
-		date.getUTCMonth() === month - 1 &&
-		date.getUTCDate() === day
+	return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
 		? { day, month, year }
 		: null;
 }
@@ -56,9 +52,7 @@ export function addCalendarMonths(month: CalendarMonth, amount: number): Calenda
 
 export function addCalendarDays(value: string, amount: number): string | null {
 	const parts = calendarDateParts(value);
-	return parts
-		? calendarDateFromTimestamp(Date.UTC(parts.year, parts.month - 1, parts.day + amount))
-		: null;
+	return parts ? calendarDateFromTimestamp(Date.UTC(parts.year, parts.month - 1, parts.day + amount)) : null;
 }
 
 export function calendarDays(month: CalendarMonth): CalendarDay[] {

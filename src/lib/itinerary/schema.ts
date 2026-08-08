@@ -11,11 +11,7 @@ export const calendarDateSchema = z
 	.refine((value) => {
 		const [year, month, day] = value.split('-').map(Number);
 		const date = new Date(Date.UTC(year, month - 1, day));
-		return (
-			date.getUTCFullYear() === year &&
-			date.getUTCMonth() === month - 1 &&
-			date.getUTCDate() === day
-		);
+		return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 	}, 'Use a valid calendar date.');
 export const unixTimestampSchema = z
 	.number()
@@ -89,32 +85,10 @@ export const googleMapsUrlSchema = z
 	.refine(isGoogleMapsUrl, 'Use a Google Maps or maps.app.goo.gl URL.');
 
 export const itineraryItemTypeSchema = z.enum(['transport', 'activity', 'accommodation']);
-export const locationRoleSchema = z.enum([
-	'primary',
-	'departure',
-	'arrival',
-	'via',
-	'meeting-point'
-]);
-export const transportModeSchema = z.enum([
-	'air',
-	'bus',
-	'car',
-	'ferry',
-	'rail',
-	'ride-share',
-	'walk',
-	'other'
-]);
+export const locationRoleSchema = z.enum(['primary', 'departure', 'arrival', 'via', 'meeting-point']);
+export const transportModeSchema = z.enum(['air', 'bus', 'car', 'ferry', 'rail', 'ride-share', 'walk', 'other']);
 export const reservationStatusSchema = z.enum(['confirmed', 'pending', 'waitlisted', 'cancelled']);
-export const documentKindSchema = z.enum([
-	'ticket',
-	'confirmation',
-	'itinerary',
-	'visa',
-	'insurance',
-	'other'
-]);
+export const documentKindSchema = z.enum(['ticket', 'confirmation', 'itinerary', 'visa', 'insurance', 'other']);
 export const timingKindSchema = z.enum(['exact', 'approximate', 'window']);
 
 export const locationCoordinatesSchema = z.strictObject({

@@ -563,9 +563,7 @@ async function writeData(data: StoredData): Promise<void> {
 	]);
 }
 
-async function transaction<Result>(
-	operation: (data: StoredData) => Promise<Result> | Result
-): Promise<Result> {
+async function transaction<Result>(operation: (data: StoredData) => Promise<Result> | Result): Promise<Result> {
 	let release: (() => void) | undefined;
 	const nextTransaction = new Promise<void>((resolve) => {
 		release = resolve;
@@ -678,19 +676,13 @@ function requireTripById(data: StoredData, tripId: string): StoredTrip {
 	return trip;
 }
 
-function getTripAccess(
-	data: StoredData,
-	trip: StoredTrip,
-	user: AuthenticatedUser | null
-): TripAccessRole | null {
+function getTripAccess(data: StoredData, trip: StoredTrip, user: AuthenticatedUser | null): TripAccessRole | null {
 	if (user?.id === trip.ownerId) {
 		return 'sudo';
 	}
 
 	if (user) {
-		const share = data.shares.find(
-			(candidate) => candidate.tripId === trip.id && candidate.userId === user.id
-		);
+		const share = data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === user.id);
 		if (share) {
 			return share.role;
 		}
@@ -714,10 +706,7 @@ export async function needsInitialSetup(): Promise<boolean> {
 	return data.users.length === 0;
 }
 
-export async function createInitialSudo(
-	usernameInput: string,
-	passwordInput: string
-): Promise<AuthenticatedUser> {
+export async function createInitialSudo(usernameInput: string, passwordInput: string): Promise<AuthenticatedUser> {
 	const username = usernameSchema.parse(usernameInput);
 	const password = passwordSchema.parse(passwordInput);
 	const passwordHash = await hashPassword(password);
@@ -745,19 +734,14 @@ export async function createInitialSudo(
 	});
 }
 
-export async function authenticate(
-	usernameInput: string,
-	passwordInput: string
-): Promise<AuthenticatedUser | null> {
+export async function authenticate(usernameInput: string, passwordInput: string): Promise<AuthenticatedUser | null> {
 	const username = usernameSchema.safeParse(usernameInput);
 	if (!username.success || typeof passwordInput !== 'string') {
 		return null;
 	}
 
 	const data = await readData();
-	const user = data.users.find(
-		(candidate) => candidate.username.toLowerCase() === username.data.toLowerCase()
-	);
+	const user = data.users.find((candidate) => candidate.username.toLowerCase() === username.data.toLowerCase());
 	if (!user || !(await verifyPassword(passwordInput, user.passwordHash))) {
 		return null;
 	}
@@ -781,17 +765,13 @@ export async function createSession(userId: string): Promise<string> {
 	});
 }
 
-export async function getSessionUser(
-	sessionId: string | undefined
-): Promise<AuthenticatedUser | null> {
+export async function getSessionUser(sessionId: string | undefined): Promise<AuthenticatedUser | null> {
 	if (!sessionId) {
 		return null;
 	}
 
 	const data = await readData();
-	const session = data.sessions.find(
-		(candidate) => candidate.id === sessionId && !isExpired(candidate.expiresAt)
-	);
+	const session = data.sessions.find((candidate) => candidate.id === sessionId && !isExpired(candidate.expiresAt));
 	if (!session) {
 		return null;
 	}
@@ -810,10 +790,7 @@ export async function destroySession(sessionId: string | undefined): Promise<voi
 	});
 }
 
-export async function getTripView(
-	slug: string,
-	user: AuthenticatedUser | null
-): Promise<TripView | null> {
+export async function getTripView(slug: string, user: AuthenticatedUser | null): Promise<TripView | null> {
 	const data = await readData();
 	const trip = findTripBySlug(data, slug);
 	if (!trip) {
@@ -848,10 +825,7 @@ export async function getTripView(
 	};
 }
 
-export async function createTrip(input: {
-	details: unknown;
-	ownerId: string;
-}): Promise<TripReference> {
+export async function createTrip(input: { details: unknown; ownerId: string }): Promise<TripReference> {
 	const details = tripDetailsSchema.parse(input.details);
 
 	return transaction((data) => {
@@ -893,10 +867,7 @@ export async function listTripSwitchOptions(userId: string): Promise<TripSwitchO
 		.sort(compareTripSwitchOptions);
 }
 
-export async function assertTripOwnerAccess(input: {
-	tripId: string;
-	userId: string;
-}): Promise<void> {
+export async function assertTripOwnerAccess(input: { tripId: string; userId: string }): Promise<void> {
 	const data = await readData();
 	getTripForMutation(data, input.tripId, input.userId);
 }
@@ -913,9 +884,7 @@ export async function listTripMembers(tripId: string, actorId: string): Promise<
 			continue;
 		}
 
-		const share = data.shares.find(
-			(candidate) => candidate.tripId === trip.id && candidate.userId === user.id
-		);
+		const share = data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === user.id);
 		if (share) {
 			members.push({ id: user.id, username: user.username, role: share.role });
 		}
@@ -923,10 +892,7 @@ export async function listTripMembers(tripId: string, actorId: string): Promise<
 	return members;
 }
 
-export async function hasActiveTripEditSession(input: {
-	tripId: string;
-	userId: string;
-}): Promise<boolean> {
+export async function hasActiveTripEditSession(input: { tripId: string; userId: string }): Promise<boolean> {
 	const data = await readData();
 	const trip = requireTripById(data, input.tripId);
 	assertTripOwner(trip, input.userId);
@@ -964,11 +930,7 @@ export async function createSharedUser(input: {
 	});
 }
 
-export async function setTripPublic(input: {
-	actorId: string;
-	isPublic: boolean;
-	tripId: string;
-}): Promise<void> {
+export async function setTripPublic(input: { actorId: string; isPublic: boolean; tripId: string }): Promise<void> {
 	await transaction((data) => {
 		const trip = requireTripById(data, input.tripId);
 		assertTripOwner(trip, input.actorId);
@@ -1001,10 +963,7 @@ export async function saveTripDetails(input: {
 
 function assertExpectedRevision(trip: StoredTrip, revision: number): void {
 	if (trip.revision !== revision) {
-		throw new StoreError(
-			409,
-			'This trip changed before your edit could be saved. Reload and try again.'
-		);
+		throw new StoreError(409, 'This trip changed before your edit could be saved. Reload and try again.');
 	}
 }
 
@@ -1097,18 +1056,11 @@ async function renewTripLock(input: {
 	});
 }
 
-export async function acquireItemLock(input: {
-	itemId: string;
-	tripId: string;
-	userId: string;
-}): Promise<EditLock> {
+export async function acquireItemLock(input: { itemId: string; tripId: string; userId: string }): Promise<EditLock> {
 	return acquireTripLock({ ...input, targetId: input.itemId });
 }
 
-export async function acquireTripStructureLock(input: {
-	tripId: string;
-	userId: string;
-}): Promise<EditLock> {
+export async function acquireTripStructureLock(input: { tripId: string; userId: string }): Promise<EditLock> {
 	return acquireTripLock({ ...input, targetId: tripStructureLockTargetId });
 }
 
@@ -1179,9 +1131,7 @@ export async function saveItem(input: {
 		if (itemIndex < 0) {
 			throw new StoreError(404, 'Itinerary item not found.');
 		}
-		const items = trip.itinerary.items.map((existingItem, index) =>
-			index === itemIndex ? item : existingItem
-		);
+		const items = trip.itinerary.items.map((existingItem, index) => (index === itemIndex ? item : existingItem));
 		const result = commitItineraryChange(trip, { ...trip.itinerary, items });
 		data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
 		return result;

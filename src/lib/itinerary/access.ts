@@ -11,8 +11,7 @@ export type PublicItinerary = Pick<Itinerary, 'title' | 'timeZone'> & {
 	items: PublicItineraryItem[];
 };
 
-type RestrictedItineraryDetail =
-	'documents' | 'reservation' | 'transportPlatform' | 'transportSeat';
+type RestrictedItineraryDetail = 'documents' | 'reservation' | 'transportPlatform' | 'transportSeat';
 
 /** This is the single policy for data that is not visible to a standard shared user. */
 export const itineraryDetailVisibility = {
@@ -29,10 +28,7 @@ const accessRank = {
 	sudo: 3
 } as const satisfies Record<TripAccessRole, number>;
 
-export function canViewItineraryDetail(
-	access: DetailedTripAccessRole,
-	detail: RestrictedItineraryDetail
-): boolean {
+export function canViewItineraryDetail(access: DetailedTripAccessRole, detail: RestrictedItineraryDetail): boolean {
 	return accessRank[access] >= accessRank[itineraryDetailVisibility[detail]];
 }
 
@@ -72,10 +68,7 @@ function projectDetailedItem(item: ItineraryItem, access: DetailedTripAccessRole
 	};
 }
 
-export function projectDetailedItinerary(
-	itinerary: Itinerary,
-	access: DetailedTripAccessRole
-): Itinerary {
+export function projectDetailedItinerary(itinerary: Itinerary, access: DetailedTripAccessRole): Itinerary {
 	if (access === 'admin' || access === 'sudo') {
 		return itinerary;
 	}

@@ -2,11 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { editLockTokenRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
-import {
-	acquireTripStructureLock,
-	releaseTripStructureLock,
-	renewTripStructureLock
-} from '$lib/server/store';
+import { acquireTripStructureLock, releaseTripStructureLock, renewTripStructureLock } from '$lib/server/store';
 
 export const POST: RequestHandler = async ({ locals, params }) => {
 	if (!locals.user) {

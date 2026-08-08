@@ -18,9 +18,7 @@
 	const viewerLabel = $derived(
 		browserReady ? formatItineraryTiming(timing, includeDate, viewerContext.timeZone) : null
 	);
-	const localLabel = $derived(
-		browserReady ? formatItineraryTiming(timing, includeDate, timeZone) : null
-	);
+	const localLabel = $derived(browserReady ? formatItineraryTiming(timing, includeDate, timeZone) : null);
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
 
 	onMount(() => {
@@ -28,10 +26,7 @@
 	});
 </script>
 
-<span
-	class:uncertain={timing.kind === 'approximate' || timing.kind === 'window'}
-	class="itinerary-timing"
->
+<span class:uncertain={timing.kind === 'approximate' || timing.kind === 'window'} class="itinerary-timing">
 	<span>{viewerLabel ?? 'Localizing…'}</span>
 	{#if showLocalTime && localLabel}
 		<span class="local-time">{localLabel} {timeZoneShortLabel(timeZone)}</span>

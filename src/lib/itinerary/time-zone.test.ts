@@ -14,10 +14,7 @@ describe('itinerary time-zone resolution', () => {
 		expect(resolveTimingTimeZone(timing, tripTimeZone)).toBe('Asia/Tokyo');
 		expect(resolveTimingTimeZone(timingOverride, tripTimeZone)).toBe('Australia/Melbourne');
 		expect(
-			resolveTransportStopTimeZone(
-				{ locationId: 'arrival', scheduledAt: 1_775_956_000_000 },
-				'Australia/Melbourne'
-			)
+			resolveTransportStopTimeZone({ locationId: 'arrival', scheduledAt: 1_775_956_000_000 }, 'Australia/Melbourne')
 		).toBe('Australia/Melbourne');
 		expect(
 			resolveTransportStopTimeZone(

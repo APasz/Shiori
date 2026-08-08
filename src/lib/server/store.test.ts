@@ -22,11 +22,7 @@ function managedDataPath(filename: string): string {
 	return join(dataDirectory, filename);
 }
 
-async function createTestTrip(
-	store: StoreModule,
-	ownerId: string,
-	itemIds: readonly string[] = []
-): Promise<TestTrip> {
+async function createTestTrip(store: StoreModule, ownerId: string, itemIds: readonly string[] = []): Promise<TestTrip> {
 	const trip = await store.createTrip({
 		details: { title: 'Test trip', timeZone: 'UTC' },
 		ownerId
@@ -107,16 +103,10 @@ describe('JSON store', () => {
 	});
 
 	it('rejects incomplete or invalid split data before serving it', async () => {
-		await writeFile(
-			managedDataPath('users.json'),
-			JSON.stringify({ version: 6, users: [] }, null, 4),
-			'utf8'
-		);
+		await writeFile(managedDataPath('users.json'), JSON.stringify({ version: 6, users: [] }, null, 4), 'utf8');
 
 		const incompleteStore = await import('./store');
-		await expect(incompleteStore.needsInitialSetup()).rejects.toThrow(
-			'Split Shiori data is incomplete.'
-		);
+		await expect(incompleteStore.needsInitialSetup()).rejects.toThrow('Split Shiori data is incomplete.');
 
 		vi.resetModules();
 		await Promise.all([
@@ -151,22 +141,12 @@ describe('JSON store', () => {
 				),
 				'utf8'
 			),
-			writeFile(
-				managedDataPath('sessions.json'),
-				JSON.stringify({ version: 6, sessions: [] }, null, 4),
-				'utf8'
-			),
-			writeFile(
-				managedDataPath('edit-locks.json'),
-				JSON.stringify({ version: 6, editLocks: [] }, null, 4),
-				'utf8'
-			)
+			writeFile(managedDataPath('sessions.json'), JSON.stringify({ version: 6, sessions: [] }, null, 4), 'utf8'),
+			writeFile(managedDataPath('edit-locks.json'), JSON.stringify({ version: 6, editLocks: [] }, null, 4), 'utf8')
 		]);
 
 		const invalidStore = await import('./store');
-		await expect(invalidStore.needsInitialSetup()).rejects.toThrow(
-			'A share must reference an existing trip.'
-		);
+		await expect(invalidStore.needsInitialSetup()).rejects.toThrow('A share must reference an existing trip.');
 	});
 
 	it('prunes expired records during every write transaction', async () => {
@@ -264,9 +244,10 @@ describe('JSON store', () => {
 		}
 
 		const trips = await store.listTripSwitchOptions(owner.id);
-		expect(
-			trips.filter((trip) => trip.latestItemStartAt === null).map((trip) => trip.title)
-		).toEqual(['Second empty trip', 'First empty trip']);
+		expect(trips.filter((trip) => trip.latestItemStartAt === null).map((trip) => trip.title)).toEqual([
+			'Second empty trip',
+			'First empty trip'
+		]);
 		expect(
 			trips
 				.filter((trip) => trip.latestItemStartAt !== null)
@@ -310,9 +291,7 @@ describe('JSON store', () => {
 		});
 		await store.setTripPublic({ actorId: user.id, isPublic: true, tripId: trip.id });
 
-		const backup: unknown = JSON.parse(
-			await readFile(`${managedTripPath(trip.slug)}.backup`, 'utf8')
-		);
+		const backup: unknown = JSON.parse(await readFile(`${managedTripPath(trip.slug)}.backup`, 'utf8'));
 		expect(backup).toMatchObject({ trip: { isPublic: false } });
 	});
 
@@ -353,19 +332,15 @@ describe('JSON store', () => {
 			tripId: trip.id,
 			userId: user.id
 		});
-		await expect(
-			store.hasActiveTripEditSession({ tripId: trip.id, userId: user.id })
-		).resolves.toBe(true);
+		await expect(store.hasActiveTripEditSession({ tripId: trip.id, userId: user.id })).resolves.toBe(true);
 
-		await expect(
-			store.forceReleaseTripEditLocks({ tripId: trip.id, userId: admin.id })
-		).rejects.toMatchObject({ status: 403 });
-		await expect(
-			store.forceReleaseTripEditLocks({ tripId: trip.id, userId: user.id })
-		).resolves.toEqual({ released: 1 });
-		await expect(
-			store.hasActiveTripEditSession({ tripId: trip.id, userId: user.id })
-		).resolves.toBe(false);
+		await expect(store.forceReleaseTripEditLocks({ tripId: trip.id, userId: admin.id })).rejects.toMatchObject({
+			status: 403
+		});
+		await expect(store.forceReleaseTripEditLocks({ tripId: trip.id, userId: user.id })).resolves.toEqual({
+			released: 1
+		});
+		await expect(store.hasActiveTripEditSession({ tripId: trip.id, userId: user.id })).resolves.toBe(false);
 		await expect(
 			store.acquireItemLock({
 				itemId: 'second-item',

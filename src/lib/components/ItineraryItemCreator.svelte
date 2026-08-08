@@ -1,11 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
-	import {
-		apiErrorSchema,
-		itineraryItemImportResponseSchema,
-		type ItineraryItemImport
-	} from '$lib/editing/contracts';
+	import { apiErrorSchema, itineraryItemImportResponseSchema, type ItineraryItemImport } from '$lib/editing/contracts';
 	import type { ItineraryItemType } from '$lib/itinerary/schema';
 
 	type CreatorState = 'entry' | 'importing' | 'review';
@@ -97,9 +93,7 @@
 			return 'Activity details were detected.';
 		}
 		const route = item.locations.map((location) => location.name).join(' → ');
-		const service = item.transport.operator
-			? `${item.transport.operator}${item.transport.serviceNumber ?? ''} · `
-			: '';
+		const service = item.transport.operator ? `${item.transport.operator}${item.transport.serviceNumber ?? ''} · ` : '';
 		return `${service}${route}`;
 	}
 
@@ -146,8 +140,8 @@
 			<button class="text-button" onclick={retryImport} type="button">Try another link</button>
 		{:else}
 			<p class="intro">
-				Paste a Google Maps place or directions link, or a Google Flights link. We’ll prefill what
-				we can, then you can review it.
+				Paste a Google Maps place or directions link, or a Google Flights link. We’ll prefill what we can, then you can
+				review it.
 			</p>
 			<form class="shiori-form" onsubmit={importUrl}>
 				<label class="shiori-form-label">
@@ -168,20 +162,14 @@
 			<div class="manual">
 				<h3>Or create manually</h3>
 				<div>
-					<button
-						disabled={creatorState === 'importing'}
-						onclick={() => startManual('transport')}
-						type="button">Transport</button
+					<button disabled={creatorState === 'importing'} onclick={() => startManual('transport')} type="button"
+						>Transport</button
 					>
-					<button
-						disabled={creatorState === 'importing'}
-						onclick={() => startManual('activity')}
-						type="button">Activity</button
+					<button disabled={creatorState === 'importing'} onclick={() => startManual('activity')} type="button"
+						>Activity</button
 					>
-					<button
-						disabled={creatorState === 'importing'}
-						onclick={() => startManual('accommodation')}
-						type="button">Accommodation</button
+					<button disabled={creatorState === 'importing'} onclick={() => startManual('accommodation')} type="button"
+						>Accommodation</button
 					>
 				</div>
 			</div>

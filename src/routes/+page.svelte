@@ -22,6 +22,7 @@
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
+	import { clearOfflineTripPages, refreshOfflineTripPage } from '$lib/offline';
 	import type { AuthenticatedUser, DetailedTripView, TripSwitchOption, TripView } from '$lib/server/store';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import { onMount } from 'svelte';
@@ -54,6 +55,7 @@
 	let dayDisclosureReady = $state(false);
 	let openDayDates = $state<string[]>([]);
 	let appliedViewerRevision = $state(0);
+	let offline = $state(false);
 
 	const itemTypeLabels: Record<ItineraryItem['type'], string> = {
 		transport: 'Transport',
@@ -222,6 +224,7 @@
 				selectedItemId = null;
 			}
 			await invalidateAll();
+			refreshOfflineTripPage();
 		} catch {
 			mutationError = 'The itinerary item could not be deleted because the server is unavailable.';
 		} finally {
@@ -232,11 +235,13 @@
 	async function finishEditing(): Promise<void> {
 		editingItem = null;
 		await invalidateAll();
+		refreshOfflineTripPage();
 	}
 
 	async function finishTripEditing(): Promise<void> {
 		editingTripMode = null;
 		await invalidateAll();
+		refreshOfflineTripPage();
 	}
 
 	async function visitCreatedTrip(slug: string): Promise<void> {
@@ -245,12 +250,23 @@
 	}
 
 	onMount(() => {
+		const updateOfflineStatus = (): void => {
+			offline = !navigator.onLine;
+		};
+		updateOfflineStatus();
+		window.addEventListener('online', updateOfflineStatus);
+		window.addEventListener('offline', updateOfflineStatus);
 		appliedViewerRevision = viewerContext.revision;
 		localScheduleReady = true;
 		queueMicrotask(() => {
 			openDayDates = restoredOpenDayDates() ?? defaultOpenDayDates();
 			dayDisclosureReady = true;
 		});
+
+		return () => {
+			window.removeEventListener('online', updateOfflineStatus);
+			window.removeEventListener('offline', updateOfflineStatus);
+		};
 	});
 </script>
 
@@ -261,13 +277,20 @@
 
 <main>
 	<header>
+		{#if offline}
+			<p class="offline-status" role="status">
+				Offline · showing the last saved itinerary. Changes require a connection.
+			</p>
+		{/if}
 		<nav aria-label="Account">
 			{#if data.currentUser}
 				<span>Signed as {data.currentUser.username}</span>
 				{#if data.trip.access === 'sudo'}
 					<a href={resolve(`/settings/access?trip=${encodeURIComponent(data.trip.slug)}`)}>Access</a>
 				{/if}
-				<form action="/logout" method="POST"><button type="submit">Sign out</button></form>
+				<form action="/logout" method="POST" onsubmit={clearOfflineTripPages}>
+					<button type="submit">Sign out</button>
+				</form>
 			{:else if data.setupRequired}
 				<a href={resolve('/setup')}>Set up Shiori</a>
 			{:else}
@@ -446,6 +469,15 @@
 	header {
 		border-bottom: 1px solid var(--color-border-default);
 		padding: clamp(3rem, 5vw, 4rem) 1rem 0.75rem;
+	}
+
+	.offline-status {
+		background: var(--color-surface-raised);
+		border-bottom: 1px solid var(--color-border-default);
+		font-size: 0.8125rem;
+		margin: 0;
+		padding: 0.5rem 1rem;
+		text-align: center;
 	}
 
 	.itinerary-content {

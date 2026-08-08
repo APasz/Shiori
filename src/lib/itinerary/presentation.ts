@@ -17,9 +17,7 @@ export type LocalItineraryDay<Item extends TimedItem> = Readonly<{
 }>;
 
 function timestampForViewer(timestamp: number, timeZone: string | undefined) {
-	return timeZone
-		? formatTimestampInTimeZone(timestamp, timeZone)
-		: formatLocalTimestamp(timestamp);
+	return timeZone ? formatTimestampInTimeZone(timestamp, timeZone) : formatLocalTimestamp(timestamp);
 }
 
 function localDateForTimestamp(timestamp: number, timeZone: string | undefined): string {
@@ -49,24 +47,15 @@ function timingDateBounds(timing: ItineraryTiming, timeZone: string | undefined)
 			];
 		}
 		case 'window':
-			return [
-				localDateForTimestamp(timing.earliestAt, timeZone),
-				localDateForTimestamp(timing.latestAt, timeZone)
-			];
+			return [localDateForTimestamp(timing.earliestAt, timeZone), localDateForTimestamp(timing.latestAt, timeZone)];
 	}
 }
 
 function compareTimedItems<Item extends TimedItem>(left: Item, right: Item): number {
-	return (
-		timingStartTimestamp(left.timing) - timingStartTimestamp(right.timing) ||
-		left.id.localeCompare(right.id)
-	);
+	return timingStartTimestamp(left.timing) - timingStartTimestamp(right.timing) || left.id.localeCompare(right.id);
 }
 
-function itemsByLocalDay<Item extends TimedItem>(
-	items: Item[],
-	timeZone?: string
-): Map<string, Item[]> {
+function itemsByLocalDay<Item extends TimedItem>(items: Item[], timeZone?: string): Map<string, Item[]> {
 	const days = new Map<string, Item[]>();
 
 	for (const item of [...items].sort(compareTimedItems)) {
@@ -100,10 +89,7 @@ export function formatLocalDay(date: string): string {
 	return formatted;
 }
 
-export function getItineraryDateRange(
-	items: TimedItem[],
-	timeZone?: string
-): [string, string] | null {
+export function getItineraryDateRange(items: TimedItem[], timeZone?: string): [string, string] | null {
 	const firstItem = items[0];
 	if (!firstItem) {
 		return null;
@@ -144,17 +130,9 @@ export function getLocalItineraryDays<Item extends TimedItem>(
 	return days;
 }
 
-export function defaultItemTimestamp(
-	date: string | undefined,
-	timeZone: string,
-	currentTimestamp: number
-): number {
+export function defaultItemTimestamp(date: string | undefined, timeZone: string, currentTimestamp: number): number {
 	const currentDateTime = formatTimestampForTimeZoneInput(currentTimestamp, timeZone);
-	const dateTime = date
-		? `${date}T09:00`
-		: currentDateTime
-			? `${currentDateTime.slice(0, 13)}:00`
-			: null;
+	const dateTime = date ? `${date}T09:00` : currentDateTime ? `${currentDateTime.slice(0, 13)}:00` : null;
 	const timestamp = dateTime ? zonedDateTimeToUnixMilliseconds(dateTime, timeZone) : null;
 	if (timestamp === null) {
 		throw new Error(`Cannot create a local default time in ${timeZone}.`);

@@ -1,11 +1,7 @@
 import type { ItineraryItem, ItineraryItemType, ItineraryLocation } from './schema';
 import type { ItineraryItemImport } from '$lib/editing/contracts';
 
-export function createEmptyItineraryItem(
-	type: ItineraryItemType,
-	id: string,
-	startAt: number
-): ItineraryItem {
+export function createEmptyItineraryItem(type: ItineraryItemType, id: string, startAt: number): ItineraryItem {
 	const common = {
 		id,
 		timing: { kind: 'exact' as const, startAt },

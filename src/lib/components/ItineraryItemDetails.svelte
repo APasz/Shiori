@@ -79,11 +79,7 @@
 						<li>
 							{#if location.googleMapsUrl}
 								<strong>
-									<a
-										href={location.googleMapsUrl}
-										rel="external noopener noreferrer"
-										target="_blank"
-									>
+									<a href={location.googleMapsUrl} rel="external noopener noreferrer" target="_blank">
 										{location.name}
 									</a>
 								</strong>

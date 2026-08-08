@@ -2,10 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { itineraryItemImportRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
-import {
-	GoogleItineraryImportError,
-	resolveGoogleItineraryUrl
-} from '$lib/server/google-itinerary';
+import { GoogleItineraryImportError, resolveGoogleItineraryUrl } from '$lib/server/google-itinerary';
 import { assertTripOwnerAccess } from '$lib/server/store';
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
@@ -16,10 +13,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 	const payload = itineraryItemImportRequestSchema.safeParse(await requestJson(request));
 	if (!payload.success) {
-		return json(
-			{ message: 'Provide a valid Google Maps or Google Flights link.' },
-			{ status: 400 }
-		);
+		return json({ message: 'Provide a valid Google Maps or Google Flights link.' }, { status: 400 });
 	}
 
 	try {

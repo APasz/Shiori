@@ -21,13 +21,7 @@
 			</label>
 			<label class="shiori-form-label">
 				Password
-				<input
-					class="shiori-form-control"
-					autocomplete="current-password"
-					name="password"
-					required
-					type="password"
-				/>
+				<input class="shiori-form-control" autocomplete="current-password" name="password" required type="password" />
 			</label>
 			{#if form?.invalidCredentials}
 				<p class="error" role="alert">The username or password is incorrect.</p>

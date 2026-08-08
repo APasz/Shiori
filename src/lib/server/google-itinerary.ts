@@ -1,9 +1,5 @@
 import { isGoogleFlightsUrl, isGoogleMapsUrl, type TransportDetails } from '$lib/itinerary/schema';
-import {
-	GoogleMapsResolveError,
-	parseGoogleMapsLocationUrl,
-	resolveGoogleMapsUrl
-} from '$lib/server/google-maps';
+import { GoogleMapsResolveError, parseGoogleMapsLocationUrl, resolveGoogleMapsUrl } from '$lib/server/google-maps';
 import type { ItineraryItemImport } from '$lib/editing/contracts';
 import { operatorNameForServicePrefix } from '$lib/itinerary/transport-operator';
 
@@ -148,10 +144,7 @@ function matchedValue(value: string | undefined, pattern: RegExp): string | unde
 function parseFlightLegs(url: URL): FlightLeg[] {
 	const tfs = url.searchParams.get('tfs');
 	if (!tfs) {
-		throw new GoogleItineraryImportError(
-			422,
-			'The Google Flights link did not include a flight selection.'
-		);
+		throw new GoogleItineraryImportError(422, 'The Google Flights link did not include a flight selection.');
 	}
 	const values = flightSearchStrings(tfs);
 	const legs: FlightLeg[] = [];
@@ -176,10 +169,7 @@ function parseFlightLegs(url: URL): FlightLeg[] {
 		});
 	}
 	if (legs.length === 0) {
-		throw new GoogleItineraryImportError(
-			422,
-			'The Google Flights link did not contain a supported flight itinerary.'
-		);
+		throw new GoogleItineraryImportError(422, 'The Google Flights link did not contain a supported flight itinerary.');
 	}
 	return legs;
 }
@@ -213,10 +203,7 @@ async function fetchGoogleFlightsUrl(url: URL): Promise<Response> {
 	try {
 		return await fetch(url, { redirect: 'manual', signal: controller.signal });
 	} catch {
-		throw new GoogleItineraryImportError(
-			502,
-			'Google Flights could not be reached. Try again later.'
-		);
+		throw new GoogleItineraryImportError(502, 'Google Flights could not be reached. Try again later.');
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -245,10 +232,7 @@ async function resolveGoogleFlightsUrl(inputUrl: string): Promise<URL> {
 				const location = response.headers.get('location');
 				const nextUrl = location ? new URL(location, currentUrl) : null;
 				if (!nextUrl || !isGoogleFlightsUrl(nextUrl.toString())) {
-					throw new GoogleItineraryImportError(
-						400,
-						'Google Flights redirected to an unsupported address.'
-					);
+					throw new GoogleItineraryImportError(400, 'Google Flights redirected to an unsupported address.');
 				}
 				currentUrl = nextUrl;
 			} finally {
@@ -271,10 +255,7 @@ export async function resolveGoogleItineraryUrl(inputUrl: string): Promise<Itine
 	if (isGoogleMapsUrl(inputUrl)) {
 		try {
 			const inputUrlObject = new URL(inputUrl);
-			const url =
-				inputUrlObject.hostname === 'maps.app.goo.gl'
-					? await resolveGoogleMapsUrl(inputUrl)
-					: inputUrlObject;
+			const url = inputUrlObject.hostname === 'maps.app.goo.gl' ? await resolveGoogleMapsUrl(inputUrl) : inputUrlObject;
 			return [isDirectionsUrl(url) ? directionsImport(url) : mapsPlaceImport(url)];
 		} catch (error: unknown) {
 			if (error instanceof GoogleMapsResolveError) {
@@ -286,8 +267,5 @@ export async function resolveGoogleItineraryUrl(inputUrl: string): Promise<Itine
 	if (isGoogleFlightsUrl(inputUrl)) {
 		return flightImports(await resolveGoogleFlightsUrl(inputUrl));
 	}
-	throw new GoogleItineraryImportError(
-		400,
-		'Use a Google Maps place or directions link, or a Google Flights link.'
-	);
+	throw new GoogleItineraryImportError(400, 'Use a Google Maps place or directions link, or a Google Flights link.');
 }

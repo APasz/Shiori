@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isGoogleMapsUrl } from '../itinerary/schema';
-import {
-	GoogleMapsResolveError,
-	parseGoogleMapsLocationUrl,
-	resolveGoogleMapsLocation
-} from './google-maps';
+import { GoogleMapsResolveError, parseGoogleMapsLocationUrl, resolveGoogleMapsLocation } from './google-maps';
 
 const melbourneAirportUrl =
 	'https://www.google.com/maps/place/Melbourne+Airport/@-37.7332209,144.8645358,27101m/data=!3m1!1e3!4m6!3m5!1s0x6ad659a9ebaa3917:0xf045676052ff090!8m2!3d-37.6708228!4d144.8429763!16zL20vMDFuZmx3';
@@ -22,17 +18,11 @@ describe('Google Maps location parsing', () => {
 	});
 
 	it('reads coordinate-query links without mistaking map viewports for places', () => {
-		expect(
-			parseGoogleMapsLocationUrl(new URL('https://maps.google.com/?q=-37.6708228,144.8429763'))
-		).toMatchObject({
+		expect(parseGoogleMapsLocationUrl(new URL('https://maps.google.com/?q=-37.6708228,144.8429763'))).toMatchObject({
 			coordinates: { latitude: -37.6708228, longitude: 144.8429763 }
 		});
 
-		expect(
-			parseGoogleMapsLocationUrl(
-				new URL('https://www.google.com/maps/place/Cafe/@-37.814,144.963,15z')
-			)
-		).toEqual({
+		expect(parseGoogleMapsLocationUrl(new URL('https://www.google.com/maps/place/Cafe/@-37.814,144.963,15z'))).toEqual({
 			googleMapsUrl: 'https://www.google.com/maps/place/Cafe/@-37.814,144.963,15z',
 			name: 'Cafe'
 		});
@@ -43,9 +33,7 @@ describe('Google Maps location parsing', () => {
 		expect(isGoogleMapsUrl('https://www.google.com.au/maps/place/Melbourne+Airport')).toBe(true);
 		expect(isGoogleMapsUrl('https://www.google.com/search?q=Melbourne+Airport')).toBe(false);
 
-		expect(() => parseGoogleMapsLocationUrl(new URL('https://example.com/?q=-37,144'))).toThrow(
-			GoogleMapsResolveError
-		);
+		expect(() => parseGoogleMapsLocationUrl(new URL('https://example.com/?q=-37,144'))).toThrow(GoogleMapsResolveError);
 	});
 
 	it('follows Google-only redirects before parsing the resolved Maps URL', async () => {
@@ -60,9 +48,7 @@ describe('Google Maps location parsing', () => {
 			.mockResolvedValueOnce(new Response('map page', { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 
-		await expect(
-			resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')
-		).resolves.toMatchObject({
+		await expect(resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).resolves.toMatchObject({
 			coordinates: { latitude: -37.6708228, longitude: 144.8429763 },
 			name: 'Melbourne Airport'
 		});
@@ -78,17 +64,13 @@ describe('Google Maps location parsing', () => {
 		);
 		vi.stubGlobal('fetch', unsafeRedirectFetch);
 
-		await expect(
-			resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')
-		).rejects.toMatchObject({
+		await expect(resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).rejects.toMatchObject({
 			status: 400
 		});
 		expect(unsafeRedirectFetch).toHaveBeenCalledTimes(1);
 
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network unavailable')));
-		await expect(
-			resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')
-		).rejects.toMatchObject({
+		await expect(resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).rejects.toMatchObject({
 			status: 502
 		});
 	});
