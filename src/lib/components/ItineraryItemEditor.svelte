@@ -925,7 +925,9 @@
 						<legend>Schedule</legend>
 						{#if timingNeedsConfirmation}
 							<p class="timing-confirmation">
-								The imported link did not include a reliable time. Confirm the schedule before saving.
+								{suggestedStartDate
+									? `The imported link confirms ${suggestedStartDate}. Add the time before saving.`
+									: 'The imported link did not include a reliable time. Confirm the schedule before saving.'}
 							</p>
 						{/if}
 						<label class="shiori-form-label">
@@ -945,9 +947,10 @@
 							<DateTimeInput
 								dateTime={startAt}
 								id="item-start"
-								label="Start date and time"
+								label={timingNeedsConfirmation && suggestedStartDate ? 'Start time' : 'Start date and time'}
 								onDateTimeChange={(value) => (startAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
+								pickerMode={timingNeedsConfirmation && suggestedStartDate ? 'time' : 'date-time'}
 								timeZoneHint="Saved with this timing."
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}

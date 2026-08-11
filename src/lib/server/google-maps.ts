@@ -9,6 +9,14 @@ export type GoogleMapsLocationImport = Readonly<{
 	name?: string;
 }>;
 
+/** Creates a validated Google Maps search link for a known location name. */
+export function googleMapsSearchUrl(query: string): string {
+	const url = new URL('https://www.google.com/maps/search/');
+	url.searchParams.set('api', '1');
+	url.searchParams.set('query', query);
+	return googleMapsUrlSchema.parse(url.toString());
+}
+
 export class GoogleMapsResolveError extends Error {
 	constructor(
 		readonly status: number,

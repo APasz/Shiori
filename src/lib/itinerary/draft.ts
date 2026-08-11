@@ -53,7 +53,9 @@ export function createItineraryItemFromImport(
 		...common,
 		type: 'transport',
 		transport: {
-			...itemImport.transport,
+			mode: itemImport.transport.mode,
+			...(itemImport.transport.operator ? { operator: itemImport.transport.operator } : {}),
+			...(itemImport.transport.serviceNumber ? { serviceNumber: itemImport.transport.serviceNumber } : {}),
 			stops: locations.map((location) => ({ locationId: location.id }))
 		}
 	};

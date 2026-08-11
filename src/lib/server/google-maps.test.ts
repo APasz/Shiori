@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isGoogleMapsUrl } from '../itinerary/schema';
-import { GoogleMapsResolveError, parseGoogleMapsLocationUrl, resolveGoogleMapsLocation } from './google-maps';
+import {
+	GoogleMapsResolveError,
+	googleMapsSearchUrl,
+	parseGoogleMapsLocationUrl,
+	resolveGoogleMapsLocation
+} from './google-maps';
 
 const melbourneAirportUrl =
 	'https://www.google.com/maps/place/Melbourne+Airport/@-37.7332209,144.8645358,27101m/data=!3m1!1e3!4m6!3m5!1s0x6ad659a9ebaa3917:0xf045676052ff090!8m2!3d-37.6708228!4d144.8429763!16zL20vMDFuZmx3';
@@ -10,6 +15,12 @@ afterEach(() => {
 });
 
 describe('Google Maps location parsing', () => {
+	it('creates a Google Maps search URL for a location name', () => {
+		expect(googleMapsSearchUrl('Kansai International Airport')).toBe(
+			'https://www.google.com/maps/search/?api=1&query=Kansai+International+Airport'
+		);
+	});
+
 	it('prefers place coordinates over the map viewport and reads the place name', () => {
 		const result = parseGoogleMapsLocationUrl(new URL(melbourneAirportUrl));
 

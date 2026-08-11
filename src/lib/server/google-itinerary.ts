@@ -1,7 +1,15 @@
 import { isGoogleFlightsUrl, isGoogleMapsUrl, type TransportDetails } from '$lib/itinerary/schema';
-import { GoogleMapsResolveError, parseGoogleMapsLocationUrl, resolveGoogleMapsUrl } from '$lib/server/google-maps';
+import { lookupAeroDataBoxFlightSchedule } from '$lib/server/aerodatabox';
+import {
+	GoogleMapsResolveError,
+	googleMapsSearchUrl,
+	parseGoogleMapsLocationUrl,
+	resolveGoogleMapsUrl
+} from '$lib/server/google-maps';
+import { lookupGoogleAirport } from '$lib/server/google-places';
 import type { ItineraryItemImport } from '$lib/editing/contracts';
 import { operatorNameForServicePrefix } from '$lib/itinerary/transport-operator';
+import { transportRouteTitle } from '$lib/itinerary/transport-journey';
 
 const maximumRedirects = 5;
 const requestTimeoutMilliseconds = 5_000;
@@ -81,7 +89,7 @@ function directionsImport(url: URL): ItineraryItemImport {
 
 	return {
 		type: 'transport',
-		title: `Travel from ${departure} to ${arrival}`,
+		title: transportRouteTitle(departure, arrival),
 		locations: [
 			{ name: departure, role: 'departure', googleMapsUrl: url.toString() },
 			{ name: arrival, role: 'arrival', googleMapsUrl: url.toString() }
@@ -174,27 +182,56 @@ function parseFlightLegs(url: URL): FlightLeg[] {
 	return legs;
 }
 
-function flightImports(url: URL): ItineraryItemImport[] {
-	return parseFlightLegs(url).map((leg) => {
-		const service = leg.carrierCode ? `${leg.carrierCode}${leg.flightNumber ?? ''}` : 'Flight';
-		return {
-			type: 'transport',
-			title: `${service} from ${leg.origin} to ${leg.destination}`,
-			suggestedStartDate: leg.startDate,
-			locations: [
-				{ name: leg.origin, role: 'departure' },
-				{ name: leg.destination, role: 'arrival' }
-			],
-			links: [{ label: 'Google Flights', url: url.toString() }],
-			transport: {
-				mode: 'air',
-				...(leg.carrierCode
-					? { operator: operatorNameForServicePrefix('air', leg.carrierCode) ?? leg.carrierCode }
-					: {}),
-				...(leg.flightNumber ? { serviceNumber: leg.flightNumber } : {})
+async function flightImport(url: URL, leg: FlightLeg): Promise<ItineraryItemImport> {
+	const service = leg.carrierCode ? `${leg.carrierCode}${leg.flightNumber ?? ''}` : 'Flight';
+	const schedule =
+		leg.carrierCode && leg.flightNumber
+			? await lookupAeroDataBoxFlightSchedule({
+					arrivalIata: leg.destination,
+					departureIata: leg.origin,
+					flightNumber: service,
+					localDate: leg.startDate
+				})
+			: null;
+	const [departurePlace, arrivalPlace] = schedule
+		? [null, null]
+		: await Promise.all([lookupGoogleAirport(leg.origin), lookupGoogleAirport(leg.destination)]);
+	const departureName = schedule?.departure.name ?? departurePlace?.name ?? leg.origin;
+	const arrivalName = schedule?.arrival.name ?? arrivalPlace?.name ?? leg.destination;
+	const departureCoordinates = schedule?.departure.coordinates ?? departurePlace?.coordinates;
+	const arrivalCoordinates = schedule?.arrival.coordinates ?? arrivalPlace?.coordinates;
+	const departureGoogleMapsUrl = departurePlace?.googleMapsUrl ?? googleMapsSearchUrl(departureName);
+	const arrivalGoogleMapsUrl = arrivalPlace?.googleMapsUrl ?? googleMapsSearchUrl(arrivalName);
+	return {
+		type: 'transport',
+		title: transportRouteTitle(departureName, arrivalName),
+		suggestedStartDate: leg.startDate,
+		locations: [
+			{
+				name: departureName,
+				role: 'departure',
+				googleMapsUrl: departureGoogleMapsUrl,
+				...(departureCoordinates ? { coordinates: departureCoordinates } : {})
+			},
+			{
+				name: arrivalName,
+				role: 'arrival',
+				googleMapsUrl: arrivalGoogleMapsUrl,
+				...(arrivalCoordinates ? { coordinates: arrivalCoordinates } : {})
 			}
-		};
-	});
+		],
+		links: [{ label: 'Google Flights', url: url.toString() }],
+		transport: {
+			mode: 'air',
+			...(leg.carrierCode ? { operator: operatorNameForServicePrefix('air', leg.carrierCode) ?? leg.carrierCode } : {}),
+			...(leg.flightNumber ? { serviceNumber: service } : {}),
+			...(schedule ? { schedule: schedule.schedule } : {})
+		}
+	};
+}
+
+async function flightImports(url: URL): Promise<ItineraryItemImport[]> {
+	return Promise.all(parseFlightLegs(url).map((leg) => flightImport(url, leg)));
 }
 
 async function fetchGoogleFlightsUrl(url: URL): Promise<Response> {

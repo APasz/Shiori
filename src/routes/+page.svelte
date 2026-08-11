@@ -12,6 +12,7 @@
 	import { apiErrorSchema, editSaveResponseSchema, type ItineraryItemImport } from '$lib/editing/contracts';
 	import { addCalendarDays, calendarMonthForDate } from '$lib/itinerary/calendar';
 	import { createEmptyItineraryItem, createItineraryItemFromImport } from '$lib/itinerary/draft';
+	import { createTransportJourneyItem, type TransportJourneyDraft } from '$lib/itinerary/transport-journey';
 	import {
 		defaultItemTimestamp,
 		formatLocalDay,
@@ -128,6 +129,25 @@
 			mode: 'create',
 			...(suggestedStartDate ? { suggestedStartDate } : {}),
 			timingNeedsConfirmation: true
+		};
+	}
+
+	function beginTransportJourney(journey: TransportJourneyDraft): void {
+		if (!canModifyItinerary) {
+			return;
+		}
+
+		const journeyDate = journey.suggestedStartDate ?? itemCreationLocalDay;
+		mutationError = null;
+		editingItem = {
+			item: createTransportJourneyItem(
+				journey,
+				crypto.randomUUID(),
+				defaultItemTimestamp(journeyDate, viewerContext.timeZone, viewerContext.currentTimestamp)
+			),
+			mode: 'create',
+			...(journeyDate ? { suggestedStartDate: journeyDate } : {}),
+			timingNeedsConfirmation: journey.schedule === undefined
 		};
 	}
 
@@ -523,6 +543,7 @@
 			onDismiss={() => (creatingItem = false)}
 			onImported={beginImportedItem}
 			onManual={beginCreatingItem}
+			onTransportJourney={beginTransportJourney}
 		/>
 	{/if}
 

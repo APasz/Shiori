@@ -12,6 +12,7 @@ import {
 	tripDetailsSchema,
 	unixTimestampSchema
 } from '$lib/itinerary/schema';
+import { transportJourneyScheduleSchema } from '$lib/itinerary/transport-schedule';
 
 export const editLockResponseSchema = z.strictObject({
 	expiresAt: unixTimestampSchema,
@@ -96,7 +97,8 @@ export const itineraryItemImportSchema = z.discriminatedUnion('type', [
 		transport: z.strictObject({
 			mode: transportModeSchema,
 			operator: z.string().trim().min(1).optional(),
-			serviceNumber: z.string().trim().min(1).optional()
+			serviceNumber: z.string().trim().min(1).optional(),
+			schedule: transportJourneyScheduleSchema.optional()
 		})
 	})
 ]);

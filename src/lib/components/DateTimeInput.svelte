@@ -18,6 +18,7 @@
 
 	type PickerPresentation = 'popover' | 'dialog';
 	type DialogPlacement = 'center' | 'above-development-controls';
+	type PickerMode = 'date-time' | 'date' | 'time';
 	type DialogPosition = Readonly<{
 		left: number;
 		top: number;
@@ -30,6 +31,7 @@
 		id,
 		dateTime,
 		label,
+		pickerMode = 'date-time',
 		dialogPlacement = 'center',
 		pickerPresentation = 'popover',
 		timeZoneHint = 'Used to interpret this value; not saved.',
@@ -41,6 +43,7 @@
 		id: string;
 		dateTime: string;
 		label: string;
+		pickerMode?: PickerMode;
 		dialogPlacement?: DialogPlacement;
 		pickerPresentation?: PickerPresentation;
 		timeZoneHint?: string;
@@ -78,6 +81,12 @@
 	function selectedLabel(value: string): string {
 		const date = formatCalendarDate(datePart(value));
 		const time = timePart(value);
+		if (pickerMode === 'date') {
+			return date ?? 'Select date';
+		}
+		if (pickerMode === 'time') {
+			return /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : 'Select time';
+		}
 		return date && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)
 			? `${date} · ${time}`
 			: date
@@ -178,55 +187,61 @@
 </script>
 
 {#snippet pickerContent()}
-	<div class="calendar-header" data-dialog-drag-handle>
-		<button
-			aria-label="Previous month"
-			onclick={() => (visibleMonth = addCalendarMonths(visibleMonth, -1))}
-			type="button"
-		>
-			‹
-		</button>
-		<strong aria-live="polite">{formatCalendarMonth(visibleMonth)}</strong>
-		<button aria-label="Next month" onclick={() => (visibleMonth = addCalendarMonths(visibleMonth, 1))} type="button">
-			›
-		</button>
-	</div>
-	<div class="picker-body">
-		<div class="calendar">
-			<div aria-hidden="true" class="weekdays">
-				<span>Mon</span>
-				<span>Tue</span>
-				<span>Wed</span>
-				<span>Thu</span>
-				<span>Fri</span>
-				<span>Sat</span>
-				<span>Sun</span>
-			</div>
-			<div aria-label={formatCalendarMonth(visibleMonth)} class="days">
-				{#each days as day (day.date)}
-					<button
-						aria-current={day.date === today ? 'date' : undefined}
-						aria-label={formatCalendarDate(day.date) ?? day.date}
-						aria-pressed={day.date === datePart(dateTime)}
-						class:outside-month={!day.inCurrentMonth}
-						class:selected={day.date === datePart(dateTime)}
-						onclick={() => onDateTimeChange(replaceDatePart(dateTime, day.date))}
-						type="button"
-					>
-						{day.day}
-					</button>
-				{/each}
-			</div>
+	{#if pickerMode !== 'time'}
+		<div class="calendar-header" data-dialog-drag-handle>
+			<button
+				aria-label="Previous month"
+				onclick={() => (visibleMonth = addCalendarMonths(visibleMonth, -1))}
+				type="button"
+			>
+				‹
+			</button>
+			<strong aria-live="polite">{formatCalendarMonth(visibleMonth)}</strong>
+			<button aria-label="Next month" onclick={() => (visibleMonth = addCalendarMonths(visibleMonth, 1))} type="button">
+				›
+			</button>
 		</div>
-		<div class="time-panel">
-			<strong>Time</strong>
-			<span class="field-hint">24-hour time</span>
-			<TimePicker
-				id={`${id}-time`}
-				onChange={(time) => onDateTimeChange(replaceTimePart(dateTime, time))}
-				value={timePart(dateTime)}
-			/>
-		</div>
+	{/if}
+	<div class:date-only={pickerMode === 'date'} class:time-only={pickerMode === 'time'} class="picker-body">
+		{#if pickerMode !== 'time'}
+			<div class="calendar">
+				<div aria-hidden="true" class="weekdays">
+					<span>Mon</span>
+					<span>Tue</span>
+					<span>Wed</span>
+					<span>Thu</span>
+					<span>Fri</span>
+					<span>Sat</span>
+					<span>Sun</span>
+				</div>
+				<div aria-label={formatCalendarMonth(visibleMonth)} class="days">
+					{#each days as day (day.date)}
+						<button
+							aria-current={day.date === today ? 'date' : undefined}
+							aria-label={formatCalendarDate(day.date) ?? day.date}
+							aria-pressed={day.date === datePart(dateTime)}
+							class:outside-month={!day.inCurrentMonth}
+							class:selected={day.date === datePart(dateTime)}
+							onclick={() => onDateTimeChange(replaceDatePart(dateTime, day.date))}
+							type="button"
+						>
+							{day.day}
+						</button>
+					{/each}
+				</div>
+			</div>
+		{/if}
+		{#if pickerMode !== 'date'}
+			<div class="time-panel">
+				<strong>Time</strong>
+				<span class="field-hint">24-hour time</span>
+				<TimePicker
+					id={`${id}-time`}
+					onChange={(time) => onDateTimeChange(replaceTimePart(dateTime, time))}
+					value={timePart(dateTime)}
+				/>
+			</div>
+		{/if}
 	</div>
 	<div class="picker-actions">
 		<button onclick={closePicker} type="button">Done</button>
@@ -235,7 +250,12 @@
 
 <div class="date-time-grid">
 	<div bind:this={pickerElement} class="date-time-picker shiori-form-label" onfocusout={closeAfterFocusChange}>
-		<span>{label}</span>
+		<span>
+			{label}
+			{#if pickerMode === 'time' && formatCalendarDate(datePart(dateTime))}
+				<span class="field-hint">Date fixed as {formatCalendarDate(datePart(dateTime))}</span>
+			{/if}
+		</span>
 		<button
 			aria-expanded={isOpen}
 			aria-haspopup="dialog"
@@ -352,6 +372,14 @@
 		display: grid;
 		gap: 1rem;
 		grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.75fr);
+	}
+
+	.picker-body.date-only {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.picker-body.time-only {
+		grid-template-columns: minmax(13rem, 1fr);
 	}
 
 	.weekdays,

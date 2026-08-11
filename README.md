@@ -83,6 +83,23 @@ Configure `ORIGIN`
 to the public application URL in production so SvelteKit can apply its request-origin protections.
 Use `.env.example` as the configuration reference; never commit the real environment file.
 
+To enrich selected Google Flights links with verified airport names, scheduled departure and arrival
+times, and their source time zones, configure `AERODATABOX_API_KEY` with an AeroDataBox RapidAPI key.
+A direct subscription is also supported through `AERODATABOX_DIRECT_API_KEY`. The integration uses the
+documented flight-number-and-local-date lookup and accepts a result only when its flight number and
+both IATA airports exactly match the Google Flights selection. With no key, unavailable data, or an
+ambiguous result, imports continue normally and only ask the user to confirm the missing time.
+Successful flight results are kept in a bounded, process-local cache for 24 hours. Requests are
+coalesced and paced at one per second to respect AeroDataBox's Basic/RapidAPI rate limit; a `429`
+response honours `Retry-After` before one retry.
+
+Configure `GOOGLE_PLACES_API_KEY` with a Google Places API (New) key to resolve flight IATA airport
+codes to named locations and coordinates. Flight titles then use concise names such as `Perth > Kuala
+Lumpur`, rather than airport codes, and locations receive their Google Maps links. To avoid a
+misleading result, the lookup only accepts a single airport returned for an IATA-specific, strictly
+type-filtered search. Successful results are retained in a bounded process-local cache for seven days
+and duplicate requests are coalesced.
+
 Trip data is private by default. A sudo user can use `/settings/access` to enable the public
 visitor schedule or create read-only `user` and `admin` accounts. Passwords are hashed with
 Node's `scrypt`; sessions are stored server-side and issued in HTTP-only cookies.
@@ -94,9 +111,12 @@ withheld until `admin` or `sudo` access. This visibility policy is centralized i
 
 The sudo owner can add, edit, and delete itinerary items from the itinerary page. New items begin
 with an import-first dialog: Google Maps place and directions links, plus selected Google Flights
-links, prefill the fields that can be parsed safely. The original link is retained, while a missing
-or unreliable time must be confirmed before saving. Manual item creation remains available from the
-same dialog. Items are ordered and grouped by their timestamps in each viewer's local calendar.
-Edits use one trip-wide lock, so changes cannot race with an open editor. Persisted edit locks are
-cleared when a server process starts; the sudo owner can also force close an active edit session from
-the Access page when a browser session has become stuck.
+links, prefill the fields that can be parsed safely. Transport imports and manual transport creation
+use a four-step journey flow: departure, arrival, journey details, then review. Each endpoint can be
+looked up from an optional Google Maps link, and the original source link is retained. The final
+schedule and save step remains in the shared editor, so a missing or unreliable time must still be
+confirmed before saving. Manual activity and accommodation creation remain available from the same
+dialog. Items are ordered and grouped by their timestamps in each viewer's local calendar. Edits use
+one trip-wide lock, so changes cannot race with an open editor. Persisted edit locks are cleared when
+a server process starts; the sudo owner can also force close an active edit session from the Access
+page when a browser session has become stuck.
