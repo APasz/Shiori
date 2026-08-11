@@ -55,6 +55,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	vi.useRealTimers();
+	vi.unstubAllGlobals();
 	delete process.env.SHIORI_DATA_DIRECTORY;
 	await rm(dataDirectory, { force: true, recursive: true });
 });
@@ -199,6 +200,58 @@ describe('JSON store', () => {
 
 		const updated = await store.getTripView(created.slug, owner);
 		expect(updated?.itinerary.title).toBe('Autumn in Montréal');
+	});
+
+	it('snapshots an ECB conversion when a sudo owner marks an item cost paid', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-02T12:00:00.000Z'));
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(
+						[
+							'KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE',
+							'EXR.D.AUD.EUR.SP00.A,D,AUD,EUR,SP00,A,2026-01-02,1.5',
+							'EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2026-01-02,1.25'
+						].join('\n')
+					)
+			)
+		);
+
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id, ['paid-item']);
+		const lock = await store.acquireItemLock({ itemId: 'paid-item', tripId: trip.id, userId: owner.id });
+
+		await store.saveItem({
+			item: {
+				...createEmptyItineraryItem('activity', 'paid-item', Date.UTC(2026, 0, 3)),
+				cost: { amount: { amountMinor: 10_000, currency: 'USD' }, status: 'paid' },
+				title: 'paid-item'
+			},
+			itemId: 'paid-item',
+			lockToken: lock.token,
+			revision: trip.revision,
+			tripId: trip.id,
+			userId: owner.id
+		});
+
+		const savedTrip = await store.getTripView(trip.slug, owner);
+		if (!savedTrip || savedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the saved trip.');
+		}
+		const savedItem = savedTrip.itinerary.items.find((item) => item.id === 'paid-item');
+		expect(savedItem?.cost).toEqual({
+			amount: { amountMinor: 10_000, currency: 'USD' },
+			payment: {
+				exchangeRate: 1.2,
+				localAmount: { amountMinor: 12_000, currency: 'AUD' },
+				paidAt: Date.UTC(2026, 0, 2, 12),
+				rateDate: '2026-01-02'
+			},
+			status: 'paid'
+		});
 	});
 
 	it('lists empty trips before planned trips ordered by their latest item start', async () => {

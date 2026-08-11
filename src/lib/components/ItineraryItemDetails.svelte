@@ -3,12 +3,14 @@
 	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
-	import type { ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
+	import type { CurrencyCode, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
+	import { formatMonetaryAmount } from '$lib/money';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { itemTypeAccentStyle, reservationStatusStyle } from '$lib/theme/palette';
 
 	let {
 		item,
+		localCurrency,
 		tripTimeZone,
 		canEdit,
 		deleteError,
@@ -18,6 +20,7 @@
 		onEdit
 	}: {
 		item: ItineraryItem;
+		localCurrency: CurrencyCode;
 		tripTimeZone: string;
 		canEdit: boolean;
 		deleteError: string | null;
@@ -44,6 +47,14 @@
 
 	function transportStopLabel(locationId: string): string {
 		return findLocation(locationId)?.name ?? locationId;
+	}
+
+	function paidAtLabel(paidAt: number): string {
+		return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(paidAt);
+	}
+
+	function exchangeRateLabel(exchangeRate: number): string {
+		return new Intl.NumberFormat(undefined, { maximumSignificantDigits: 8 }).format(exchangeRate);
 	}
 </script>
 
@@ -160,6 +171,36 @@
 			</section>
 		{/if}
 
+		{#if item.cost}
+			<section aria-labelledby="cost-heading">
+				<h3 id="cost-heading">Cost</h3>
+				<dl>
+					<dt>Charged</dt>
+					<dd>{formatMonetaryAmount(item.cost.amount)}</dd>
+					<dt>Status</dt>
+					<dd>{item.cost.status === 'paid' ? 'Paid' : 'Unpaid'}</dd>
+					{#if item.cost.status === 'paid'}
+						<dt>Local equivalent</dt>
+						<dd>
+							{formatMonetaryAmount(item.cost.payment.localAmount)}
+							{#if item.cost.payment.localAmount.currency !== localCurrency}
+								<span class="cost-note">Saved before the trip currency changed to {localCurrency}.</span>
+							{/if}
+						</dd>
+						<dt>Rate</dt>
+						<dd>
+							1 {item.cost.amount.currency} = {exchangeRateLabel(item.cost.payment.exchangeRate)}
+							{item.cost.payment.localAmount.currency}
+						</dd>
+						<dt>Reference rate date</dt>
+						<dd>{item.cost.payment.rateDate}</dd>
+						<dt>Marked paid</dt>
+						<dd>{paidAtLabel(item.cost.payment.paidAt)}</dd>
+					{/if}
+				</dl>
+			</section>
+		{/if}
+
 		{#if item.notes.length > 0}
 			<section aria-labelledby="notes-heading">
 				<h3 id="notes-heading">Notes</h3>
@@ -262,7 +303,8 @@
 
 	.location-role,
 	.document-kind,
-	.location-map-link {
+	.location-map-link,
+	.cost-note {
 		color: var(--color-text-muted);
 		font-size: 0.75rem;
 		font-weight: 700;
@@ -272,6 +314,13 @@
 
 	.location-map-link {
 		width: fit-content;
+	}
+
+	.cost-note {
+		display: block;
+		font-size: 0.625rem;
+		letter-spacing: 0.04em;
+		margin-top: 0.25rem;
 	}
 
 	.eyebrow {

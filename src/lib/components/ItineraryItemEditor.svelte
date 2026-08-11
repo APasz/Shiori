@@ -9,21 +9,26 @@
 		locationResolveResponseSchema
 	} from '$lib/editing/contracts';
 	import {
+		currencyCodeSchema,
 		documentKindSchema,
-		itineraryItemSchema,
+		itineraryItemDraftSchema,
 		itineraryItemTypeSchema,
 		locationRoleSchema,
 		reservationStatusSchema,
 		timingKindSchema,
 		transportModeSchema,
 		type DocumentReference,
+		type CurrencyCode,
 		type ItineraryItem,
+		type ItineraryItemDraft,
 		type ItineraryItemType,
 		type ItineraryLocation,
 		type ReservationStatus,
 		type ItineraryTiming,
+		type MonetaryAmount,
 		type TransportDetails
 	} from '$lib/itinerary/schema';
+	import { amountMinorFromInput, currencyFractionDigits } from '$lib/money';
 	import {
 		formatTimestampForTimeZoneInput,
 		isValidIanaTimeZone,
@@ -38,7 +43,13 @@
 	type EditorMode = 'create' | 'edit';
 	type EditorState = 'acquiring' | 'editing' | 'error' | 'saving';
 	type EditorSectionId =
-		'editor-links' | 'editor-overview' | 'editor-places' | 'editor-private' | 'editor-schedule' | 'editor-transport';
+		| 'editor-cost'
+		| 'editor-links'
+		| 'editor-overview'
+		| 'editor-places'
+		| 'editor-private'
+		| 'editor-schedule'
+		| 'editor-transport';
 
 	type LocationDraft = {
 		address: string;
@@ -74,12 +85,13 @@
 	};
 
 	type ItemValidation =
-		{ readonly item: ItineraryItem; readonly valid: true } | { readonly error: string; readonly valid: false };
+		{ readonly item: ItineraryItemDraft; readonly valid: true } | { readonly error: string; readonly valid: false };
 
 	let {
 		item,
 		mode,
 		tripId,
+		localCurrency,
 		tripTimeZone,
 		revision,
 		suggestedStartDate,
@@ -90,6 +102,7 @@
 		item: ItineraryItem;
 		mode: EditorMode;
 		tripId: string;
+		localCurrency: CurrencyCode;
 		tripTimeZone: string;
 		revision: number;
 		suggestedStartDate?: string;
@@ -125,6 +138,10 @@
 	let reservationProvider = $state('');
 	let reservationReference = $state('');
 	let reservationStatus = $state<ReservationStatus>('pending');
+	let costEnabled = $state(false);
+	let costAmount = $state('');
+	let costCurrency = $state<CurrencyCode>('AUD');
+	let costPaid = $state(false);
 	let transportMode = $state<TransportDetails['mode']>('other');
 	let transportOperator = $state('');
 	let transportServiceNumber = $state('');
@@ -142,6 +159,7 @@
 	const transportModeOptions = transportModeSchema.options;
 	const documentKindOptions = documentKindSchema.options;
 	const timingKindOptions = timingKindSchema.options;
+	const currencyOptions = currencyCodeSchema.options;
 	const timingKindLabels: Record<ItineraryTiming['kind'], string> = {
 		exact: 'Exact time',
 		approximate: 'Around a time',
@@ -212,6 +230,10 @@
 		reservationProvider = source.reservation?.provider ?? '';
 		reservationReference = source.reservation?.reference ?? '';
 		reservationStatus = source.reservation?.status ?? 'pending';
+		costEnabled = source.cost !== undefined;
+		costAmount = source.cost ? amountInputValue(source.cost.amount) : '';
+		costCurrency = source.cost?.amount.currency ?? localCurrency;
+		costPaid = source.cost?.status === 'paid';
 		transportMode = source.type === 'transport' ? source.transport.mode : 'other';
 		transportOperator = source.type === 'transport' ? (source.transport.operator ?? '') : '';
 		transportServiceNumber = source.type === 'transport' ? (source.transport.serviceNumber ?? '') : '';
@@ -361,6 +383,30 @@
 	function optionalText(value: string): string | undefined {
 		const trimmed = value.trim();
 		return trimmed === '' ? undefined : trimmed;
+	}
+
+	function amountInputValue(amount: MonetaryAmount): string {
+		const fractionDigits = currencyFractionDigits(amount.currency);
+		if (fractionDigits === 0) {
+			return String(amount.amountMinor);
+		}
+		const scale = 10 ** fractionDigits;
+		const whole = Math.floor(amount.amountMinor / scale);
+		const fraction = String(amount.amountMinor % scale).padStart(fractionDigits, '0');
+		return `${whole}.${fraction}`;
+	}
+
+	function costCandidate(): unknown | undefined {
+		if (!costEnabled) {
+			return undefined;
+		}
+		return {
+			amount: {
+				amountMinor: amountMinorFromInput(costAmount, costCurrency) ?? Number.NaN,
+				currency: costCurrency
+			},
+			status: costPaid ? 'paid' : 'unpaid'
+		};
 	}
 
 	function fillMissingTransportOperator(): void {
@@ -533,6 +579,7 @@
 	}
 
 	function itemCandidate(): unknown {
+		const cost = costCandidate();
 		const reservation = reservationEnabled
 			? {
 					status: reservationStatus,
@@ -555,6 +602,7 @@
 				title: document.title.trim(),
 				url: document.url.trim()
 			})),
+			...(cost ? { cost } : {}),
 			...(reservation ? { reservation } : {})
 		};
 
@@ -627,12 +675,27 @@
 		return null;
 	}
 
+	function validateCost(): string | null {
+		if (!costEnabled) {
+			return null;
+		}
+		const amountMinor = amountMinorFromInput(costAmount, costCurrency);
+		if (amountMinor === null || amountMinor < 1) {
+			return `Cost: enter a positive ${costCurrency} amount with no more than ${currencyFractionDigits(costCurrency)} decimal places.`;
+		}
+		return null;
+	}
+
 	function validateItem(): ItemValidation {
 		const dateTimeError = validateDateTimes();
 		if (dateTimeError) {
 			return { error: dateTimeError, valid: false };
 		}
-		const validation = itineraryItemSchema.safeParse(itemCandidate());
+		const costError = validateCost();
+		if (costError) {
+			return { error: costError, valid: false };
+		}
+		const validation = itineraryItemDraftSchema.safeParse(itemCandidate());
 		if (validation.success) {
 			return { item: validation.data, valid: true };
 		}
@@ -900,6 +963,7 @@
 						<button onclick={() => scrollToSection('editor-transport')} type="button">Transport</button>
 					{/if}
 					<button onclick={() => scrollToSection('editor-links')} type="button">Links</button>
+					<button onclick={() => scrollToSection('editor-cost')} type="button">Cost</button>
 					<button onclick={() => scrollToSection('editor-private')} type="button">Private</button>
 				</nav>
 				<div class="editor-sections">
@@ -1210,6 +1274,45 @@
 							{/each}
 						</div>
 						<button class="text-button" onclick={addLink} type="button">Add link</button>
+					</fieldset>
+
+					<fieldset class="sensitive-section" id="editor-cost">
+						<legend>Cost</legend>
+						<p>Only admin and sudo accounts can view costs.</p>
+						<label class="toggle-label">
+							<input bind:checked={costEnabled} type="checkbox" />
+							Add a cost
+						</label>
+						{#if costEnabled}
+							<div class="field-grid">
+								<label class="shiori-form-label">
+									Charged amount
+									<input class="shiori-form-control" bind:value={costAmount} inputmode="decimal" placeholder="0.00" />
+								</label>
+								<label class="shiori-form-label">
+									Charged currency
+									<select bind:value={costCurrency} class="shiori-form-control">
+										{#each currencyOptions as currency (currency)}
+											<option value={currency}>{currency}</option>
+										{/each}
+									</select>
+								</label>
+							</div>
+							<label class="toggle-label">
+								<input bind:checked={costPaid} type="checkbox" />
+								Mark as paid
+							</label>
+							{#if costPaid}
+								<p class="field-hint">
+									Shiori saves the ECB rate and {localCurrency} equivalent when you save this paid cost.
+								</p>
+							{/if}
+							{#if item.cost?.status === 'paid'}
+								<p class="field-hint">
+									This paid cost keeps its saved rate. To correct its amount or currency, mark it unpaid and save first.
+								</p>
+							{/if}
+						{/if}
 					</fieldset>
 
 					<fieldset class="sensitive-section" id="editor-private">

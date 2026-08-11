@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isOpenRailwayMapUrl, itineraryItemSchema, itinerarySchema } from './schema';
+import { isOpenRailwayMapUrl, itineraryItemDraftSchema, itineraryItemSchema, itinerarySchema } from './schema';
 
 const itemBase = {
 	id: 'sample-item',
@@ -79,6 +79,33 @@ describe('transport stop schema', () => {
 				title: 'Sample itinerary'
 			}).success
 		).toBe(false);
+	});
+});
+
+describe('cost schemas', () => {
+	it('accepts paid cost drafts but requires the server-created payment snapshot in stored items', () => {
+		const paidCost = {
+			amount: { amountMinor: 12_500, currency: 'USD' },
+			status: 'paid'
+		} as const;
+		const item = { ...itemBase, cost: paidCost, timing: { kind: 'exact' as const, startAt: 1_775_952_000_000 } };
+
+		expect(itineraryItemDraftSchema.safeParse(item).success).toBe(true);
+		expect(itineraryItemSchema.safeParse(item).success).toBe(false);
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				cost: {
+					...paidCost,
+					payment: {
+						exchangeRate: 1.2,
+						localAmount: { amountMinor: 15_000, currency: 'AUD' },
+						paidAt: 1_775_952_000_000,
+						rateDate: '2026-04-03'
+					}
+				}
+			}).success
+		).toBe(true);
 	});
 });
 

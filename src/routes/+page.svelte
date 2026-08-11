@@ -504,6 +504,7 @@
 				{#if selectedItem}
 					<ItineraryItemDetails
 						item={selectedItem}
+						localCurrency={detailedTrip.itinerary.localCurrency}
 						tripTimeZone={itinerary.timeZone}
 						canEdit={canModifyItinerary}
 						deleteError={mutationError}
@@ -526,6 +527,7 @@
 	{#if detailedTrip && canModifyItinerary && editingItem}
 		<ItineraryItemEditor
 			item={editingItem.item}
+			localCurrency={detailedTrip.itinerary.localCurrency}
 			mode={editingItem.mode}
 			tripTimeZone={itinerary.timeZone}
 			tripId={detailedTrip.id}

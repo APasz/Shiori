@@ -12,14 +12,22 @@ import {
 } from '$lib/itinerary/access';
 import {
 	itineraryIdentifierSchema,
+	itineraryItemDraftSchema,
 	itineraryItemSchema,
 	itinerarySchema,
 	tripDetailsSchema,
 	unixTimestampSchema,
+	type Cost,
+	type CurrencyCode,
 	type Itinerary,
+	type ItineraryItem,
+	type ItineraryItemDraft,
+	type MonetaryAmount,
 	type TripDetails
 } from '$lib/itinerary/schema';
+import { currencyFractionDigits } from '$lib/money';
 import { timingStartTimestamp } from '$lib/itinerary/timing';
+import { lookupEcbConversionRate } from './ecb-exchange-rates';
 
 const sessionLifetimeMilliseconds = 7 * 24 * 60 * 60 * 1000;
 const editLockLifetimeMilliseconds = 10 * 60 * 1000;
@@ -695,6 +703,68 @@ function findItemIndex(itinerary: Itinerary, itemId: string): number {
 	return itinerary.items.findIndex((item) => item.id === itemId);
 }
 
+function sameMonetaryAmount(left: MonetaryAmount, right: MonetaryAmount): boolean {
+	return left.amountMinor === right.amountMinor && left.currency === right.currency;
+}
+
+function convertedMinorAmount(amount: MonetaryAmount, localCurrency: CurrencyCode, exchangeRate: number): number {
+	const chargedFractionDigits = currencyFractionDigits(amount.currency);
+	const localFractionDigits = currencyFractionDigits(localCurrency);
+	const converted = Math.round(
+		(amount.amountMinor * exchangeRate * 10 ** localFractionDigits) / 10 ** chargedFractionDigits
+	);
+	if (!Number.isSafeInteger(converted) || converted < 0 || converted > 1_000_000_000_000) {
+		throw new StoreError(400, 'The converted cost is outside Shiori’s supported range.');
+	}
+	return converted;
+}
+
+async function persistedItemForCost(
+	item: ItineraryItemDraft,
+	localCurrency: CurrencyCode,
+	existingItem: ItineraryItem | undefined
+): Promise<ItineraryItem> {
+	const cost = item.cost;
+	if (!cost || cost.status === 'unpaid') {
+		return itineraryItemSchema.parse(item);
+	}
+
+	if (existingItem?.cost?.status === 'paid') {
+		if (!sameMonetaryAmount(cost.amount, existingItem.cost.amount)) {
+			throw new StoreError(400, 'Set this cost to unpaid and save before changing its charged amount or currency.');
+		}
+		return itineraryItemSchema.parse({ ...item, cost: existingItem.cost });
+	}
+
+	const paidAt = timestamp();
+	const exchangeRate = await lookupEcbConversionRate({
+		chargedCurrency: cost.amount.currency,
+		localCurrency,
+		paidAt
+	});
+	if (!exchangeRate) {
+		throw new StoreError(
+			503,
+			'The ECB reference rate is unavailable. Leave this cost unpaid and try marking it paid again shortly.'
+		);
+	}
+
+	const paidCost: Cost = {
+		amount: cost.amount,
+		payment: {
+			exchangeRate: exchangeRate.localCurrencyPerChargedCurrency,
+			rateDate: exchangeRate.effectiveDate,
+			localAmount: {
+				amountMinor: convertedMinorAmount(cost.amount, localCurrency, exchangeRate.localCurrencyPerChargedCurrency),
+				currency: localCurrency
+			},
+			paidAt
+		},
+		status: 'paid'
+	};
+	return itineraryItemSchema.parse({ ...item, cost: paidCost });
+}
+
 function assertTripOwner(trip: StoredTrip, userId: string): void {
 	if (trip.ownerId !== userId) {
 		throw new StoreError(403, 'Only the trip owner can edit this trip.');
@@ -1118,10 +1188,19 @@ export async function saveItem(input: {
 	tripId: string;
 	userId: string;
 }): Promise<{ revision: number }> {
-	const item = itineraryItemSchema.parse(input.item);
+	const item = itineraryItemDraftSchema.parse(input.item);
 	if (item.id !== input.itemId) {
 		throw new StoreError(400, 'An item ID cannot be changed while editing.');
 	}
+	const preflightData = await readData();
+	const preflightTrip = getTripForMutation(preflightData, input.tripId, input.userId);
+	assertExpectedRevision(preflightTrip, input.revision);
+	assertActiveLock(preflightData, { ...input, targetId: input.itemId });
+	const existingItem = preflightTrip.itinerary.items.find((candidate) => candidate.id === input.itemId);
+	if (!existingItem) {
+		throw new StoreError(404, 'Itinerary item not found.');
+	}
+	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, existingItem);
 
 	return transaction((data) => {
 		const trip = getTripForMutation(data, input.tripId, input.userId);
@@ -1131,7 +1210,9 @@ export async function saveItem(input: {
 		if (itemIndex < 0) {
 			throw new StoreError(404, 'Itinerary item not found.');
 		}
-		const items = trip.itinerary.items.map((existingItem, index) => (index === itemIndex ? item : existingItem));
+		const items = trip.itinerary.items.map((existingItem, index) =>
+			index === itemIndex ? persistedItem : existingItem
+		);
 		const result = commitItineraryChange(trip, { ...trip.itinerary, items });
 		data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
 		return result;
@@ -1145,18 +1226,26 @@ export async function createItem(input: {
 	tripId: string;
 	userId: string;
 }): Promise<{ revision: number }> {
-	const item = itineraryItemSchema.parse(input.item);
+	const item = itineraryItemDraftSchema.parse(input.item);
+	const preflightData = await readData();
+	const preflightTrip = getTripForMutation(preflightData, input.tripId, input.userId);
+	assertExpectedRevision(preflightTrip, input.revision);
+	assertActiveLock(preflightData, { ...input, targetId: tripStructureLockTargetId });
+	if (findItemIndex(preflightTrip.itinerary, item.id) >= 0) {
+		throw new StoreError(409, 'An itinerary item already uses this ID.');
+	}
+	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, undefined);
 
 	return transaction((data) => {
 		const trip = getTripForMutation(data, input.tripId, input.userId);
 		assertExpectedRevision(trip, input.revision);
 		const lock = assertActiveLock(data, { ...input, targetId: tripStructureLockTargetId });
-		if (findItemIndex(trip.itinerary, item.id) >= 0) {
+		if (findItemIndex(trip.itinerary, persistedItem.id) >= 0) {
 			throw new StoreError(409, 'An itinerary item already uses this ID.');
 		}
 		const result = commitItineraryChange(trip, {
 			...trip.itinerary,
-			items: [...trip.itinerary.items, item]
+			items: [...trip.itinerary.items, persistedItem]
 		});
 		data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
 		return result;

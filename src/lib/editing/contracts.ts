@@ -4,7 +4,7 @@ import {
 	externalUrlSchema,
 	googleMapsUrlSchema,
 	itineraryIdentifierSchema,
-	itineraryItemSchema,
+	itineraryItemDraftSchema,
 	itineraryLinkSchema,
 	locationRoleSchema,
 	locationCoordinatesSchema,
@@ -22,7 +22,7 @@ export const editLockResponseSchema = z.strictObject({
 });
 
 export const editSaveRequestSchema = z.strictObject({
-	item: itineraryItemSchema,
+	item: itineraryItemDraftSchema,
 	lockToken: z.string().uuid(),
 	revision: z.number().int().nonnegative()
 });
@@ -46,7 +46,7 @@ export const tripDetailsSaveRequestSchema = z.strictObject({
 });
 
 export const itemCreateRequestSchema = z.strictObject({
-	item: itineraryItemSchema,
+	item: itineraryItemDraftSchema,
 	lockToken: z.string().uuid(),
 	revision: z.number().int().nonnegative()
 });

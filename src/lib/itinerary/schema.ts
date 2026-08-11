@@ -110,6 +110,40 @@ export const transportModeSchema = z.enum(['air', 'bus', 'car', 'ferry', 'rail',
 export const reservationStatusSchema = z.enum(['confirmed', 'pending', 'waitlisted', 'cancelled']);
 export const documentKindSchema = z.enum(['ticket', 'confirmation', 'itinerary', 'visa', 'insurance', 'other']);
 export const timingKindSchema = z.enum(['exact', 'approximate', 'window']);
+export const currencyCodeSchema = z.enum([
+	'AUD',
+	'BGN',
+	'BRL',
+	'CAD',
+	'CHF',
+	'CNY',
+	'CZK',
+	'DKK',
+	'EUR',
+	'GBP',
+	'HKD',
+	'HUF',
+	'IDR',
+	'ILS',
+	'INR',
+	'ISK',
+	'JPY',
+	'KRW',
+	'MXN',
+	'MYR',
+	'NOK',
+	'NZD',
+	'PHP',
+	'PLN',
+	'RON',
+	'SEK',
+	'SGD',
+	'THB',
+	'TRY',
+	'USD',
+	'ZAR'
+]);
+export const costStatusSchema = z.enum(['unpaid', 'paid']);
 
 export const locationCoordinatesSchema = z.strictObject({
 	latitude: z.number().gte(-90).lte(90),
@@ -142,6 +176,39 @@ export const reservationSchema = z.strictObject({
 	reference: nonEmptyTextSchema.optional(),
 	status: reservationStatusSchema
 });
+
+const minorAmountSchema = z
+	.number()
+	.int('Use a whole number of minor currency units.')
+	.min(0, 'Use an amount no less than zero.')
+	.max(1_000_000_000_000, 'Use an amount no greater than 1,000,000,000,000 minor units.');
+
+export const monetaryAmountSchema = z.strictObject({
+	amountMinor: minorAmountSchema.min(1, 'Use an amount greater than zero.'),
+	currency: currencyCodeSchema
+});
+
+const convertedMonetaryAmountSchema = z.strictObject({
+	amountMinor: minorAmountSchema,
+	currency: currencyCodeSchema
+});
+
+export const costDraftSchema = z.strictObject({
+	amount: monetaryAmountSchema,
+	status: costStatusSchema
+});
+
+const costPaymentSchema = z.strictObject({
+	exchangeRate: z.number().finite('Use a finite exchange rate.').positive('Use an exchange rate greater than zero.'),
+	rateDate: calendarDateSchema,
+	localAmount: convertedMonetaryAmountSchema,
+	paidAt: unixTimestampSchema
+});
+
+export const costSchema = z.discriminatedUnion('status', [
+	z.strictObject({ amount: monetaryAmountSchema, status: z.literal('unpaid') }),
+	z.strictObject({ amount: monetaryAmountSchema, payment: costPaymentSchema, status: z.literal('paid') })
+]);
 
 const transportStopSchema = z.strictObject({
 	locationId: itineraryIdentifierSchema,
@@ -222,7 +289,13 @@ const itineraryItemBaseShape = {
 	notes: z.array(nonEmptyTextSchema).default([]),
 	links: z.array(itineraryLinkSchema).default([]),
 	documents: z.array(documentReferenceSchema).default([]),
-	reservation: reservationSchema.optional()
+	reservation: reservationSchema.optional(),
+	cost: costSchema.optional()
+};
+
+const itineraryItemDraftBaseShape = {
+	...itineraryItemBaseShape,
+	cost: costDraftSchema.optional()
 };
 
 export const itineraryItemSchema = z.discriminatedUnion('type', [
@@ -241,9 +314,26 @@ export const itineraryItemSchema = z.discriminatedUnion('type', [
 	})
 ]);
 
+export const itineraryItemDraftSchema = z.discriminatedUnion('type', [
+	z.strictObject({
+		...itineraryItemDraftBaseShape,
+		type: z.literal('transport'),
+		transport: transportDetailsSchema
+	}),
+	z.strictObject({
+		...itineraryItemDraftBaseShape,
+		type: z.literal('activity')
+	}),
+	z.strictObject({
+		...itineraryItemDraftBaseShape,
+		type: z.literal('accommodation')
+	})
+]);
+
 export const tripDetailsSchema = z.strictObject({
 	title: nonEmptyTextSchema,
-	timeZone: ianaTimeZoneSchema
+	timeZone: ianaTimeZoneSchema,
+	localCurrency: currencyCodeSchema.default('AUD')
 });
 
 export const itinerarySchema = tripDetailsSchema
@@ -301,6 +391,7 @@ export const itinerarySchema = tripDetailsSchema
 export type Itinerary = z.infer<typeof itinerarySchema>;
 export type TripDetails = z.infer<typeof tripDetailsSchema>;
 export type ItineraryItem = z.infer<typeof itineraryItemSchema>;
+export type ItineraryItemDraft = z.infer<typeof itineraryItemDraftSchema>;
 export type ItineraryItemType = z.infer<typeof itineraryItemTypeSchema>;
 export type ItineraryTiming = z.infer<typeof itineraryTimingSchema>;
 export type IanaTimeZone = z.infer<typeof ianaTimeZoneSchema>;
@@ -310,3 +401,7 @@ export type DocumentReference = z.infer<typeof documentReferenceSchema>;
 export type Reservation = z.infer<typeof reservationSchema>;
 export type ReservationStatus = z.infer<typeof reservationStatusSchema>;
 export type TransportDetails = z.infer<typeof transportDetailsSchema>;
+export type CurrencyCode = z.infer<typeof currencyCodeSchema>;
+export type MonetaryAmount = z.infer<typeof monetaryAmountSchema>;
+export type Cost = z.infer<typeof costSchema>;
+export type CostDraft = z.infer<typeof costDraftSchema>;

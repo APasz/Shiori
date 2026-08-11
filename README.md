@@ -120,6 +120,16 @@ normal details, while documents, reservations, transport seat assignments, and p
 withheld until `admin` or `sudo` access. This visibility policy is centralized in
 `src/lib/itinerary/access.ts`.
 
+Each trip has a local currency, selected by its sudo owner in **Edit trip** (new and legacy trips
+default to AUD). A sudo owner can add one cost to an itinerary item in the charged currency, leave
+it unpaid, or mark it paid. Costs are visible only to `admin` and `sudo` accounts. When a cost is
+marked paid, Shiori retains the original amount and records the paid timestamp, local-currency
+minor-unit amount, direct conversion rate, and date of the European Central Bank (ECB) daily
+reference rate. Later views use that saved snapshot rather than a current rate. The ECB publishes
+rates only on business days, so a weekend or holiday payment uses the latest shared reference rate
+published on or before the UTC payment date. Changing a trip's local currency affects later
+payments only; previous snapshots continue to show their original saved currency.
+
 The sudo owner can add, edit, and delete itinerary items from the itinerary page. New items begin
 with an import-first dialog: Google Maps place and directions links, plus selected Google Flights
 links, prefill the fields that can be parsed safely. Transport imports and manual transport creation

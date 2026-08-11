@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import { apiErrorSchema, editSaveResponseSchema, tripCreateResponseSchema } from '$lib/editing/contracts';
-	import { tripDetailsSchema } from '$lib/itinerary/schema';
+	import { currencyCodeSchema, tripDetailsSchema, type CurrencyCode, type TripDetails } from '$lib/itinerary/schema';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
 	import type { DetailedTripView } from '$lib/server/store';
@@ -12,11 +12,7 @@
 	type EditorMode = 'create' | 'edit';
 	type EditorState = 'editing' | 'saving';
 	type TripDetailsValidation =
-		| {
-				readonly details: { readonly timeZone: string; readonly title: string };
-				readonly valid: true;
-		  }
-		| { readonly error: string; readonly valid: false };
+		{ readonly details: TripDetails; readonly valid: true } | { readonly error: string; readonly valid: false };
 
 	let {
 		mode,
@@ -35,6 +31,7 @@
 	let dialogElement: HTMLDialogElement;
 	let title = $state('');
 	let timeZone = $state('UTC');
+	let localCurrency = $state<CurrencyCode>('AUD');
 	let timeZoneOptions = $state<TimeZoneSearchOption[]>([]);
 	let editorState = $state<EditorState>('editing');
 	let errorMessage = $state('');
@@ -42,6 +39,7 @@
 
 	const draftFingerprint = $derived(JSON.stringify(detailsCandidate()));
 	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
+	const currencyOptions = currencyCodeSchema.options;
 
 	function browserTimeZone(): string {
 		const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -49,7 +47,7 @@
 	}
 
 	function detailsCandidate(): unknown {
-		return { title: title.trim(), timeZone };
+		return { localCurrency, title: title.trim(), timeZone };
 	}
 
 	function populateDraft(): void {
@@ -58,6 +56,7 @@
 			return;
 		}
 
+		localCurrency = trip.itinerary.localCurrency;
 		title = trip.itinerary.title;
 		timeZone = trip.itinerary.timeZone;
 	}
@@ -206,6 +205,15 @@
 				options={timeZoneOptions}
 				value={timeZone}
 			/>
+		</label>
+		<label class="shiori-form-label">
+			Local currency
+			<span class="field-hint">Newly paid costs are converted to this currency and saved at that rate.</span>
+			<select bind:value={localCurrency} class="shiori-form-control">
+				{#each currencyOptions as currency (currency)}
+					<option value={currency}>{currency}</option>
+				{/each}
+			</select>
 		</label>
 		{#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
 	</form>

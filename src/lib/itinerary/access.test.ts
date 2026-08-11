@@ -3,6 +3,7 @@ import { projectDetailedItinerary, projectPublicItinerary } from './access';
 import { externalUrlSchema, type Itinerary } from './schema';
 
 const testItinerary = {
+	localCurrency: 'AUD' as const,
 	title: 'Test itinerary',
 	timeZone: 'UTC',
 	items: [
@@ -16,6 +17,16 @@ const testItinerary = {
 			],
 			notes: [],
 			links: [],
+			cost: {
+				amount: { amountMinor: 12_500, currency: 'USD' },
+				payment: {
+					exchangeRate: 1.2,
+					localAmount: { amountMinor: 15_000, currency: 'AUD' },
+					paidAt: 1_775_952_000_000,
+					rateDate: '2026-04-03'
+				},
+				status: 'paid'
+			},
 			documents: [
 				{
 					title: 'Ticket confirmation',
@@ -73,6 +84,7 @@ describe('itinerary visibility projection', () => {
 
 		expect(transport.documents).toEqual([]);
 		expect(transport.reservation).toBeUndefined();
+		expect(transport.cost).toBeUndefined();
 		expect(transport.transport.seat).toBeUndefined();
 		expect(transport.transport.stops.every((stop) => stop.platform === undefined)).toBe(true);
 	});
@@ -82,6 +94,7 @@ describe('itinerary visibility projection', () => {
 
 		expect(transport.documents).toHaveLength(1);
 		expect(transport.reservation?.reference).toBe('TEST-000000');
+		expect(transport.cost?.status).toBe('paid');
 		expect(transport.transport.seat).toBe('Car 8, Seat 12A');
 		expect(transport.transport.stops[0]?.platform).toBe('20');
 	});
