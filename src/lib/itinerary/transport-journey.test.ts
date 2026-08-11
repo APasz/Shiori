@@ -36,6 +36,30 @@ describe('transport journey drafts', () => {
 		});
 	});
 
+	it('preserves OpenRailwayMap permalinks for rail journey endpoints', () => {
+		const departureMapUrl = 'https://www.openrailwaymap.org/?lat=-37.8183&lon=144.9671&zoom=14';
+		const item = createTransportJourneyItem(
+			{
+				departure: {
+					coordinates: { latitude: -37.8183, longitude: 144.9671 },
+					name: 'Flinders Street Station',
+					openRailwayMapUrl: departureMapUrl
+				},
+				arrival: { name: 'Southern Cross Station' },
+				mode: 'rail',
+				sourceLinks: []
+			},
+			'flinders-street-to-southern-cross',
+			Date.UTC(2026, 9, 27)
+		);
+
+		expect(item.locations[0]).toMatchObject({
+			name: 'Flinders Street Station',
+			openRailwayMapUrl: departureMapUrl,
+			role: 'departure'
+		});
+	});
+
 	it('uses concise endpoint names in generated route titles', () => {
 		expect(transportRouteTitle('Kansai International Airport', 'Flinders Street Station')).toBe(
 			'Kansai > Flinders Street'

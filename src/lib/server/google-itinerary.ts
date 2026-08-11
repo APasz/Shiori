@@ -2,14 +2,22 @@ import { isGoogleFlightsUrl, isGoogleMapsUrl, type TransportDetails } from '$lib
 import { lookupAeroDataBoxFlightSchedule } from '$lib/server/aerodatabox';
 import {
 	GoogleMapsResolveError,
+	googleMapsDirectionsCoordinates,
 	googleMapsSearchUrl,
 	parseGoogleMapsLocationUrl,
 	resolveGoogleMapsUrl
 } from '$lib/server/google-maps';
 import { lookupGoogleAirport } from '$lib/server/google-places';
+import { lookupGoogleTimeZone } from '$lib/server/google-time-zone';
+import {
+	lookupGoogleTransitLegs,
+	type GoogleTransitLeg,
+	type GoogleTransitTimingIntent
+} from '$lib/server/google-transit';
 import type { ItineraryItemImport } from '$lib/editing/contracts';
 import { operatorNameForServicePrefix } from '$lib/itinerary/transport-operator';
 import { transportRouteTitle } from '$lib/itinerary/transport-journey';
+import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from '$lib/itinerary/zoned-time';
 
 const maximumRedirects = 5;
 const requestTimeoutMilliseconds = 5_000;
@@ -25,6 +33,16 @@ type FlightLeg = Readonly<{
 	flightNumber?: string;
 	origin: string;
 	startDate: string;
+}>;
+
+type GoogleDirectionsEndpoints = Readonly<{
+	arrival: string;
+	departure: string;
+}>;
+
+type GoogleMapsTransitTiming = Readonly<{
+	interpretation: 'absolute' | 'local';
+	timing: GoogleTransitTimingIntent;
 }>;
 
 export class GoogleItineraryImportError extends Error {
@@ -46,9 +64,9 @@ function decodedPathSegment(value: string): string | undefined {
 	}
 }
 
-function directionsTravelMode(url: URL): TransportDetails['mode'] {
+function googleDirectionsTravelMode(url: URL): string | null {
 	const legacyDirectionFlag = url.searchParams.get('dirflg');
-	const mode =
+	return (
 		url.searchParams.get('travelmode') ??
 		(legacyDirectionFlag === 'd'
 			? 'driving'
@@ -58,7 +76,12 @@ function directionsTravelMode(url: URL): TransportDetails['mode'] {
 					? 'walking'
 					: legacyDirectionFlag === 'b'
 						? 'bicycling'
-						: null);
+						: null)
+	);
+}
+
+function directionsTravelMode(url: URL): TransportDetails['mode'] {
+	const mode = googleDirectionsTravelMode(url);
 	if (mode === 'walking' || mode === 'bicycling') {
 		throw new GoogleItineraryImportError(
 			422,
@@ -71,7 +94,7 @@ function directionsTravelMode(url: URL): TransportDetails['mode'] {
 	return 'other';
 }
 
-function directionsImport(url: URL): ItineraryItemImport {
+function directionsEndpoints(url: URL): GoogleDirectionsEndpoints {
 	const segments = url.pathname.split('/').filter((segment) => segment !== '');
 	const directionsIndex = segments.indexOf('dir');
 	const pathLocations = segments
@@ -86,7 +109,11 @@ function directionsImport(url: URL): ItineraryItemImport {
 			'The Google Maps directions link must identify both a departure and arrival location.'
 		);
 	}
+	return { arrival, departure };
+}
 
+function directionsImport(url: URL, endpoints: GoogleDirectionsEndpoints): ItineraryItemImport {
+	const { arrival, departure } = endpoints;
 	return {
 		type: 'transport',
 		title: transportRouteTitle(departure, arrival),
@@ -97,6 +124,107 @@ function directionsImport(url: URL): ItineraryItemImport {
 		links: [{ label: 'Google Maps directions', url: url.toString() }],
 		transport: { mode: directionsTravelMode(url) }
 	};
+}
+
+function isTransitDirectionsUrl(url: URL): boolean {
+	return googleDirectionsTravelMode(url) === 'transit' || url.pathname.includes('!3e3');
+}
+
+function googleMapsTransitTiming(url: URL): GoogleMapsTransitTiming | undefined {
+	const timestamp = url.pathname.match(/!8j(\d{10,13})(?:!|$)/)?.[1];
+	if (!timestamp) {
+		return undefined;
+	}
+	const value = Number(timestamp);
+	if (!Number.isSafeInteger(value)) {
+		return undefined;
+	}
+	const milliseconds = timestamp.length <= 10 ? value * 1_000 : value;
+	if (!Number.isSafeInteger(milliseconds) || Number.isNaN(new Date(milliseconds).getTime())) {
+		return undefined;
+	}
+
+	return {
+		interpretation: url.pathname.includes('!7e2') ? 'local' : 'absolute',
+		timing: {
+			at: milliseconds,
+			kind: url.pathname.includes('!6e1') ? 'arrival' : 'departure'
+		}
+	};
+}
+
+async function transitTimingForLookup(
+	url: URL,
+	timing: GoogleMapsTransitTiming
+): Promise<GoogleTransitTimingIntent | undefined> {
+	if (timing.interpretation === 'absolute') {
+		return timing.timing;
+	}
+
+	const coordinates = googleMapsDirectionsCoordinates(url);
+	const endpointCoordinates = timing.timing.kind === 'arrival' ? coordinates.arrival : coordinates.departure;
+	if (!endpointCoordinates) {
+		return undefined;
+	}
+
+	const timeZone = await lookupGoogleTimeZone(endpointCoordinates, timing.timing.at);
+	const localDateTime = formatTimestampForTimeZoneInput(timing.timing.at, 'UTC');
+	const at = timeZone && localDateTime ? zonedDateTimeToUnixMilliseconds(localDateTime, timeZone) : null;
+	return at === null ? undefined : { ...timing.timing, at };
+}
+
+function transitImport(url: URL, leg: GoogleTransitLeg): ItineraryItemImport {
+	const departureGoogleMapsUrl = googleMapsSearchUrl(leg.departure.name);
+	const arrivalGoogleMapsUrl = googleMapsSearchUrl(leg.arrival.name);
+	return {
+		type: 'transport',
+		title: transportRouteTitle(leg.departure.name, leg.arrival.name),
+		locations: [
+			{
+				name: leg.departure.name,
+				role: 'departure',
+				googleMapsUrl: departureGoogleMapsUrl,
+				coordinates: leg.departure.coordinates
+			},
+			{
+				name: leg.arrival.name,
+				role: 'arrival',
+				googleMapsUrl: arrivalGoogleMapsUrl,
+				coordinates: leg.arrival.coordinates
+			}
+		],
+		links: [{ label: 'Google Maps transit directions', url: url.toString() }],
+		transport: {
+			mode: leg.mode,
+			...(leg.operator ? { operator: leg.operator } : {}),
+			...(leg.schedule ? { schedule: leg.schedule } : {}),
+			...(leg.serviceNumber ? { serviceNumber: leg.serviceNumber } : {})
+		}
+	};
+}
+
+async function directionsImports(url: URL): Promise<ItineraryItemImport[]> {
+	const endpoints = directionsEndpoints(url);
+	const fallback = directionsImport(url, endpoints);
+	if (!isTransitDirectionsUrl(url)) {
+		return [fallback];
+	}
+
+	const sourceTiming = googleMapsTransitTiming(url);
+	if (!sourceTiming) {
+		return [fallback];
+	}
+	const timing = await transitTimingForLookup(url, sourceTiming);
+	if (!timing) {
+		return [fallback];
+	}
+
+	const transitLegs = await lookupGoogleTransitLegs({
+		arrivalAddress: endpoints.arrival,
+		departureAddress: endpoints.departure,
+		timing
+	});
+	return transitLegs?.map((leg) => transitImport(url, leg)) ?? [fallback];
 }
 
 function mapsPlaceImport(url: URL): ItineraryItemImport {
@@ -293,7 +421,7 @@ export async function resolveGoogleItineraryUrl(inputUrl: string): Promise<Itine
 		try {
 			const inputUrlObject = new URL(inputUrl);
 			const url = inputUrlObject.hostname === 'maps.app.goo.gl' ? await resolveGoogleMapsUrl(inputUrl) : inputUrlObject;
-			return [isDirectionsUrl(url) ? directionsImport(url) : mapsPlaceImport(url)];
+			return isDirectionsUrl(url) ? directionsImports(url) : [mapsPlaceImport(url)];
 		} catch (error: unknown) {
 			if (error instanceof GoogleMapsResolveError) {
 				throw new GoogleItineraryImportError(error.status, error.message);

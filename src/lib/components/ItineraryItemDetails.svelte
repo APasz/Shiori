@@ -86,6 +86,16 @@
 							{:else}
 								<strong>{location.name}</strong>
 							{/if}
+							{#if location.openRailwayMapUrl}
+								<a
+									class="location-map-link"
+									href={location.openRailwayMapUrl}
+									rel="external noopener noreferrer"
+									target="_blank"
+								>
+									OpenRailwayMap
+								</a>
+							{/if}
 							<span class="location-role">{location.role.replace('-', ' ')}</span>
 							{#if location.address}<span>{location.address}</span>{/if}
 						</li>
@@ -251,12 +261,17 @@
 	}
 
 	.location-role,
-	.document-kind {
+	.document-kind,
+	.location-map-link {
 		color: var(--color-text-muted);
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
+	}
+
+	.location-map-link {
+		width: fit-content;
 	}
 
 	.eyebrow {

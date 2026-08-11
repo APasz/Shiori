@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { itineraryItemSchema, itinerarySchema } from './schema';
+import { isOpenRailwayMapUrl, itineraryItemSchema, itinerarySchema } from './schema';
 
 const itemBase = {
 	id: 'sample-item',
@@ -79,5 +79,27 @@ describe('transport stop schema', () => {
 				title: 'Sample itinerary'
 			}).success
 		).toBe(false);
+	});
+});
+
+describe('OpenRailwayMap URLs', () => {
+	it('accepts secure map permalinks for itinerary locations', () => {
+		const item = itineraryItemSchema.parse({
+			...transportItem,
+			locations: [
+				{
+					id: 'departure',
+					name: 'Flinders Street Station',
+					openRailwayMapUrl: 'https://www.openrailwaymap.org/?lat=-37.8183&lon=144.9671&zoom=14',
+					role: 'departure' as const
+				},
+				{ id: 'arrival', name: 'Southern Cross Station', role: 'arrival' as const }
+			]
+		});
+
+		expect(item.locations[0]?.openRailwayMapUrl).toBe(
+			'https://www.openrailwaymap.org/?lat=-37.8183&lon=144.9671&zoom=14'
+		);
+		expect(isOpenRailwayMapUrl('https://openrailwaymap.org/?lat=-37.8183&lon=144.9671')).toBe(true);
 	});
 });

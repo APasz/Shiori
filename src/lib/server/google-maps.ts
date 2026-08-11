@@ -9,6 +9,11 @@ export type GoogleMapsLocationImport = Readonly<{
 	name?: string;
 }>;
 
+export type GoogleMapsDirectionsCoordinates = Readonly<{
+	arrival?: ItineraryLocation['coordinates'];
+	departure?: ItineraryLocation['coordinates'];
+}>;
+
 /** Creates a validated Google Maps search link for a known location name. */
 export function googleMapsSearchUrl(query: string): string {
 	const url = new URL('https://www.google.com/maps/search/');
@@ -89,6 +94,18 @@ function coordinatesFromGoogleMapsUrl(url: URL): ItineraryLocation['coordinates'
 	}
 
 	return undefined;
+}
+
+/** Extracts endpoint coordinates embedded in a Google Maps directions URL. */
+export function googleMapsDirectionsCoordinates(url: URL): GoogleMapsDirectionsCoordinates {
+	const coordinatePairs = [...url.pathname.matchAll(/!1d(-?(?:\d+(?:\.\d+)?|\.\d+))!2d(-?(?:\d+(?:\.\d+)?|\.\d+))/g)];
+	const [departureMatch, arrivalMatch] = coordinatePairs;
+	const departure = departureMatch ? coordinateValue(departureMatch[2], departureMatch[1]) : undefined;
+	const arrival = arrivalMatch ? coordinateValue(arrivalMatch[2], arrivalMatch[1]) : undefined;
+	return {
+		...(departure ? { departure } : {}),
+		...(arrival ? { arrival } : {})
+	};
 }
 
 export function parseGoogleMapsLocationUrl(url: URL): GoogleMapsLocationImport {

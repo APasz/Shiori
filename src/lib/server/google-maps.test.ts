@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isGoogleMapsUrl } from '../itinerary/schema';
 import {
 	GoogleMapsResolveError,
+	googleMapsDirectionsCoordinates,
 	googleMapsSearchUrl,
 	parseGoogleMapsLocationUrl,
 	resolveGoogleMapsLocation
@@ -36,6 +37,17 @@ describe('Google Maps location parsing', () => {
 		expect(parseGoogleMapsLocationUrl(new URL('https://www.google.com/maps/place/Cafe/@-37.814,144.963,15z'))).toEqual({
 			googleMapsUrl: 'https://www.google.com/maps/place/Cafe/@-37.814,144.963,15z',
 			name: 'Cafe'
+		});
+	});
+
+	it('reads embedded direction endpoint coordinates without using the map viewport', () => {
+		const directionsUrl = new URL(
+			'https://www.google.com/maps/dir/KL+Sentral/JB+Sentral/@2.2978148,101.4035567,875812m/data=!4m8!1m2!1d101.6860377!2d3.1341631!1m2!1d103.7621742!2d1.4633316'
+		);
+
+		expect(googleMapsDirectionsCoordinates(directionsUrl)).toEqual({
+			arrival: { latitude: 1.4633316, longitude: 103.7621742 },
+			departure: { latitude: 3.1341631, longitude: 101.6860377 }
 		});
 	});
 

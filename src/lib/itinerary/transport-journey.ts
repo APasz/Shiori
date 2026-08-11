@@ -6,6 +6,7 @@ import {
 	itineraryItemSchema,
 	itineraryLinkSchema,
 	locationCoordinatesSchema,
+	openRailwayMapUrlSchema,
 	transportModeSchema,
 	type ItineraryItem,
 	type TransportDetails
@@ -19,7 +20,8 @@ const transportTitleSuffixPattern =
 export const transportJourneyEndpointSchema = z.strictObject({
 	coordinates: locationCoordinatesSchema.optional(),
 	googleMapsUrl: googleMapsUrlSchema.optional(),
-	name: nonEmptyTextSchema
+	name: nonEmptyTextSchema,
+	openRailwayMapUrl: openRailwayMapUrlSchema.optional()
 });
 
 export const transportJourneyDraftSchema = z.strictObject({
@@ -46,7 +48,8 @@ function locationForEndpoint(
 		name: endpoint.name,
 		role,
 		...(endpoint.coordinates ? { coordinates: endpoint.coordinates } : {}),
-		...(endpoint.googleMapsUrl ? { googleMapsUrl: endpoint.googleMapsUrl } : {})
+		...(endpoint.googleMapsUrl ? { googleMapsUrl: endpoint.googleMapsUrl } : {}),
+		...(endpoint.openRailwayMapUrl ? { openRailwayMapUrl: endpoint.openRailwayMapUrl } : {})
 	};
 }
 
@@ -79,12 +82,14 @@ export function transportJourneyDraftFromImport(itemImport: ItineraryItemImport)
 		departure: {
 			name: departure.name,
 			...(departure.coordinates ? { coordinates: departure.coordinates } : {}),
-			...(departure.googleMapsUrl ? { googleMapsUrl: departure.googleMapsUrl } : {})
+			...(departure.googleMapsUrl ? { googleMapsUrl: departure.googleMapsUrl } : {}),
+			...(departure.openRailwayMapUrl ? { openRailwayMapUrl: departure.openRailwayMapUrl } : {})
 		},
 		arrival: {
 			name: arrival.name,
 			...(arrival.coordinates ? { coordinates: arrival.coordinates } : {}),
-			...(arrival.googleMapsUrl ? { googleMapsUrl: arrival.googleMapsUrl } : {})
+			...(arrival.googleMapsUrl ? { googleMapsUrl: arrival.googleMapsUrl } : {}),
+			...(arrival.openRailwayMapUrl ? { openRailwayMapUrl: arrival.openRailwayMapUrl } : {})
 		},
 		mode: itemImport.transport.mode,
 		sourceLinks: itemImport.links,

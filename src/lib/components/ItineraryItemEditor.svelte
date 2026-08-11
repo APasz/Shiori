@@ -6,7 +6,7 @@
 		apiErrorSchema,
 		editLockResponseSchema,
 		editSaveResponseSchema,
-		googleMapsLocationResolveResponseSchema
+		locationResolveResponseSchema
 	} from '$lib/editing/contracts';
 	import {
 		documentKindSchema,
@@ -48,6 +48,7 @@
 		latitude: string;
 		longitude: string;
 		name: string;
+		openRailwayMapUrl: string;
 		role: ItineraryLocation['role'];
 	};
 
@@ -115,9 +116,9 @@
 	let startAtTimeZone = $state('UTC');
 	let notes = $state('');
 	let locations = $state<LocationDraft[]>([]);
-	let googleMapsImportUrl = $state('');
-	let googleMapsImportError = $state('');
-	let isImportingGoogleMapsLocation = $state(false);
+	let locationImportUrl = $state('');
+	let locationImportError = $state('');
+	let isImportingLocation = $state(false);
 	let links = $state<LinkDraft[]>([]);
 	let documents = $state<DocumentDraft[]>([]);
 	let reservationEnabled = $state(false);
@@ -156,6 +157,7 @@
 			latitude: location.coordinates ? String(location.coordinates.latitude) : '',
 			longitude: location.coordinates ? String(location.coordinates.longitude) : '',
 			name: location.name,
+			openRailwayMapUrl: location.openRailwayMapUrl ?? '',
 			role: location.role
 		};
 	}
@@ -228,7 +230,7 @@
 		return `/api/trips/${encodeURIComponent(tripId)}`;
 	}
 
-	function googleMapsResolveEndpoint(): string {
+	function locationResolveEndpoint(): string {
 		return `${tripEndpoint()}/locations/resolve`;
 	}
 
@@ -253,6 +255,7 @@
 			latitude: '',
 			longitude: '',
 			name: '',
+			openRailwayMapUrl: '',
 			role: 'primary'
 		};
 		addLocationDraft(location);
@@ -270,43 +273,44 @@
 		transportStops = transportStops.filter((stop) => stop.locationId !== locationId);
 	}
 
-	async function importGoogleMapsLocation(): Promise<void> {
-		const url = googleMapsImportUrl.trim();
+	async function importLocation(): Promise<void> {
+		const url = locationImportUrl.trim();
 		if (!url) {
-			googleMapsImportError = 'Paste a Google Maps link first.';
+			locationImportError = 'Paste a Google Maps or OpenRailwayMap link first.';
 			return;
 		}
 
-		isImportingGoogleMapsLocation = true;
-		googleMapsImportError = '';
+		isImportingLocation = true;
+		locationImportError = '';
 		try {
-			const response = await fetch(googleMapsResolveEndpoint(), {
+			const response = await fetch(locationResolveEndpoint(), {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ url })
 			});
 			const data = await responseData(response);
-			const importedLocation = googleMapsLocationResolveResponseSchema.safeParse(data);
+			const importedLocation = locationResolveResponseSchema.safeParse(data);
 			if (!response.ok || !importedLocation.success) {
-				googleMapsImportError = errorFrom(data, 'The Google Maps link could not be imported.');
+				locationImportError = errorFrom(data, 'The map link could not be imported.');
 				return;
 			}
 
 			addLocationDraft({
 				address: '',
-				googleMapsUrl: importedLocation.data.googleMapsUrl,
+				googleMapsUrl: importedLocation.data.googleMapsUrl ?? '',
 				id: newIdentifier(),
 				isExpanded: true,
 				latitude: importedLocation.data.coordinates ? String(importedLocation.data.coordinates.latitude) : '',
 				longitude: importedLocation.data.coordinates ? String(importedLocation.data.coordinates.longitude) : '',
 				name: importedLocation.data.name ?? '',
+				openRailwayMapUrl: importedLocation.data.openRailwayMapUrl ?? '',
 				role: 'primary'
 			});
-			googleMapsImportUrl = '';
+			locationImportUrl = '';
 		} catch {
-			googleMapsImportError = 'The Google Maps link could not be imported because the server is unavailable.';
+			locationImportError = 'The map link could not be imported because the server is unavailable.';
 		} finally {
-			isImportingGoogleMapsLocation = false;
+			isImportingLocation = false;
 		}
 	}
 
@@ -479,6 +483,7 @@
 	function locationValue(draft: LocationDraft): unknown {
 		const address = optionalText(draft.address);
 		const googleMapsUrl = optionalText(draft.googleMapsUrl);
+		const openRailwayMapUrl = optionalText(draft.openRailwayMapUrl);
 		const hasCoordinates = draft.latitude.trim() !== '' || draft.longitude.trim() !== '';
 		return {
 			id: draft.id.trim(),
@@ -486,6 +491,7 @@
 			name: draft.name.trim(),
 			...(address ? { address } : {}),
 			...(googleMapsUrl ? { googleMapsUrl } : {}),
+			...(openRailwayMapUrl ? { openRailwayMapUrl } : {}),
 			...(hasCoordinates
 				? {
 						coordinates: {
@@ -1019,27 +1025,27 @@
 
 					<fieldset id="editor-places">
 						<legend>Places</legend>
-						<div class="google-maps-import">
+						<div class="location-map-import">
 							<label class="shiori-form-label">
-								Import from Google Maps
+								Import from a map link
 								<input
 									class="shiori-form-control"
-									bind:value={googleMapsImportUrl}
+									bind:value={locationImportUrl}
 									inputmode="url"
-									placeholder="Paste a Google Maps or maps.app.goo.gl link"
+									placeholder="Paste a Google Maps or OpenRailwayMap link"
 								/>
 							</label>
 							<button
 								class="shiori-form-button"
-								disabled={isImportingGoogleMapsLocation}
-								onclick={() => void importGoogleMapsLocation()}
+								disabled={isImportingLocation}
+								onclick={() => void importLocation()}
 								type="button"
 							>
-								{isImportingGoogleMapsLocation ? 'Importing…' : 'Import location'}
+								{isImportingLocation ? 'Importing…' : 'Import location'}
 							</button>
 						</div>
-						{#if googleMapsImportError}
-							<p class="error" role="alert">{googleMapsImportError}</p>
+						{#if locationImportError}
+							<p class="error" role="alert">{locationImportError}</p>
 						{/if}
 						<div class="collection">
 							{#each locations as location, index (location.id)}
@@ -1075,6 +1081,10 @@
 										<label class="shiori-form-label">
 											Google Maps link <span class="field-hint">Shown with this location.</span>
 											<input class="shiori-form-control" bind:value={location.googleMapsUrl} inputmode="url" />
+										</label>
+										<label class="shiori-form-label">
+											OpenRailwayMap link <span class="field-hint">Shown with this location.</span>
+											<input class="shiori-form-control" bind:value={location.openRailwayMapUrl} inputmode="url" />
 										</label>
 										<div class="field-grid">
 											<label class="shiori-form-label">
@@ -1448,7 +1458,7 @@
 		gap: 0.75rem;
 	}
 
-	.google-maps-import {
+	.location-map-import {
 		align-items: end;
 		display: grid;
 		gap: 0.75rem;
@@ -1638,7 +1648,7 @@
 			grid-template-columns: 1fr;
 		}
 
-		.google-maps-import {
+		.location-map-import {
 			grid-template-columns: 1fr;
 		}
 	}

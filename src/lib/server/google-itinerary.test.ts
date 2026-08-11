@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const privateEnvironment = vi.hoisted(() => ({
 	AERODATABOX_API_KEY: undefined as string | undefined,
 	AERODATABOX_DIRECT_API_KEY: undefined as string | undefined,
-	GOOGLE_PLACES_API_KEY: undefined as string | undefined
+	GOOGLE_PLACES_API_KEY: undefined as string | undefined,
+	GOOGLE_ROUTES_API_KEY: undefined as string | undefined
 }));
 
 vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
@@ -17,6 +18,7 @@ afterEach(() => {
 	privateEnvironment.AERODATABOX_API_KEY = undefined;
 	privateEnvironment.AERODATABOX_DIRECT_API_KEY = undefined;
 	privateEnvironment.GOOGLE_PLACES_API_KEY = undefined;
+	privateEnvironment.GOOGLE_ROUTES_API_KEY = undefined;
 	vi.unstubAllGlobals();
 });
 
@@ -50,6 +52,142 @@ describe('Google itinerary import', () => {
 				transport: { mode: 'car' }
 			})
 		]);
+	});
+
+	it('imports scheduled transit vehicle legs from a Google Maps transit direction', async () => {
+		privateEnvironment.GOOGLE_ROUTES_API_KEY = 'test-key';
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ status: 'OK', timeZoneId: 'Asia/Kuala_Lumpur' }), {
+					headers: { 'content-type': 'application/json' }
+				})
+			)
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						routes: [
+							{
+								legs: [
+									{
+										steps: [
+											{
+												transitDetails: {
+													localizedValues: {
+														arrivalTime: { timeZone: 'Asia/Kuala_Lumpur' },
+														departureTime: { timeZone: 'Asia/Kuala_Lumpur' }
+													},
+													stopDetails: {
+														arrivalStop: {
+															location: { latLng: { latitude: 1.4632, longitude: 103.7646 } },
+															name: 'JB Sentral'
+														},
+														arrivalTime: '2026-10-27T06:30:00Z',
+														departureStop: {
+															location: { latLng: { latitude: 3.1342, longitude: 101.686 } },
+															name: 'KL Sentral'
+														},
+														departureTime: '2026-10-27T02:00:00Z'
+													},
+													transitLine: {
+														agencies: [{ name: 'KTM Berhad' }],
+														nameShort: 'ETS 9321',
+														vehicle: { type: 'LONG_DISTANCE_TRAIN' }
+													}
+												}
+											}
+										]
+									}
+								]
+							}
+						]
+					}),
+					{ headers: { 'content-type': 'application/json' } }
+				)
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			resolveGoogleItineraryUrl(
+				'https://www.google.com/maps/dir/KL+Sentral/JB+Sentral/data=!1d101.6860377!2d3.1341631!1d103.7621742!2d1.4633316!6e0!7e2!8j1793095200!3e3'
+			)
+		).resolves.toEqual([
+			expect.objectContaining({
+				title: 'KL Sentral > JB Sentral',
+				transport: {
+					mode: 'rail',
+					operator: 'KTM Berhad',
+					serviceNumber: 'ETS 9321',
+					schedule: {
+						arrival: { scheduledAt: Date.UTC(2026, 9, 27, 6, 30), timeZone: 'Asia/Kuala_Lumpur' },
+						departure: { scheduledAt: Date.UTC(2026, 9, 27, 2), timeZone: 'Asia/Kuala_Lumpur' }
+					}
+				},
+				locations: [
+					expect.objectContaining({ name: 'KL Sentral', role: 'departure' }),
+					expect.objectContaining({ name: 'JB Sentral', role: 'arrival' })
+				]
+			})
+		]);
+
+		const [, routeRequest] = fetchMock.mock.calls[1] ?? [];
+		expect(routeRequest).toMatchObject({
+			body: JSON.stringify({
+				destination: { address: 'JB Sentral' },
+				departureTime: '2026-10-27T02:00:00.000Z',
+				origin: { address: 'KL Sentral' },
+				travelMode: 'TRANSIT'
+			})
+		});
+	});
+
+	it('keeps the ordinary directions fallback when Google Routes is not configured', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			resolveGoogleItineraryUrl(
+				'https://www.google.com/maps/dir/KL+Sentral/JB+Sentral/data=!1d101.6860377!2d3.1341631!1d103.7621742!2d1.4633316!6e0!7e2!8j1793095200!3e3'
+			)
+		).resolves.toEqual([
+			expect.objectContaining({
+				title: 'KL Sentral > JB Sentral',
+				transport: { mode: 'other' }
+			})
+		]);
+
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('uses the arrival endpoint and arrival timestamp for a local arrive-by transit selection', async () => {
+		privateEnvironment.GOOGLE_ROUTES_API_KEY = 'test-key';
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ status: 'OK', timeZoneId: 'Asia/Kuala_Lumpur' }), {
+					headers: { 'content-type': 'application/json' }
+				})
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ routes: [] }), { headers: { 'content-type': 'application/json' } })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			resolveGoogleItineraryUrl(
+				'https://www.google.com/maps/dir/KL+Sentral/JB+Sentral/data=!1d101.6860377!2d3.1341631!1d103.7621742!2d1.4633316!6e1!7e2!8j1793095200!3e3'
+			)
+		).resolves.toMatchObject([expect.objectContaining({ transport: { mode: 'other' } })]);
+
+		const [timeZoneRequest] = fetchMock.mock.calls[0] ?? [];
+		expect((timeZoneRequest as URL).searchParams.get('location')).toBe('1.4633316,103.7621742');
+		const [, routeRequest] = fetchMock.mock.calls[1] ?? [];
+		expect(JSON.parse((routeRequest as RequestInit).body as string)).toEqual({
+			destination: { address: 'JB Sentral' },
+			arrivalTime: '2026-10-27T02:00:00.000Z',
+			origin: { address: 'KL Sentral' },
+			travelMode: 'TRANSIT'
+		});
 	});
 
 	it('imports a Google Maps place as an activity', async () => {

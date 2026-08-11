@@ -8,6 +8,7 @@ import {
 	itineraryLinkSchema,
 	locationRoleSchema,
 	locationCoordinatesSchema,
+	openRailwayMapUrlSchema,
 	transportModeSchema,
 	tripDetailsSchema,
 	unixTimestampSchema
@@ -60,15 +61,23 @@ export const editLockTokenRequestSchema = z.strictObject({
 	lockToken: z.string().uuid()
 });
 
-export const googleMapsLocationResolveRequestSchema = z.strictObject({
-	url: googleMapsUrlSchema
+const locationMapUrlSchema = z.union([googleMapsUrlSchema, openRailwayMapUrlSchema]);
+
+export const locationResolveRequestSchema = z.strictObject({
+	url: locationMapUrlSchema
 });
 
-export const googleMapsLocationResolveResponseSchema = z.strictObject({
-	coordinates: locationCoordinatesSchema.optional(),
-	googleMapsUrl: googleMapsUrlSchema,
-	name: z.string().trim().min(1).optional()
-});
+export const locationResolveResponseSchema = z
+	.strictObject({
+		coordinates: locationCoordinatesSchema.optional(),
+		googleMapsUrl: googleMapsUrlSchema.optional(),
+		name: z.string().trim().min(1).optional(),
+		openRailwayMapUrl: openRailwayMapUrlSchema.optional()
+	})
+	.refine(
+		(location) => location.googleMapsUrl !== undefined || location.openRailwayMapUrl !== undefined,
+		'Include a Google Maps or OpenRailwayMap URL.'
+	);
 
 export const itineraryItemImportRequestSchema = z.strictObject({
 	url: externalUrlSchema
@@ -78,6 +87,7 @@ const importedLocationSchema = z.strictObject({
 	coordinates: locationCoordinatesSchema.optional(),
 	googleMapsUrl: googleMapsUrlSchema.optional(),
 	name: z.string().trim().min(1),
+	openRailwayMapUrl: openRailwayMapUrlSchema.optional(),
 	role: locationRoleSchema
 });
 

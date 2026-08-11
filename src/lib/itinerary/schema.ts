@@ -43,6 +43,7 @@ export const externalUrlSchema = z
 	);
 
 const googleMapsHostnamePattern = /^(?:(?:maps|www)\.)?google\.(?:com|[a-z]{2,3})(?:\.[a-z]{2})?$/;
+const openRailwayMapHostnamePattern = /^(?:www\.)?openrailwaymap\.org$/;
 
 function hasGoogleMapsHostname(url: URL): boolean {
 	return url.hostname === 'maps.app.goo.gl' || googleMapsHostnamePattern.test(url.hostname);
@@ -84,6 +85,25 @@ export const googleMapsUrlSchema = z
 	.url('Use an absolute Google Maps URL.')
 	.refine(isGoogleMapsUrl, 'Use a Google Maps or maps.app.goo.gl URL.');
 
+function hasOpenRailwayMapPath(url: URL): boolean {
+	return url.pathname === '/' || url.pathname === '/index.php' || url.pathname === '/mobile.php';
+}
+
+/** Returns whether a URL is a secure OpenRailwayMap map or permalink URL. */
+export function isOpenRailwayMapUrl(value: string): boolean {
+	try {
+		const url = new URL(value);
+		return url.protocol === 'https:' && openRailwayMapHostnamePattern.test(url.hostname) && hasOpenRailwayMapPath(url);
+	} catch {
+		return false;
+	}
+}
+
+export const openRailwayMapUrlSchema = z
+	.string()
+	.url('Use an absolute OpenRailwayMap URL.')
+	.refine(isOpenRailwayMapUrl, 'Use an OpenRailwayMap URL.');
+
 export const itineraryItemTypeSchema = z.enum(['transport', 'activity', 'accommodation']);
 export const locationRoleSchema = z.enum(['primary', 'departure', 'arrival', 'via', 'meeting-point']);
 export const transportModeSchema = z.enum(['air', 'bus', 'car', 'ferry', 'rail', 'ride-share', 'walk', 'other']);
@@ -102,7 +122,8 @@ export const locationSchema = z.strictObject({
 	name: nonEmptyTextSchema,
 	address: nonEmptyTextSchema.optional(),
 	coordinates: locationCoordinatesSchema.optional(),
-	googleMapsUrl: googleMapsUrlSchema.optional()
+	googleMapsUrl: googleMapsUrlSchema.optional(),
+	openRailwayMapUrl: openRailwayMapUrlSchema.optional()
 });
 
 export const itineraryLinkSchema = z.strictObject({

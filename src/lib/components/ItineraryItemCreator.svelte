@@ -3,7 +3,7 @@
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import {
 		apiErrorSchema,
-		googleMapsLocationResolveResponseSchema,
+		locationResolveResponseSchema,
 		itineraryItemImportResponseSchema,
 		type ItineraryItemImport
 	} from '$lib/editing/contracts';
@@ -31,11 +31,17 @@
 		| 'transport-details'
 		| 'transport-review';
 	type TransportEndpointKind = 'departure' | 'arrival';
+	type TransportEndpointMapProvider = 'google-maps' | 'open-railway-map';
 	type TransportEndpointDraft = {
 		coordinates?: { latitude: number; longitude: number };
 		googleMapsUrl: string;
 		name: string;
+		openRailwayMapUrl: string;
 	};
+	type ResolvingEndpoint = Readonly<{
+		kind: TransportEndpointKind;
+		provider: TransportEndpointMapProvider;
+	}>;
 
 	let {
 		tripId,
@@ -57,9 +63,9 @@
 	let creatorState = $state<CreatorState>('entry');
 	let importedItems = $state<ItineraryItemImport[]>([]);
 	let transportErrorMessage = $state('');
-	let resolvingEndpoint = $state<TransportEndpointKind | null>(null);
-	let departure = $state<TransportEndpointDraft>({ googleMapsUrl: '', name: '' });
-	let arrival = $state<TransportEndpointDraft>({ googleMapsUrl: '', name: '' });
+	let resolvingEndpoint = $state<ResolvingEndpoint | null>(null);
+	let departure = $state<TransportEndpointDraft>({ googleMapsUrl: '', name: '', openRailwayMapUrl: '' });
+	let arrival = $state<TransportEndpointDraft>({ googleMapsUrl: '', name: '', openRailwayMapUrl: '' });
 	let transportMode = $state<TransportDetails['mode']>('other');
 	let transportOperator = $state('');
 	let transportServiceNumber = $state('');
@@ -74,7 +80,7 @@
 		return `/api/trips/${encodeURIComponent(tripId)}/items/import`;
 	}
 
-	function googleMapsResolveEndpoint(): string {
+	function locationResolveEndpoint(): string {
 		return `/api/trips/${encodeURIComponent(tripId)}/locations/resolve`;
 	}
 
@@ -160,7 +166,7 @@
 	}
 
 	function emptyTransportEndpoint(): TransportEndpointDraft {
-		return { googleMapsUrl: '', name: '' };
+		return { googleMapsUrl: '', name: '', openRailwayMapUrl: '' };
 	}
 
 	function optionalText(value: string): string | undefined {
@@ -171,6 +177,7 @@
 	function assignEndpoint(endpoint: TransportEndpointDraft, value: TransportJourneyDraft['departure']): void {
 		endpoint.name = value.name;
 		endpoint.googleMapsUrl = value.googleMapsUrl ?? '';
+		endpoint.openRailwayMapUrl = value.openRailwayMapUrl ?? '';
 		endpoint.coordinates = value.coordinates;
 	}
 
@@ -211,9 +218,11 @@
 
 	function endpointValue(endpointDraft: TransportEndpointDraft): TransportJourneyDraft['departure'] {
 		const googleMapsUrl = optionalText(endpointDraft.googleMapsUrl);
+		const openRailwayMapUrl = optionalText(endpointDraft.openRailwayMapUrl);
 		return {
 			name: endpointDraft.name.trim(),
 			...(googleMapsUrl ? { googleMapsUrl } : {}),
+			...(openRailwayMapUrl ? { openRailwayMapUrl } : {}),
 			...(endpointDraft.coordinates ? { coordinates: endpointDraft.coordinates } : {})
 		};
 	}
@@ -282,30 +291,58 @@
 		onTransportJourney(journey.data);
 	}
 
-	async function resolveTransportEndpoint(kind: TransportEndpointKind): Promise<void> {
+	function mapUrlForProvider(endpointDraft: TransportEndpointDraft, provider: TransportEndpointMapProvider): string {
+		return provider === 'google-maps' ? endpointDraft.googleMapsUrl : endpointDraft.openRailwayMapUrl;
+	}
+
+	function isResolvingEndpoint(kind: TransportEndpointKind, provider: TransportEndpointMapProvider): boolean {
+		return resolvingEndpoint?.kind === kind && resolvingEndpoint.provider === provider;
+	}
+
+	function mapProviderLabel(provider: TransportEndpointMapProvider): string {
+		return provider === 'google-maps' ? 'Google Maps' : 'OpenRailwayMap';
+	}
+
+	async function resolveTransportEndpoint(
+		kind: TransportEndpointKind,
+		provider: TransportEndpointMapProvider
+	): Promise<void> {
 		const endpointDraft = endpointFor(kind);
-		const url = endpointDraft.googleMapsUrl.trim();
+		const providerName = mapProviderLabel(provider);
+		const url = mapUrlForProvider(endpointDraft, provider).trim();
 		if (url === '') {
-			transportErrorMessage = `Paste a Google Maps link to look up the ${endpointLabel(kind)}.`;
+			transportErrorMessage = `Paste a ${providerName} link to look up the ${endpointLabel(kind)}.`;
 			return;
 		}
 
-		resolvingEndpoint = kind;
+		resolvingEndpoint = { kind, provider };
 		transportErrorMessage = '';
 		try {
-			const response = await fetch(googleMapsResolveEndpoint(), {
+			const response = await fetch(locationResolveEndpoint(), {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ url })
 			});
 			const data = await responseData(response);
-			const importedLocation = googleMapsLocationResolveResponseSchema.safeParse(data);
+			const importedLocation = locationResolveResponseSchema.safeParse(data);
 			if (!response.ok || !importedLocation.success) {
 				transportErrorMessage = errorFrom(data, `The ${endpointLabel(kind)} could not be imported.`);
 				return;
 			}
 
-			endpointDraft.googleMapsUrl = importedLocation.data.googleMapsUrl;
+			if (provider === 'google-maps') {
+				if (!importedLocation.data.googleMapsUrl) {
+					transportErrorMessage = `The ${providerName} link could not be imported.`;
+					return;
+				}
+				endpointDraft.googleMapsUrl = importedLocation.data.googleMapsUrl;
+			} else {
+				if (!importedLocation.data.openRailwayMapUrl) {
+					transportErrorMessage = `The ${providerName} link could not be imported.`;
+					return;
+				}
+				endpointDraft.openRailwayMapUrl = importedLocation.data.openRailwayMapUrl;
+			}
 			endpointDraft.name = importedLocation.data.name ?? endpointDraft.name;
 			endpointDraft.coordinates = importedLocation.data.coordinates;
 		} catch {
@@ -402,10 +439,29 @@
 					<button
 						class="shiori-form-button"
 						disabled={resolvingEndpoint !== null}
-						onclick={() => void resolveTransportEndpoint(endpointKind)}
+						onclick={() => void resolveTransportEndpoint(endpointKind, 'google-maps')}
 						type="button"
 					>
-						{resolvingEndpoint === endpointKind ? 'Looking up…' : 'Look up link'}
+						{isResolvingEndpoint(endpointKind, 'google-maps') ? 'Looking up…' : 'Look up link'}
+					</button>
+				</div>
+				<div class="maps-lookup">
+					<label class="shiori-form-label">
+						OpenRailwayMap link <span class="field-hint">Optional; import its station name or map position.</span>
+						<input
+							class="shiori-form-control"
+							bind:value={endpointDraft.openRailwayMapUrl}
+							inputmode="url"
+							placeholder="Paste an OpenRailwayMap permalink"
+						/>
+					</label>
+					<button
+						class="shiori-form-button"
+						disabled={resolvingEndpoint !== null}
+						onclick={() => void resolveTransportEndpoint(endpointKind, 'open-railway-map')}
+						type="button"
+					>
+						{isResolvingEndpoint(endpointKind, 'open-railway-map') ? 'Looking up…' : 'Look up link'}
 					</button>
 				</div>
 				{#if transportErrorMessage}<p class="error" role="alert">{transportErrorMessage}</p>{/if}
@@ -439,7 +495,7 @@
 					</label>
 				</div>
 				{#if transportSchedule}
-					<p class="schedule-found">The scheduled times from AeroDataBox will be kept for the final review.</p>
+					<p class="schedule-found">The imported scheduled times will be kept for the final review.</p>
 				{:else}
 					<label class="shiori-form-label">
 						Departure date <span class="field-hint">Optional; used to prefill the schedule.</span>
@@ -460,7 +516,7 @@
 			<p class="wizard-progress">Step 4 of 4 · Review</p>
 			<p class="intro">
 				{transportSchedule
-					? 'AeroDataBox found a route-matched scheduled flight. Confirm it before saving.'
+					? 'The imported source found a scheduled journey. Confirm it before saving.'
 					: 'Confirm the journey. The next screen will ask for the departure time before you save it.'}
 			</p>
 			<section class="journey-summary" aria-label="Transport journey summary">
