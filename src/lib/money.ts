@@ -8,7 +8,7 @@ export function currencyFractionDigits(currency: CurrencyCode): number {
 }
 
 /** Parses a user-entered decimal amount into an exact integer number of currency minor units. */
-export function amountFromInput(value: string, currency: CurrencyCode): number | null {
+export function amountMinorFromInput(value: string, currency: CurrencyCode): number | null {
 	const match = amountInputPattern.exec(value.trim());
 	if (!match?.groups) {
 		return null;
@@ -26,11 +26,11 @@ export function amountFromInput(value: string, currency: CurrencyCode): number |
 }
 
 /** Formats an exact minor-unit monetary amount for display in the viewer's locale. */
-export function formatMonetaryAmount(amount: number, currency: CurrencyCode, locales?: string | string[]): string {
+export function formatMonetaryAmount(amountMinor: number, currency: CurrencyCode, locales?: string | string[]): string {
 	const fractionDigits = currencyFractionDigits(currency);
 	return new Intl.NumberFormat(locales, {
 		currency,
 		currencyDisplay: 'code',
 		style: 'currency'
-	}).format(amount / 10 ** fractionDigits);
+	}).format(amountMinor / 10 ** fractionDigits);
 }

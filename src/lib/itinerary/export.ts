@@ -46,7 +46,7 @@ export const defaultItineraryExportOptions: ItineraryExportOptions = {
 	includeLinksAndDocuments: true,
 	includeNotes: true,
 	includeReservationDetails: true,
-	normalizeCostAmounts: false,
+	normalizeCostAmounts: true,
 	useEpochTimestamps: false
 };
 
@@ -105,6 +105,23 @@ type ExportedTransport = Readonly<{
 }>;
 
 type ExportedCost =
+	| Readonly<{
+			amountMinor: number;
+			currency: CurrencyCode;
+			status: 'unpaid';
+	  }>
+	| Readonly<{
+			amountMinor: number;
+			currency: CurrencyCode;
+			status: 'paid';
+			payment: Readonly<{
+				exchangeRate: number;
+				localAmountMinor: number;
+				localCurrency: CurrencyCode;
+				paidAt: number | string;
+				rateDate: string;
+			}>;
+	  }>
 	| Readonly<{
 			amount: number;
 			currency: CurrencyCode;
@@ -233,7 +250,26 @@ function normalizeCostAmount(amount: number, currency: CurrencyCode): number {
 }
 
 function exportCost(cost: Cost, options: ItineraryExportOptions): ExportedCost {
-	const amount = options.normalizeCostAmounts ? normalizeCostAmount(cost.amount, cost.currency) : cost.amount;
+	if (!options.normalizeCostAmounts) {
+		if (cost.status === 'unpaid') {
+			return { amountMinor: cost.amountMinor, currency: cost.currency, status: 'unpaid' };
+		}
+
+		return {
+			amountMinor: cost.amountMinor,
+			currency: cost.currency,
+			status: 'paid',
+			payment: {
+				exchangeRate: cost.payment.exchangeRate,
+				localAmountMinor: cost.payment.localAmountMinor,
+				localCurrency: cost.payment.localCurrency,
+				paidAt: exportTimestampValue(cost.payment.paidAt, options.useEpochTimestamps),
+				rateDate: cost.payment.rateDate
+			}
+		};
+	}
+
+	const amount = normalizeCostAmount(cost.amountMinor, cost.currency);
 	if (cost.status === 'unpaid') {
 		return { amount, currency: cost.currency, status: 'unpaid' };
 	}
@@ -244,14 +280,16 @@ function exportCost(cost: Cost, options: ItineraryExportOptions): ExportedCost {
 		status: 'paid',
 		payment: {
 			exchangeRate: cost.payment.exchangeRate,
-			localAmount: options.normalizeCostAmounts
-				? normalizeCostAmount(cost.payment.localAmount, cost.payment.localCurrency)
-				: cost.payment.localAmount,
+			localAmount: normalizeCostAmount(cost.payment.localAmountMinor, cost.payment.localCurrency),
 			localCurrency: cost.payment.localCurrency,
 			paidAt: exportTimestampValue(cost.payment.paidAt, options.useEpochTimestamps),
 			rateDate: cost.payment.rateDate
 		}
 	};
+}
+
+function isNormalizedCost(cost: ExportedCost): cost is Extract<ExportedCost, { amount: number }> {
+	return 'amount' in cost;
 }
 
 function compareItems(left: BasicItineraryItem, right: BasicItineraryItem): number {
@@ -341,7 +379,7 @@ function reservationText(reservation: Reservation): string {
 	return details.length === 0 ? reservation.status : `${reservation.status} · ${details.join(' · ')}`;
 }
 
-function textLinesForItem(item: ExportedItem, index: number, options: ItineraryExportOptions): string[] {
+function textLinesForItem(item: ExportedItem, index: number): string[] {
 	const lines = [`${index + 1}. ${item.title} (${item.type})`, `   When: ${timingText(item.timing)}`];
 	if (item.locations && item.locations.length > 0) {
 		lines.push('   Locations:');
@@ -369,9 +407,10 @@ function textLinesForItem(item: ExportedItem, index: number, options: ItineraryE
 		lines.push(`   Reservation: ${reservationText(item.reservation)}`);
 	}
 	if (item.cost) {
-		lines.push(
-			`   Cost: ${monetaryAmountText(item.cost.amount, item.cost.currency, options.normalizeCostAmounts)} (${item.cost.status})`
-		);
+		const costText = isNormalizedCost(item.cost)
+			? monetaryAmountText(item.cost.amount, item.cost.currency, true)
+			: monetaryAmountText(item.cost.amountMinor, item.cost.currency, false);
+		lines.push(`   Cost: ${costText} (${item.cost.status})`);
 	}
 	if (item.notes && item.notes.length > 0) {
 		lines.push('   Notes:');
@@ -394,7 +433,7 @@ function textLinesForItem(item: ExportedItem, index: number, options: ItineraryE
 	return lines;
 }
 
-function plainTextExport(itinerary: ItineraryExport, options: ItineraryExportOptions): string {
+function plainTextExport(itinerary: ItineraryExport): string {
 	const lines = [itinerary.title, `Time zone: ${itinerary.timeZone}`];
 	if (itinerary.localCurrency !== undefined) {
 		lines.push(`Local currency: ${itinerary.localCurrency}`);
@@ -405,7 +444,7 @@ function plainTextExport(itinerary: ItineraryExport, options: ItineraryExportOpt
 		lines.push('No items planned.');
 	} else {
 		for (const [index, item] of itinerary.items.entries()) {
-			lines.push(...textLinesForItem(item, index, options), '');
+			lines.push(...textLinesForItem(item, index), '');
 		}
 	}
 
@@ -425,7 +464,7 @@ export function renderItineraryExport(
 		case 'yaml':
 			return stringify(itinerary);
 		case 'txt':
-			return plainTextExport(itinerary, options);
+			return plainTextExport(itinerary);
 	}
 }
 

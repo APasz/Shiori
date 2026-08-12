@@ -14,6 +14,37 @@ type TestTrip = {
 	slug: string;
 };
 
+const costMigrationFixtures = [
+	{
+		sourceCost: {
+			amount: { amountMinor: 12_500, currency: 'USD' },
+			payment: {
+				exchangeRate: 1.2,
+				localAmount: { amountMinor: 15_000, currency: 'AUD' },
+				paidAt: Date.UTC(2026, 3, 3),
+				rateDate: '2026-04-03'
+			},
+			status: 'paid'
+		},
+		sourceVersion: 6
+	},
+	{
+		sourceCost: {
+			amount: 12_500,
+			currency: 'USD',
+			payment: {
+				exchangeRate: 1.2,
+				localAmount: 15_000,
+				localCurrency: 'AUD',
+				paidAt: Date.UTC(2026, 3, 3),
+				rateDate: '2026-04-03'
+			},
+			status: 'paid'
+		},
+		sourceVersion: 7
+	}
+] as const satisfies readonly Readonly<{ sourceCost: Record<string, unknown>; sourceVersion: 6 | 7 }>[];
+
 function managedTripPath(slug: string): string {
 	return join(dataDirectory, 'trips', `${slug}.json`);
 }
@@ -82,11 +113,11 @@ describe('JSON store', () => {
 		]);
 
 		for (const source of [users, shares, sessions, editLocks, trip]) {
-			expect(source).toContain('\n    "version": 7');
+			expect(source).toContain('\n    "version": 8');
 			expect(source).toMatch(/\n$/);
 		}
-		expect(JSON.parse(users)).toMatchObject({ version: 7, users: [{ username: 'owner' }] });
-		expect(JSON.parse(trip)).toMatchObject({ version: 7, trip: { id: expect.any(String) } });
+		expect(JSON.parse(users)).toMatchObject({ version: 8, users: [{ username: 'owner' }] });
+		expect(JSON.parse(trip)).toMatchObject({ version: 8, trip: { id: expect.any(String) } });
 		expect(JSON.parse(trip)).not.toHaveProperty('trip.slug');
 	});
 
@@ -103,72 +134,66 @@ describe('JSON store', () => {
 		});
 	});
 
-	it('migrates version 6 cost records to the flat version 7 shape on startup', async () => {
-		const store = await import('./store');
-		const owner = await store.createInitialSudo('owner', 'a strong test password');
-		const trip = await createTestTrip(store, owner.id, ['legacy-cost']);
-		const persistedTrip: {
-			version: number;
-			trip: { itinerary: { items: Array<Record<string, unknown>> } };
-		} = JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'));
-		const legacyItem = persistedTrip.trip.itinerary.items.find((item) => item.id === 'legacy-cost');
-		if (!legacyItem) {
-			throw new Error('The test trip should contain the legacy cost item.');
-		}
-		legacyItem.cost = {
-			amount: { amountMinor: 12_500, currency: 'USD' },
-			payment: {
-				exchangeRate: 1.2,
-				localAmount: { amountMinor: 15_000, currency: 'AUD' },
-				paidAt: Date.UTC(2026, 3, 3),
-				rateDate: '2026-04-03'
-			},
-			status: 'paid'
-		};
-		persistedTrip.version = 6;
-		await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
+	it.each(costMigrationFixtures)(
+		'migrates version $sourceVersion cost records to explicit version 8 minor-unit fields on startup',
+		async ({ sourceCost, sourceVersion }) => {
+			const store = await import('./store');
+			const owner = await store.createInitialSudo('owner', 'a strong test password');
+			const trip = await createTestTrip(store, owner.id, ['legacy-cost']);
+			const persistedTrip: {
+				version: number;
+				trip: { itinerary: { items: Array<Record<string, unknown>> } };
+			} = JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'));
+			const legacyItem = persistedTrip.trip.itinerary.items.find((item) => item.id === 'legacy-cost');
+			if (!legacyItem) {
+				throw new Error('The test trip should contain the legacy cost item.');
+			}
+			legacyItem.cost = sourceCost;
+			persistedTrip.version = sourceVersion;
+			await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
 
-		for (const filePath of [
-			managedDataPath('users.json'),
-			managedDataPath('shares.json'),
-			managedDataPath('sessions.json'),
-			managedDataPath('edit-locks.json')
-		]) {
-			const persistedGlobalData: { version: number } = JSON.parse(await readFile(filePath, 'utf8'));
-			persistedGlobalData.version = 6;
-			await writeFile(filePath, JSON.stringify(persistedGlobalData, null, 4), 'utf8');
-		}
-
-		vi.resetModules();
-		const restartedStore = await import('./store');
-		const migratedTrip = await restartedStore.getTripView(trip.slug, owner);
-		if (!migratedTrip || migratedTrip.access !== 'sudo') {
-			throw new Error('The owner should be able to read the migrated trip.');
-		}
-		expect(migratedTrip.itinerary.items.find((item) => item.id === 'legacy-cost')?.cost).toEqual({
-			amount: 12_500,
-			currency: 'USD',
-			payment: {
-				exchangeRate: 1.2,
-				localAmount: 15_000,
-				localCurrency: 'AUD',
-				paidAt: Date.UTC(2026, 3, 3),
-				rateDate: '2026-04-03'
-			},
-			status: 'paid'
-		});
-
-		const migratedFiles = await Promise.all(
-			[
+			for (const filePath of [
 				managedDataPath('users.json'),
 				managedDataPath('shares.json'),
 				managedDataPath('sessions.json'),
-				managedDataPath('edit-locks.json'),
-				managedTripPath(trip.slug)
-			].map(async (filePath) => JSON.parse(await readFile(filePath, 'utf8')) as { version: number })
-		);
-		expect(migratedFiles.map((file) => file.version)).toEqual([7, 7, 7, 7, 7]);
-	});
+				managedDataPath('edit-locks.json')
+			]) {
+				const persistedGlobalData: { version: number } = JSON.parse(await readFile(filePath, 'utf8'));
+				persistedGlobalData.version = sourceVersion;
+				await writeFile(filePath, JSON.stringify(persistedGlobalData, null, 4), 'utf8');
+			}
+
+			vi.resetModules();
+			const restartedStore = await import('./store');
+			const migratedTrip = await restartedStore.getTripView(trip.slug, owner);
+			if (!migratedTrip || migratedTrip.access !== 'sudo') {
+				throw new Error('The owner should be able to read the migrated trip.');
+			}
+			expect(migratedTrip.itinerary.items.find((item) => item.id === 'legacy-cost')?.cost).toEqual({
+				amountMinor: 12_500,
+				currency: 'USD',
+				payment: {
+					exchangeRate: 1.2,
+					localAmountMinor: 15_000,
+					localCurrency: 'AUD',
+					paidAt: Date.UTC(2026, 3, 3),
+					rateDate: '2026-04-03'
+				},
+				status: 'paid'
+			});
+
+			const migratedFiles = await Promise.all(
+				[
+					managedDataPath('users.json'),
+					managedDataPath('shares.json'),
+					managedDataPath('sessions.json'),
+					managedDataPath('edit-locks.json'),
+					managedTripPath(trip.slug)
+				].map(async (filePath) => JSON.parse(await readFile(filePath, 'utf8')) as { version: number })
+			);
+			expect(migratedFiles.map((file) => file.version)).toEqual([8, 8, 8, 8, 8]);
+		}
+	);
 
 	it('rejects incomplete or invalid split data before serving it', async () => {
 		await writeFile(managedDataPath('users.json'), JSON.stringify({ version: 6, users: [] }, null, 4), 'utf8');
@@ -294,7 +319,7 @@ describe('JSON store', () => {
 		await store.saveItem({
 			item: {
 				...createEmptyItineraryItem('activity', 'paid-item', Date.UTC(2026, 0, 3)),
-				cost: { amount: 10_000, currency: 'USD', status: 'paid' },
+				cost: { amountMinor: 10_000, currency: 'USD', status: 'paid' },
 				title: 'paid-item'
 			},
 			itemId: 'paid-item',
@@ -310,11 +335,11 @@ describe('JSON store', () => {
 		}
 		const savedItem = savedTrip.itinerary.items.find((item) => item.id === 'paid-item');
 		expect(savedItem?.cost).toEqual({
-			amount: 10_000,
+			amountMinor: 10_000,
 			currency: 'USD',
 			payment: {
 				exchangeRate: 1.2,
-				localAmount: 12_000,
+				localAmountMinor: 12_000,
 				localCurrency: 'AUD',
 				paidAt: Date.UTC(2026, 0, 2, 12),
 				rateDate: '2026-01-02'

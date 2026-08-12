@@ -31,7 +31,7 @@ describe('accommodation stay drafts', () => {
 					startAt: Date.UTC(2026, 10, 2, 6),
 					endAt: Date.UTC(2026, 10, 4, 1)
 				},
-				cost: { amount: 12_550, currency: 'AUD', status: 'unpaid' },
+				cost: { amountMinor: 12_550, currency: 'AUD', status: 'unpaid' },
 				reservation: { provider: 'Agoda', reference: 'ABC123', status: 'confirmed' }
 			}
 		});

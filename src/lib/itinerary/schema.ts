@@ -226,7 +226,7 @@ export const minorUnitAmountSchema = z
 	.max(1_000_000_000_000, 'Use an amount no greater than 1,000,000,000,000 minor units.');
 
 const costAmountSchema = z.strictObject({
-	amount: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
+	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
 	currency: currencyCodeSchema
 });
 
@@ -237,7 +237,7 @@ export const costDraftSchema = costAmountSchema.extend({
 const costPaymentSchema = z.strictObject({
 	exchangeRate: z.number().finite('Use a finite exchange rate.').positive('Use an exchange rate greater than zero.'),
 	rateDate: calendarDateSchema,
-	localAmount: minorUnitAmountSchema,
+	localAmountMinor: minorUnitAmountSchema,
 	localCurrency: currencyCodeSchema,
 	paidAt: unixTimestampSchema
 });

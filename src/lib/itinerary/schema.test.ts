@@ -86,7 +86,7 @@ describe('transport stop schema', () => {
 describe('cost schemas', () => {
 	it('accepts paid cost drafts but requires the server-created payment snapshot in stored items', () => {
 		const paidCost = {
-			amount: 12_500,
+			amountMinor: 12_500,
 			currency: 'USD',
 			status: 'paid'
 		} as const;
@@ -101,7 +101,7 @@ describe('cost schemas', () => {
 					...paidCost,
 					payment: {
 						exchangeRate: 1.2,
-						localAmount: 15_000,
+						localAmountMinor: 15_000,
 						localCurrency: 'AUD',
 						paidAt: 1_775_952_000_000,
 						rateDate: '2026-04-03'

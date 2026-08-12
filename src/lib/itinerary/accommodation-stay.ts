@@ -6,7 +6,7 @@ import {
 	type ItineraryLocation,
 	type ReservationStatus
 } from './schema';
-import { amountFromInput } from '$lib/money';
+import { amountMinorFromInput } from '$lib/money';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 type AccommodationCostInput = Readonly<{
@@ -80,8 +80,8 @@ export function accommodationStayDraft(input: AccommodationStayInput): Accommoda
 		return { error: 'Check-out must be after check-in.', valid: false };
 	}
 
-	const costAmount = input.cost ? amountFromInput(input.cost.amount, input.cost.currency) : null;
-	if (input.cost && (costAmount === null || costAmount < 1)) {
+	const costAmountMinor = input.cost ? amountMinorFromInput(input.cost.amount, input.cost.currency) : null;
+	if (input.cost && (costAmountMinor === null || costAmountMinor < 1)) {
 		return { error: 'Cost: enter an amount greater than zero.', valid: false };
 	}
 
@@ -124,8 +124,8 @@ export function accommodationStayDraft(input: AccommodationStayInput): Accommoda
 					}
 				}
 			: {}),
-		...(input.cost && costAmount !== null
-			? { cost: { amount: costAmount, currency: input.cost.currency, status: input.cost.status } }
+		...(input.cost && costAmountMinor !== null
+			? { cost: { amountMinor: costAmountMinor, currency: input.cost.currency, status: input.cost.status } }
 			: {})
 	});
 	return candidate.success

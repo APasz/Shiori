@@ -35,7 +35,8 @@ import { lookupEcbConversionRate } from './ecb-exchange-rates';
 const sessionLifetimeMilliseconds = 7 * 24 * 60 * 60 * 1000;
 const editLockLifetimeMilliseconds = 10 * 60 * 1000;
 const legacyStoredDataVersion = 6;
-const storedDataVersion = 7;
+const previousStoredDataVersion = 7;
+const storedDataVersion = 8;
 const tripStructureLockTargetId = 'trip-structure';
 const jsonIndentation = 4;
 
@@ -50,7 +51,11 @@ const passwordSchema = z
 const timestampSchema = unixTimestampSchema;
 
 const shareRoleSchema = z.enum(['user', 'admin']);
-const supportedStoredDataVersionSchema = z.union([z.literal(legacyStoredDataVersion), z.literal(storedDataVersion)]);
+const supportedStoredDataVersionSchema = z.union([
+	z.literal(legacyStoredDataVersion),
+	z.literal(previousStoredDataVersion),
+	z.literal(storedDataVersion)
+]);
 
 const legacyMonetaryAmountSchema = z.strictObject({
 	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
@@ -73,9 +78,24 @@ const legacyCostSchema = z.discriminatedUnion('status', [
 		status: z.literal('paid')
 	})
 ]);
-const legacyStoredTripFileEnvelopeSchema = z
+const previousCostSchema = z.discriminatedUnion('status', [
+	z.strictObject({ amount: minorUnitAmountSchema.min(1), currency: currencyCodeSchema, status: z.literal('unpaid') }),
+	z.strictObject({
+		amount: minorUnitAmountSchema.min(1),
+		currency: currencyCodeSchema,
+		payment: z.strictObject({
+			exchangeRate: z.number().finite().positive(),
+			localAmount: minorUnitAmountSchema,
+			localCurrency: currencyCodeSchema,
+			paidAt: unixTimestampSchema,
+			rateDate: calendarDateSchema
+		}),
+		status: z.literal('paid')
+	})
+]);
+const migratableStoredTripFileEnvelopeSchema = z
 	.object({
-		version: z.literal(legacyStoredDataVersion),
+		version: z.union([z.literal(legacyStoredDataVersion), z.literal(previousStoredDataVersion)]),
 		trip: z
 			.object({
 				itinerary: z
@@ -480,20 +500,20 @@ function migrateLegacyCost(cost: unknown): unknown {
 		return cost;
 	}
 
-	const flattenedCost = {
-		amount: parsedCost.data.amount.amountMinor,
+	const migratedCost = {
+		amountMinor: parsedCost.data.amount.amountMinor,
 		currency: parsedCost.data.amount.currency,
 		status: parsedCost.data.status
 	};
 	if (parsedCost.data.status === 'unpaid') {
-		return flattenedCost;
+		return migratedCost;
 	}
 
 	return {
-		...flattenedCost,
+		...migratedCost,
 		payment: {
 			exchangeRate: parsedCost.data.payment.exchangeRate,
-			localAmount: parsedCost.data.payment.localAmount.amountMinor,
+			localAmountMinor: parsedCost.data.payment.localAmount.amountMinor,
 			localCurrency: parsedCost.data.payment.localAmount.currency,
 			paidAt: parsedCost.data.payment.paidAt,
 			rateDate: parsedCost.data.payment.rateDate
@@ -501,12 +521,40 @@ function migrateLegacyCost(cost: unknown): unknown {
 	};
 }
 
-function migrateLegacyTripFile(file: unknown): { file: unknown; migrationRequired: boolean } {
-	const parsedFile = legacyStoredTripFileEnvelopeSchema.safeParse(file);
+function migratePreviousCost(cost: unknown): unknown {
+	const parsedCost = previousCostSchema.safeParse(cost);
+	if (!parsedCost.success) {
+		return cost;
+	}
+
+	const migratedCost = {
+		amountMinor: parsedCost.data.amount,
+		currency: parsedCost.data.currency,
+		status: parsedCost.data.status
+	};
+	if (parsedCost.data.status === 'unpaid') {
+		return migratedCost;
+	}
+
+	return {
+		...migratedCost,
+		payment: {
+			exchangeRate: parsedCost.data.payment.exchangeRate,
+			localAmountMinor: parsedCost.data.payment.localAmount,
+			localCurrency: parsedCost.data.payment.localCurrency,
+			paidAt: parsedCost.data.payment.paidAt,
+			rateDate: parsedCost.data.payment.rateDate
+		}
+	};
+}
+
+function migrateStoredTripFile(file: unknown): { file: unknown; migrationRequired: boolean } {
+	const parsedFile = migratableStoredTripFileEnvelopeSchema.safeParse(file);
 	if (!parsedFile.success) {
 		return { file, migrationRequired: false };
 	}
 
+	const migrateCost = parsedFile.data.version === legacyStoredDataVersion ? migrateLegacyCost : migratePreviousCost;
 	return {
 		file: {
 			...parsedFile.data,
@@ -519,7 +567,7 @@ function migrateLegacyTripFile(file: unknown): { file: unknown; migrationRequire
 						if (!isRecord(item) || !Object.hasOwn(item, 'cost')) {
 							return item;
 						}
-						return { ...item, cost: migrateLegacyCost(item.cost) };
+						return { ...item, cost: migrateCost(item.cost) };
 					})
 				}
 			}
@@ -552,7 +600,7 @@ async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 	const sessions = storedSessionsFileSchema.parse(sessionsFile);
 	const editLocks = storedEditLocksFileSchema.parse(editLocksFile);
 	const migratedTripFiles = tripFiles.map(({ file, slug }) => ({
-		...migrateLegacyTripFile(file),
+		...migrateStoredTripFile(file),
 		slug
 	}));
 	const trips = migratedTripFiles.map(({ file, slug }) => {
@@ -570,10 +618,10 @@ async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 			editLocks: editLocks.editLocks
 		}),
 		migrationRequired:
-			users.version === legacyStoredDataVersion ||
-			shares.version === legacyStoredDataVersion ||
-			sessions.version === legacyStoredDataVersion ||
-			editLocks.version === legacyStoredDataVersion ||
+			users.version !== storedDataVersion ||
+			shares.version !== storedDataVersion ||
+			sessions.version !== storedDataVersion ||
+			editLocks.version !== storedDataVersion ||
 			migratedTripFiles.some((tripFile) => tripFile.migrationRequired)
 	};
 }
@@ -819,14 +867,14 @@ function findItemIndex(itinerary: Itinerary, itemId: string): number {
 }
 
 function sameCostAmount(left: CostAmount, right: CostAmount): boolean {
-	return left.amount === right.amount && left.currency === right.currency;
+	return left.amountMinor === right.amountMinor && left.currency === right.currency;
 }
 
-function convertedAmount(amount: CostAmount, localCurrency: CurrencyCode, exchangeRate: number): number {
+function convertedAmountMinor(amount: CostAmount, localCurrency: CurrencyCode, exchangeRate: number): number {
 	const chargedFractionDigits = currencyFractionDigits(amount.currency);
 	const localFractionDigits = currencyFractionDigits(localCurrency);
 	const converted = Math.round(
-		(amount.amount * exchangeRate * 10 ** localFractionDigits) / 10 ** chargedFractionDigits
+		(amount.amountMinor * exchangeRate * 10 ** localFractionDigits) / 10 ** chargedFractionDigits
 	);
 	if (!Number.isSafeInteger(converted) || converted < 0 || converted > 1_000_000_000_000) {
 		throw new StoreError(400, 'The converted cost is outside Shiori’s supported range.');
@@ -865,12 +913,12 @@ async function persistedItemForCost(
 	}
 
 	const paidCost: Cost = {
-		amount: cost.amount,
+		amountMinor: cost.amountMinor,
 		currency: cost.currency,
 		payment: {
 			exchangeRate: exchangeRate.localCurrencyPerChargedCurrency,
 			rateDate: exchangeRate.effectiveDate,
-			localAmount: convertedAmount(cost, localCurrency, exchangeRate.localCurrencyPerChargedCurrency),
+			localAmountMinor: convertedAmountMinor(cost, localCurrency, exchangeRate.localCurrencyPerChargedCurrency),
 			localCurrency,
 			paidAt
 		},

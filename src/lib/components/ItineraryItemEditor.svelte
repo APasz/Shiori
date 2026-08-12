@@ -28,7 +28,7 @@
 		type CostAmount,
 		type TransportDetails
 	} from '$lib/itinerary/schema';
-	import { amountFromInput, currencyFractionDigits } from '$lib/money';
+	import { amountMinorFromInput, currencyFractionDigits } from '$lib/money';
 	import {
 		formatTimestampForTimeZoneInput,
 		isValidIanaTimeZone,
@@ -396,11 +396,11 @@
 	function amountInputValue(amount: CostAmount): string {
 		const fractionDigits = currencyFractionDigits(amount.currency);
 		if (fractionDigits === 0) {
-			return String(amount.amount);
+			return String(amount.amountMinor);
 		}
 		const scale = 10 ** fractionDigits;
-		const whole = Math.floor(amount.amount / scale);
-		const fraction = String(amount.amount % scale).padStart(fractionDigits, '0');
+		const whole = Math.floor(amount.amountMinor / scale);
+		const fraction = String(amount.amountMinor % scale).padStart(fractionDigits, '0');
 		return `${whole}.${fraction}`;
 	}
 
@@ -409,7 +409,7 @@
 			return undefined;
 		}
 		return {
-			amount: amountFromInput(costAmount, costCurrency) ?? Number.NaN,
+			amountMinor: amountMinorFromInput(costAmount, costCurrency) ?? Number.NaN,
 			currency: costCurrency,
 			status: costPaid ? 'paid' : 'unpaid'
 		};
@@ -700,8 +700,8 @@
 		if (!costEnabled) {
 			return null;
 		}
-		const amount = amountFromInput(costAmount, costCurrency);
-		if (amount === null || amount < 1) {
+		const amountMinor = amountMinorFromInput(costAmount, costCurrency);
+		if (amountMinor === null || amountMinor < 1) {
 			return `Cost: enter a positive ${costCurrency} amount with no more than ${currencyFractionDigits(costCurrency)} decimal places.`;
 		}
 		return null;

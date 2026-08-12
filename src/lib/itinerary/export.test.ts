@@ -7,11 +7,11 @@ const itinerary = itinerarySchema.parse({
 	items: [
 		{
 			cost: {
-				amount: 12_500,
+				amountMinor: 12_500,
 				currency: 'USD',
 				payment: {
 					exchangeRate: 1.2,
-					localAmount: 15_000,
+					localAmountMinor: 15_000,
 					localCurrency: 'AUD',
 					paidAt: 1_775_952_000_000,
 					rateDate: '2026-04-03'
@@ -82,7 +82,7 @@ describe('itinerary exports', () => {
 			scheduledAt: expect.any(Object)
 		});
 		expect(firstItem.reservation).toEqual({ provider: 'JR', reference: 'ABC123', status: 'confirmed' });
-		expect(firstItem.cost).toMatchObject({ amount: 12_500, currency: 'USD', status: 'paid' });
+		expect(firstItem.cost).toMatchObject({ amount: 125, currency: 'USD', status: 'paid' });
 		expect(firstItem).not.toHaveProperty('id');
 		expect(firstItem.locations[0]).not.toHaveProperty('id');
 		expect(firstItem.transport.stops[0]).not.toHaveProperty('locationId');
@@ -132,6 +132,19 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Cost: USD 125.00 (paid)');
 	});
 
+	it('preserves explicit minor-unit fields when cost normalization is disabled', () => {
+		const exported = JSON.parse(
+			renderItineraryExport(itinerary, 'json', { ...defaultItineraryExportOptions, normalizeCostAmounts: false })
+		);
+
+		expect(exported.items[0].cost).toMatchObject({
+			amountMinor: 12_500,
+			currency: 'USD',
+			payment: { localAmountMinor: 15_000, localCurrency: 'AUD' },
+			status: 'paid'
+		});
+	});
+
 	it('renders a readable text itinerary and names its download from the trip title', () => {
 		const text = renderItineraryExport(itinerary, 'txt', defaultItineraryExportOptions);
 		const file = createItineraryExportFile(itinerary, 'yaml', defaultItineraryExportOptions);
@@ -139,7 +152,7 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Japan 2026');
 		expect(text).toContain('When: 2026-04-12T00:00:00.000Z (Asia/Tokyo)');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
-		expect(text).toContain('Cost: USD 12500 minor units (paid)');
+		expect(text).toContain('Cost: USD 125.00 (paid)');
 		expect(file).toMatchObject({ filename: 'japan-2026-itinerary.yaml', mediaType: 'application/yaml' });
 	});
 });
