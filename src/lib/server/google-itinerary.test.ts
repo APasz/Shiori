@@ -10,9 +10,22 @@ const privateEnvironment = vi.hoisted(() => ({
 vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
 
 import { GoogleItineraryImportError, resolveGoogleItineraryUrl } from './google-itinerary';
+import { parseGoogleHotelsSearch } from './google-hotels';
 
 const selectedFlightUrl =
 	'https://www.google.com/travel/flights/booking?tfs=CBwQAhpiEgoyMDI2LTEwLTI3Ih4KA1NZRBIKMjAyNi0xMC0yNxoDS0lYKgJKUTICMTMoAGoNCAISCS9tLzBjaGd6bWoHCAESA1NZRHIMCAISCC9tLzBkcXl3cgwIAxIIL20vMDdkZmsaYhIKMjAyNi0xMS0wNCIeCgNLSVgSCjIwMjYtMTEtMDQaA1NZRCoCSlEyAjE0KABqDAgCEggvbS8wZHF5d2oMCAMSCC9tLzA3ZGZrcg0IAhIJL20vMGNoZ3ptcgcIARIDU1lEQAFIAXABggELCP___________wGYAQE';
+
+const selectedHotelsUrl =
+	'https://www.google.com/travel/search?ts=CAESBgoCCAMQARpXCjkSNTIlMHg2MDE4NWVkMTgxY2RkYjc5OjB4OGE2YzRkMDYzZGU4Y2FhZjoMU2hpbnlva29oYW1hGgASGhIUCgcI6g8QChgdEgcI6g8QCxgBGAMyAggBKhAKBToDQVVEGgAiBRIDEJYB';
+
+const selectedKyotoHotelsUrl =
+	'https://www.google.com/travel/search?qs=CAEgACgAMihDaG9JNTRPdl9QcUQ3YmVIQVJvTkwyY3ZNVEZ5Ylhaak9EUTNjaEFCOA1IAA&ts=CAESBgoCCAMQARpYCjoSNjIlMHg2MDAxMDhhZTkxOGIwMmVmOjB4YjYxYTQ0NmU3NGEyMWMwODoNS3lvdG8gU3RhdGlvbhoAEhoSFAoHCOoPEAsYAhIHCOoPEAsYBBgCMgIIASoRCgU6A0FVRBoAIgYSAhB6GAE&utm_campaign=sharing&utm_medium=link_btn&utm_source=htls';
+
+const hotelShareUrl = 'https://www.google.com/travel/hotels/s/jqZoDPSDyUE5pcq16';
+const resolvedHotelShareUrl =
+	'https://www.google.com.au/travel/hotels/entity/CgsI54Ov_PqD7beHARAB?ts=CAEaIAoCGgASGhIUCgcI6g8QCxgCEgcI6g8QCxgEGAIyAggCKgkKBToDQVVEGgA';
+const eleHotelMapsUrl =
+	'https://www.google.com/maps/place/ELE+Hotel+%E6%A8%9F%E8%91%89/@34.8627692,135.6751333,1405m/data=!3m1!1e3!4m11!3m10!1s0x60011babd174ef51:0x876fb41faf8bc1e7!5m4!1s2026-11-02!2i2!4m1!1i2!8m2!3d34.8627692!4d135.6777082!16s%2Fg%2F11rmvc847r';
 
 afterEach(() => {
 	privateEnvironment.AERODATABOX_API_KEY = undefined;
@@ -202,6 +215,54 @@ describe('Google itinerary import', () => {
 		]);
 	});
 
+	it('imports an explicitly named hotel Maps link as an accommodation review candidate', async () => {
+		await expect(resolveGoogleItineraryUrl(eleHotelMapsUrl)).resolves.toEqual([
+			expect.objectContaining({
+				type: 'accommodation',
+				title: 'ELE Hotel 樟葉',
+				propertyStatus: 'confirmed',
+				locations: [
+					expect.objectContaining({
+						coordinates: { latitude: 34.8627692, longitude: 135.6777082 },
+						name: 'ELE Hotel 樟葉'
+					})
+				]
+			})
+		]);
+	});
+
+	it('confirms a Google Maps hotel with Places data and uses its property time zone', async () => {
+		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						places: [
+							{
+								displayName: { text: 'ELE Hotel 樟葉' },
+								formattedAddress: '1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan',
+								location: { latitude: 34.8627692, longitude: 135.6777082 },
+								primaryType: 'lodging',
+								timeZone: 'Asia/Tokyo'
+							}
+						]
+					}),
+					{ status: 200, headers: { 'content-type': 'application/json' } }
+				)
+			)
+		);
+
+		await expect(resolveGoogleItineraryUrl(eleHotelMapsUrl)).resolves.toEqual([
+			expect.objectContaining({
+				type: 'accommodation',
+				propertyStatus: 'confirmed',
+				suggestedTimeZone: 'Asia/Tokyo',
+				locations: [expect.objectContaining({ address: '1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan' })]
+			})
+		]);
+	});
+
 	it('rejects walking directions instead of creating an itinerary transport item', async () => {
 		await expect(
 			resolveGoogleItineraryUrl('https://www.google.com/maps/dir/Essendon/Flinders+Street?travelmode=walking')
@@ -244,6 +305,157 @@ describe('Google itinerary import', () => {
 				transport: { mode: 'air', operator: 'Jetstar', serviceNumber: 'JQ14' }
 			}
 		]);
+	});
+
+	it('imports a Google Hotels search as an accommodation stay with its destination and dates', async () => {
+		await expect(resolveGoogleItineraryUrl(selectedHotelsUrl)).resolves.toEqual([
+			expect.objectContaining({
+				type: 'accommodation',
+				title: 'Accommodation in Shinyokohama',
+				suggestedStartDate: '2026-10-29',
+				suggestedEndDate: '2026-11-01',
+				locations: [
+					expect.objectContaining({
+						name: 'Shinyokohama',
+						role: 'primary',
+						googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Shinyokohama'
+					})
+				],
+				links: [{ label: 'Google Hotels', url: selectedHotelsUrl }]
+			})
+		]);
+	});
+
+	it('imports a Google Hotels destination whose encoded name is not twelve bytes long', async () => {
+		expect(parseGoogleHotelsSearch(new URL(selectedKyotoHotelsUrl))).toMatchObject({
+			selectedHotelEntityToken: 'ChoI54Ov_PqD7beHARoNL2cvMTFybXZjODQ3chAB'
+		});
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				new Response(
+					[
+						'<h1 class="hotel-name">ELE Hotel 樟葉</h1>',
+						'<span aria-label="hotel address is 1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan">',
+						'https://maps.google.com/maps?ll\\u003d34.8627692,135.6777082'
+					].join(''),
+					{ headers: { 'content-type': 'text/html' } }
+				)
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleItineraryUrl(selectedKyotoHotelsUrl)).resolves.toMatchObject([
+			{
+				type: 'accommodation',
+				title: 'ELE Hotel 樟葉',
+				suggestedStartDate: '2026-11-02',
+				suggestedEndDate: '2026-11-04',
+				locations: [
+					expect.objectContaining({
+						address: '1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan',
+						coordinates: { latitude: 34.8627692, longitude: 135.6777082 },
+						name: 'ELE Hotel 樟葉',
+						role: 'primary'
+					})
+				]
+			}
+		]);
+
+		const [requestUrl, request] = fetchMock.mock.calls[0] ?? [];
+		expect((requestUrl as URL).toString()).toBe(
+			'https://www.google.com/travel/hotels/entity/ChoI54Ov_PqD7beHARoNL2cvMTFybXZjODQ3chAB?hl=en'
+		);
+		expect(request).toMatchObject({ headers: { 'accept-language': 'en' }, redirect: 'manual' });
+	});
+
+	it('imports a Google Hotels share link with property, address, stay dates, and published stay times', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { headers: { location: resolvedHotelShareUrl }, status: 302 }))
+			.mockResolvedValueOnce(
+				new Response(
+					[
+						'<h1 class="hotel-name">ELE Hotel 樟葉</h1>',
+						'<span class="address">1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan</span>',
+						'ELE Hotel 樟葉 has a check-in time of 3:00 pm and a check-out time of 10:00 am'
+					].join('')
+				)
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleItineraryUrl(hotelShareUrl)).resolves.toEqual([
+			expect.objectContaining({
+				type: 'accommodation',
+				title: 'ELE Hotel 樟葉',
+				suggestedStartDate: '2026-11-02',
+				suggestedEndDate: '2026-11-04',
+				suggestedCheckInTime: '15:00',
+				suggestedCheckOutTime: '10:00',
+				locations: [
+					expect.objectContaining({
+						address: '1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan',
+						googleMapsUrl:
+							'https://www.google.com/maps/search/?api=1&query=1+Chome-5-5+Machikuzuha%2C+Hirakata%2C+Osaka+573-1106%2C+Japan',
+						name: 'ELE Hotel 樟葉'
+					})
+				],
+				links: [{ label: 'Google Hotels', url: hotelShareUrl }]
+			})
+		]);
+
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			1,
+			new URL(hotelShareUrl),
+			expect.objectContaining({ headers: { 'accept-language': 'en' }, redirect: 'manual' })
+		);
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			2,
+			new URL(resolvedHotelShareUrl),
+			expect.objectContaining({ headers: { 'accept-language': 'en' }, redirect: 'manual' })
+		);
+	});
+
+	it('enriches a Google Hotels destination with Google Places coordinates when configured', async () => {
+		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					places: [
+						{
+							displayName: { text: 'Shin-Yokohama' },
+							googleMapsUri: 'https://www.google.com/maps/place/Shin-Yokohama',
+							location: { latitude: 35.5074, longitude: 139.6176 },
+							primaryType: 'neighborhood'
+						}
+					]
+				}),
+				{ headers: { 'content-type': 'application/json' } }
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleItineraryUrl(selectedHotelsUrl)).resolves.toMatchObject([
+			{
+				locations: [
+					{
+						name: 'Shinyokohama',
+						googleMapsUrl: 'https://www.google.com/maps/place/Shin-Yokohama',
+						coordinates: { latitude: 35.5074, longitude: 139.6176 }
+					}
+				]
+			}
+		]);
+
+		const [, request] = fetchMock.mock.calls[0] ?? [];
+		expect(JSON.parse((request as RequestInit).body as string)).toEqual({ pageSize: 1, textQuery: 'Shinyokohama' });
+	});
+
+	it('rejects a Google Hotels link without a complete accommodation search', async () => {
+		await expect(
+			resolveGoogleItineraryUrl('https://www.google.com/travel/search?q=Shinyokohama')
+		).rejects.toMatchObject({
+			status: 422
+		});
 	});
 
 	it('keeps the IATA carrier designator in a Google Flights service number', async () => {

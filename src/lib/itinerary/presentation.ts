@@ -1,7 +1,7 @@
 import { addCalendarDays, formatCalendarDate } from './calendar';
 import type { ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
-import { timingStartTimestamp } from './timing';
+import { timingEndTimestamp, timingStartTimestamp } from './timing';
 import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export { timingStartTimestamp as timingAnchor } from './timing';
@@ -51,21 +51,47 @@ function timingDateBounds(timing: ItineraryTiming, timeZone: string | undefined)
 	}
 }
 
-function compareTimedItems<Item extends TimedItem>(left: Item, right: Item): number {
-	return timingStartTimestamp(left.timing) - timingStartTimestamp(right.timing) || left.id.localeCompare(right.id);
+function timingTimestampOnLocalDay(timing: ItineraryTiming, date: string, timeZone: string | undefined): number {
+	const [startDate, endDate] = timingDateBounds(timing, timeZone);
+	return date === endDate && startDate !== endDate ? timingEndTimestamp(timing) : timingStartTimestamp(timing);
+}
+
+function compareTimedItemsOnLocalDay<Item extends TimedItem>(
+	date: string,
+	timeZone: string | undefined,
+	left: Item,
+	right: Item
+): number {
+	return (
+		timingTimestampOnLocalDay(left.timing, date, timeZone) - timingTimestampOnLocalDay(right.timing, date, timeZone) ||
+		left.id.localeCompare(right.id)
+	);
 }
 
 function itemsByLocalDay<Item extends TimedItem>(items: Item[], timeZone?: string): Map<string, Item[]> {
 	const days = new Map<string, Item[]>();
 
-	for (const item of [...items].sort(compareTimedItems)) {
-		const date = timingStartDate(item.timing, timeZone);
-		const dayItems = days.get(date);
-		if (dayItems) {
-			dayItems.push(item);
-		} else {
-			days.set(date, [item]);
+	for (const item of items) {
+		const [startDate, endDate] = timingDateBounds(item.timing, timeZone);
+		let date = startDate;
+
+		while (date <= endDate) {
+			const dayItems = days.get(date);
+			if (dayItems) {
+				dayItems.push(item);
+			} else {
+				days.set(date, [item]);
+			}
+			const followingDate = addCalendarDays(date, 1);
+			if (!followingDate) {
+				throw new Error(`Calendar day ${date} cannot be incremented.`);
+			}
+			date = followingDate;
 		}
+	}
+
+	for (const [date, dayItems] of days) {
+		dayItems.sort((left, right) => compareTimedItemsOnLocalDay(date, timeZone, left, right));
 	}
 
 	return days;
@@ -75,10 +101,9 @@ export function groupItemsByLocalDay<Item extends TimedItem>(
 	items: Item[],
 	timeZone?: string
 ): LocalItineraryDay<Item>[] {
-	return [...itemsByLocalDay(items, timeZone).entries()].map(([date, dayItems]) => ({
-		date,
-		items: dayItems
-	}));
+	return [...itemsByLocalDay(items, timeZone).entries()]
+		.sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate))
+		.map(([date, dayItems]) => ({ date, items: dayItems }));
 }
 
 export function formatLocalDay(date: string): string {

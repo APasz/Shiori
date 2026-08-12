@@ -1,13 +1,30 @@
-import { isGoogleFlightsUrl, isGoogleMapsUrl, type TransportDetails } from '$lib/itinerary/schema';
+import {
+	isGoogleFlightsUrl,
+	isGoogleHotelPropertyUrl,
+	isGoogleHotelsSearchUrl,
+	isGoogleMapsUrl,
+	type TransportDetails
+} from '$lib/itinerary/schema';
 import { lookupAeroDataBoxFlightSchedule } from '$lib/server/aerodatabox';
 import {
+	GoogleHotelPropertyResolveError,
+	parseGoogleHotelsSearch,
+	resolveGoogleHotelProperty,
+	resolveGoogleHotelPropertyUrl
+} from '$lib/server/google-hotels';
+import {
 	GoogleMapsResolveError,
+	enrichGoogleMapsLocation,
 	googleMapsDirectionsCoordinates,
 	googleMapsSearchUrl,
 	parseGoogleMapsLocationUrl,
 	resolveGoogleMapsUrl
 } from '$lib/server/google-maps';
-import { lookupGoogleAirport } from '$lib/server/google-places';
+import {
+	lookupGoogleAccommodationDestination,
+	lookupGoogleAirport,
+	lookupGoogleMapsPlace
+} from '$lib/server/google-places';
 import { lookupGoogleTimeZone } from '$lib/server/google-time-zone';
 import {
 	lookupGoogleTransitLegs,
@@ -227,24 +244,38 @@ async function directionsImports(url: URL): Promise<ItineraryItemImport[]> {
 	return transitLegs?.map((leg) => transitImport(url, leg)) ?? [fallback];
 }
 
-function mapsPlaceImport(url: URL): ItineraryItemImport {
-	const location = parseGoogleMapsLocationUrl(url);
+async function mapsPlaceImport(url: URL): Promise<ItineraryItemImport> {
+	const location = await enrichGoogleMapsLocation(parseGoogleMapsLocationUrl(url));
 	const name =
 		location.name ??
 		(location.coordinates
 			? `Location at ${location.coordinates.latitude.toFixed(5)}, ${location.coordinates.longitude.toFixed(5)}`
 			: 'Mapped location');
+	const isLikelyAccommodation = /\b(?:apartment|campsite|guest\s*house|hostel|hotel|inn|motel|resort|ryokan)\b/iu.test(
+		name
+	);
+	const isAccommodation = location.primaryType === 'lodging' || isLikelyAccommodation;
+	const importedLocation = {
+		name,
+		role: 'primary' as const,
+		...(location.address ? { address: location.address } : {}),
+		...(location.coordinates ? { coordinates: location.coordinates } : {}),
+		googleMapsUrl: location.googleMapsUrl
+	};
+	if (isAccommodation) {
+		return {
+			type: 'accommodation',
+			title: name,
+			propertyStatus: 'confirmed',
+			...(location.timeZone ? { suggestedTimeZone: location.timeZone } : {}),
+			locations: [importedLocation],
+			links: [{ label: 'Google Maps', url: location.googleMapsUrl }]
+		};
+	}
 	return {
 		type: 'activity',
 		title: name,
-		locations: [
-			{
-				name,
-				role: 'primary',
-				...(location.coordinates ? { coordinates: location.coordinates } : {}),
-				googleMapsUrl: location.googleMapsUrl
-			}
-		],
+		locations: [importedLocation],
 		links: [{ label: 'Google Maps', url: location.googleMapsUrl }]
 	};
 }
@@ -362,6 +393,89 @@ async function flightImports(url: URL): Promise<ItineraryItemImport[]> {
 	return Promise.all(parseFlightLegs(url).map((leg) => flightImport(url, leg)));
 }
 
+async function hotelsImport(url: URL): Promise<ItineraryItemImport> {
+	const search = parseGoogleHotelsSearch(url);
+	if (!search) {
+		throw new GoogleItineraryImportError(
+			422,
+			'The Google Hotels link did not include a destination and valid check-in and check-out dates.'
+		);
+	}
+	const property = search.selectedHotelEntityToken
+		? await resolveGoogleHotelProperty(url, search.selectedHotelEntityToken)
+		: null;
+	const propertyPlace =
+		property?.coordinates && property.name
+			? await lookupGoogleMapsPlace({ coordinates: property.coordinates, name: property.name })
+			: null;
+	const locationName = property?.name ?? search.destination;
+	const locationAddress = propertyPlace?.address ?? property?.address;
+	const place = property ? null : await lookupGoogleAccommodationDestination(search.destination);
+	return {
+		type: 'accommodation',
+		title: property?.name ?? `Accommodation in ${search.destination}`,
+		propertyStatus: property ? 'confirmed' : search.selectedHotelEntityToken ? 'unconfirmed' : 'area-only',
+		suggestedStartDate: search.checkIn,
+		suggestedEndDate: search.checkOut,
+		...((propertyPlace?.timeZone ?? place?.timeZone)
+			? { suggestedTimeZone: propertyPlace?.timeZone ?? place?.timeZone }
+			: {}),
+		locations: [
+			{
+				name: locationName,
+				role: 'primary',
+				googleMapsUrl:
+					propertyPlace?.googleMapsUrl ?? place?.googleMapsUrl ?? googleMapsSearchUrl(locationAddress ?? locationName),
+				...(locationAddress ? { address: locationAddress } : {}),
+				...((propertyPlace?.coordinates ?? property?.coordinates)
+					? { coordinates: propertyPlace?.coordinates ?? property?.coordinates }
+					: {}),
+				...(place?.coordinates ? { coordinates: place.coordinates } : {})
+			}
+		],
+		links: [{ label: 'Google Hotels', url: url.toString() }],
+		...(property?.checkInTime ? { suggestedCheckInTime: property.checkInTime } : {}),
+		...(property?.checkOutTime ? { suggestedCheckOutTime: property.checkOutTime } : {})
+	};
+}
+
+async function hotelPropertyImport(url: URL): Promise<ItineraryItemImport> {
+	try {
+		const resolved = await resolveGoogleHotelPropertyUrl(url.toString());
+		const { property } = resolved;
+		const place = property.coordinates
+			? await lookupGoogleMapsPlace({ coordinates: property.coordinates, name: property.name })
+			: null;
+		return {
+			type: 'accommodation',
+			title: property.name,
+			propertyStatus: 'confirmed',
+			...(resolved.checkInDate ? { suggestedStartDate: resolved.checkInDate } : {}),
+			...(resolved.checkOutDate ? { suggestedEndDate: resolved.checkOutDate } : {}),
+			...(property.checkInTime ? { suggestedCheckInTime: property.checkInTime } : {}),
+			...(property.checkOutTime ? { suggestedCheckOutTime: property.checkOutTime } : {}),
+			...(place?.timeZone ? { suggestedTimeZone: place.timeZone } : {}),
+			locations: [
+				{
+					name: property.name,
+					address: place?.address ?? property.address,
+					role: 'primary',
+					googleMapsUrl: place?.googleMapsUrl ?? googleMapsSearchUrl(property.address),
+					...((place?.coordinates ?? property.coordinates)
+						? { coordinates: place?.coordinates ?? property.coordinates }
+						: {})
+				}
+			],
+			links: [{ label: 'Google Hotels', url: url.toString() }]
+		};
+	} catch (error: unknown) {
+		if (error instanceof GoogleHotelPropertyResolveError) {
+			throw new GoogleItineraryImportError(error.status, error.message);
+		}
+		throw error;
+	}
+}
+
 async function fetchGoogleFlightsUrl(url: URL): Promise<Response> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), requestTimeoutMilliseconds);
@@ -421,7 +535,7 @@ export async function resolveGoogleItineraryUrl(inputUrl: string): Promise<Itine
 		try {
 			const inputUrlObject = new URL(inputUrl);
 			const url = inputUrlObject.hostname === 'maps.app.goo.gl' ? await resolveGoogleMapsUrl(inputUrl) : inputUrlObject;
-			return isDirectionsUrl(url) ? directionsImports(url) : [mapsPlaceImport(url)];
+			return isDirectionsUrl(url) ? directionsImports(url) : [await mapsPlaceImport(url)];
 		} catch (error: unknown) {
 			if (error instanceof GoogleMapsResolveError) {
 				throw new GoogleItineraryImportError(error.status, error.message);
@@ -432,5 +546,14 @@ export async function resolveGoogleItineraryUrl(inputUrl: string): Promise<Itine
 	if (isGoogleFlightsUrl(inputUrl)) {
 		return flightImports(await resolveGoogleFlightsUrl(inputUrl));
 	}
-	throw new GoogleItineraryImportError(400, 'Use a Google Maps place or directions link, or a Google Flights link.');
+	if (isGoogleHotelsSearchUrl(inputUrl)) {
+		return [await hotelsImport(new URL(inputUrl))];
+	}
+	if (isGoogleHotelPropertyUrl(inputUrl)) {
+		return [await hotelPropertyImport(new URL(inputUrl))];
+	}
+	throw new GoogleItineraryImportError(
+		400,
+		'Use a Google Maps place or directions link, a Google Flights link, or a Google Hotels search or property link.'
+	);
 }

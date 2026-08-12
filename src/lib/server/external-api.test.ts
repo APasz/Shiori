@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ExpiringCache, ProviderRateLimitError, ProviderRequestCoordinator } from './external-api';
+import { ExpiringCache, MonthlyRequestLimit, ProviderRateLimitError, ProviderRequestCoordinator } from './external-api';
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -23,6 +23,17 @@ describe('ExpiringCache', () => {
 		vi.advanceTimersByTime(1_000);
 		expect(cache.get('one')).toBeUndefined();
 		expect(cache.get('three')).toBeUndefined();
+	});
+});
+
+describe('MonthlyRequestLimit', () => {
+	it('resets request availability at the start of a UTC month', () => {
+		const limit = new MonthlyRequestLimit({ maximumRequests: 2 });
+
+		expect(limit.tryAcquire(new Date('2026-10-31T23:59:00.000Z'))).toBe(true);
+		expect(limit.tryAcquire(new Date('2026-10-31T23:59:30.000Z'))).toBe(true);
+		expect(limit.tryAcquire(new Date('2026-10-31T23:59:59.000Z'))).toBe(false);
+		expect(limit.tryAcquire(new Date('2026-11-01T00:00:00.000Z'))).toBe(true);
 	});
 });
 

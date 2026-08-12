@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isGoogleMapsUrl } from '../itinerary/schema';
+
+const privateEnvironment = vi.hoisted(() => ({ GOOGLE_PLACES_API_KEY: undefined as string | undefined }));
+
+vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
+import { isGoogleHotelPropertyUrl, isGoogleMapsUrl } from '../itinerary/schema';
 import {
 	GoogleMapsResolveError,
 	googleMapsDirectionsCoordinates,
@@ -12,6 +16,7 @@ const melbourneAirportUrl =
 	'https://www.google.com/maps/place/Melbourne+Airport/@-37.7332209,144.8645358,27101m/data=!3m1!1e3!4m6!3m5!1s0x6ad659a9ebaa3917:0xf045676052ff090!8m2!3d-37.6708228!4d144.8429763!16zL20vMDFuZmx3';
 
 afterEach(() => {
+	privateEnvironment.GOOGLE_PLACES_API_KEY = undefined;
 	vi.unstubAllGlobals();
 });
 
@@ -55,6 +60,9 @@ describe('Google Maps location parsing', () => {
 		expect(isGoogleMapsUrl('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).toBe(true);
 		expect(isGoogleMapsUrl('https://www.google.com.au/maps/place/Melbourne+Airport')).toBe(true);
 		expect(isGoogleMapsUrl('https://www.google.com/search?q=Melbourne+Airport')).toBe(false);
+		expect(isGoogleHotelPropertyUrl('https://www.google.com/travel/hotels/s/jqZoDPSDyUE5pcq16')).toBe(true);
+		expect(isGoogleHotelPropertyUrl('https://www.google.com/travel/hotels/entity/CgsI54Ov_PqD7beHARAB')).toBe(true);
+		expect(isGoogleHotelPropertyUrl('https://www.google.com/travel/hotels/anything/else')).toBe(false);
 
 		expect(() => parseGoogleMapsLocationUrl(new URL('https://example.com/?q=-37,144'))).toThrow(GoogleMapsResolveError);
 	});
@@ -76,6 +84,40 @@ describe('Google Maps location parsing', () => {
 			name: 'Melbourne Airport'
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('adds an address from Google Places only after it confirms the Maps place and coordinates', async () => {
+		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response('redirect', {
+					status: 302,
+					headers: { location: melbourneAirportUrl }
+				})
+			)
+			.mockResolvedValueOnce(new Response('map page', { status: 200 }))
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						places: [
+							{
+								displayName: { text: 'Melbourne Airport' },
+								formattedAddress: 'Arrival Dr, Melbourne Airport VIC 3045, Australia',
+								location: { latitude: -37.6708228, longitude: 144.8429763 }
+							}
+						]
+					}),
+					{ status: 200, headers: { 'content-type': 'application/json' } }
+				)
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).resolves.toMatchObject({
+			address: 'Arrival Dr, Melbourne Airport VIC 3045, Australia',
+			name: 'Melbourne Airport'
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 
 	it('rejects unsafe redirects and Google Maps network failures', async () => {

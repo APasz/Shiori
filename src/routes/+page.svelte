@@ -46,6 +46,7 @@
 	type EditingItem = {
 		item: ItineraryItem;
 		mode: 'create' | 'edit';
+		suggestedEndDate?: string;
 		suggestedStartDate?: string;
 		timingNeedsConfirmation: boolean;
 	};
@@ -129,6 +130,7 @@
 				defaultItemTimestamp(suggestedStartDate, viewerContext.timeZone, viewerContext.currentTimestamp)
 			),
 			mode: 'create',
+			...(itemImport.suggestedEndDate ? { suggestedEndDate: itemImport.suggestedEndDate } : {}),
 			...(suggestedStartDate ? { suggestedStartDate } : {}),
 			timingNeedsConfirmation: true
 		};
@@ -283,6 +285,12 @@
 
 	async function finishEditing(): Promise<void> {
 		editingItem = null;
+		await invalidateAll();
+		refreshOfflineTripPage();
+	}
+
+	async function finishAccommodationCreation(): Promise<void> {
+		creatingItem = false;
 		await invalidateAll();
 		refreshOfflineTripPage();
 	}
@@ -465,6 +473,7 @@
 														style={itemTypeAccentStyle(item.type)}
 													>
 														<ItineraryTiming
+															day={day.date}
 															timing={item.timing}
 															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
 														/>
@@ -477,6 +486,7 @@
 												{:else}
 													<div class="item-summary" style={itemTypeAccentStyle(item.type)}>
 														<ItineraryTiming
+															day={day.date}
 															timing={item.timing}
 															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
 														/>
@@ -535,6 +545,7 @@
 			tripTimeZone={itinerary.timeZone}
 			tripId={detailedTrip.id}
 			revision={detailedTrip.revision}
+			suggestedEndDate={editingItem.suggestedEndDate}
 			suggestedStartDate={editingItem.suggestedStartDate}
 			timingNeedsConfirmation={editingItem.timingNeedsConfirmation}
 			onDismiss={() => (editingItem = null)}
@@ -545,7 +556,12 @@
 	{#if detailedTrip && canModifyItinerary && creatingItem}
 		<ItineraryItemCreator
 			tripId={detailedTrip.id}
+			tripTimeZone={itinerary.timeZone}
+			localCurrency={detailedTrip.itinerary.localCurrency}
+			initialDate={itemCreationLocalDay}
+			revision={detailedTrip.revision}
 			onDismiss={() => (creatingItem = false)}
+			onAccommodationSaved={finishAccommodationCreation}
 			onImported={beginImportedItem}
 			onManual={beginCreatingItem}
 			onTransportJourney={beginTransportJourney}

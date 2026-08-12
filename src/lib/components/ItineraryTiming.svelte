@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatItineraryTiming } from '$lib/itinerary/timing';
+	import { formatItineraryTiming, formatItineraryTimingForDay } from '$lib/itinerary/timing';
 	import type { ItineraryTiming } from '$lib/itinerary/schema';
 	import { timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -8,17 +8,29 @@
 	let {
 		timing,
 		timeZone,
+		day,
 		includeDate = false
 	}: {
 		timing: ItineraryTiming;
 		timeZone: string;
+		day?: string;
 		includeDate?: boolean;
 	} = $props();
 	let browserReady = $state(false);
 	const viewerLabel = $derived(
-		browserReady ? formatItineraryTiming(timing, includeDate, viewerContext.timeZone) : null
+		browserReady
+			? day
+				? formatItineraryTimingForDay(timing, day, viewerContext.timeZone, viewerContext.timeZone)
+				: formatItineraryTiming(timing, includeDate, viewerContext.timeZone)
+			: null
 	);
-	const localLabel = $derived(browserReady ? formatItineraryTiming(timing, includeDate, timeZone) : null);
+	const localLabel = $derived(
+		browserReady
+			? day
+				? formatItineraryTimingForDay(timing, day, timeZone, viewerContext.timeZone)
+				: formatItineraryTiming(timing, includeDate, timeZone)
+			: null
+	);
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
 
 	onMount(() => {

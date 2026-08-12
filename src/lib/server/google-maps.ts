@@ -1,12 +1,17 @@
 import { googleMapsUrlSchema, isGoogleMapsUrl, type ItineraryLocation } from '$lib/itinerary/schema';
+import { lookupGoogleMapsPlace } from '$lib/server/google-places';
 
 const maximumRedirects = 5;
 const requestTimeoutMilliseconds = 5_000;
 
 export type GoogleMapsLocationImport = Readonly<{
+	address?: string;
 	coordinates?: ItineraryLocation['coordinates'];
 	googleMapsUrl: string;
 	name?: string;
+	placeId?: string;
+	primaryType?: string;
+	timeZone?: string;
 }>;
 
 export type GoogleMapsDirectionsCoordinates = Readonly<{
@@ -164,7 +169,22 @@ async function cancelResponseBody(response: Response): Promise<void> {
 }
 
 export async function resolveGoogleMapsLocation(inputUrl: string): Promise<GoogleMapsLocationImport> {
-	return parseGoogleMapsLocationUrl(await resolveGoogleMapsUrl(inputUrl));
+	return enrichGoogleMapsLocation(parseGoogleMapsLocationUrl(await resolveGoogleMapsUrl(inputUrl)));
+}
+
+/** Adds canonical Place data only when Google Places confirms the parsed Maps name at the same coordinates. */
+export async function enrichGoogleMapsLocation(location: GoogleMapsLocationImport): Promise<GoogleMapsLocationImport> {
+	if (!location.name || !location.coordinates) {
+		return location;
+	}
+	const place = await lookupGoogleMapsPlace({ coordinates: location.coordinates, name: location.name });
+	return {
+		...location,
+		...(place?.address ? { address: place.address } : {}),
+		...(place?.id ? { placeId: place.id } : {}),
+		...(place?.primaryType ? { primaryType: place.primaryType } : {}),
+		...(place?.timeZone ? { timeZone: place.timeZone } : {})
+	};
 }
 
 export async function resolveGoogleMapsUrl(inputUrl: string): Promise<URL> {

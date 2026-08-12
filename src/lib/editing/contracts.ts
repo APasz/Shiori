@@ -2,12 +2,15 @@ import { z } from 'zod';
 import {
 	calendarDateSchema,
 	externalUrlSchema,
+	googleHotelPropertyUrlSchema,
 	googleMapsUrlSchema,
+	ianaTimeZoneSchema,
 	itineraryIdentifierSchema,
 	itineraryItemDraftSchema,
 	itineraryLinkSchema,
 	locationRoleSchema,
 	locationCoordinatesSchema,
+	localTimeSchema,
 	openRailwayMapUrlSchema,
 	transportModeSchema,
 	tripDetailsSchema,
@@ -61,7 +64,7 @@ export const editLockTokenRequestSchema = z.strictObject({
 	lockToken: z.string().uuid()
 });
 
-const locationMapUrlSchema = z.union([googleMapsUrlSchema, openRailwayMapUrlSchema]);
+const locationMapUrlSchema = z.union([googleMapsUrlSchema, googleHotelPropertyUrlSchema, openRailwayMapUrlSchema]);
 
 export const locationResolveRequestSchema = z.strictObject({
 	url: locationMapUrlSchema
@@ -69,10 +72,15 @@ export const locationResolveRequestSchema = z.strictObject({
 
 export const locationResolveResponseSchema = z
 	.strictObject({
+		address: z.string().trim().min(1).optional(),
+		checkInTime: localTimeSchema.optional(),
+		checkOutTime: localTimeSchema.optional(),
 		coordinates: locationCoordinatesSchema.optional(),
+		googleHotelsUrl: googleHotelPropertyUrlSchema.optional(),
 		googleMapsUrl: googleMapsUrlSchema.optional(),
 		name: z.string().trim().min(1).optional(),
-		openRailwayMapUrl: openRailwayMapUrlSchema.optional()
+		openRailwayMapUrl: openRailwayMapUrlSchema.optional(),
+		timeZone: ianaTimeZoneSchema.optional()
 	})
 	.refine(
 		(location) => location.googleMapsUrl !== undefined || location.openRailwayMapUrl !== undefined,
@@ -84,6 +92,7 @@ export const itineraryItemImportRequestSchema = z.strictObject({
 });
 
 const importedLocationSchema = z.strictObject({
+	address: z.string().trim().min(1).optional(),
 	coordinates: locationCoordinatesSchema.optional(),
 	googleMapsUrl: googleMapsUrlSchema.optional(),
 	name: z.string().trim().min(1),
@@ -94,13 +103,23 @@ const importedLocationSchema = z.strictObject({
 const importedItemBaseShape = {
 	links: z.array(itineraryLinkSchema).min(1),
 	locations: z.array(importedLocationSchema),
+	suggestedEndDate: calendarDateSchema.optional(),
 	suggestedStartDate: calendarDateSchema.optional(),
 	title: z.string().trim().min(1)
 };
 
+const accommodationPropertyStatusSchema = z.enum(['confirmed', 'area-only', 'unconfirmed']);
+
 export const itineraryItemImportSchema = z.discriminatedUnion('type', [
 	z.strictObject({ ...importedItemBaseShape, type: z.literal('activity') }),
-	z.strictObject({ ...importedItemBaseShape, type: z.literal('accommodation') }),
+	z.strictObject({
+		...importedItemBaseShape,
+		propertyStatus: accommodationPropertyStatusSchema,
+		suggestedCheckInTime: localTimeSchema.optional(),
+		suggestedCheckOutTime: localTimeSchema.optional(),
+		suggestedTimeZone: ianaTimeZoneSchema.optional(),
+		type: z.literal('accommodation')
+	}),
 	z.strictObject({
 		...importedItemBaseShape,
 		type: z.literal('transport'),

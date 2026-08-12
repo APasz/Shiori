@@ -94,6 +94,7 @@
 		localCurrency,
 		tripTimeZone,
 		revision,
+		suggestedEndDate,
 		suggestedStartDate,
 		timingNeedsConfirmation = false,
 		onDismiss,
@@ -105,6 +106,7 @@
 		localCurrency: CurrencyCode;
 		tripTimeZone: string;
 		revision: number;
+		suggestedEndDate?: string;
 		suggestedStartDate?: string;
 		timingNeedsConfirmation?: boolean;
 		onDismiss: () => void;
@@ -122,6 +124,7 @@
 	let startAt = $state('');
 	let endAt = $state('');
 	let endAtEnabled = $state(false);
+	let exactTimingDateOnly = $state(false);
 	let nominalAt = $state('');
 	let toleranceMinutes = $state(60);
 	let earliestAt = $state('');
@@ -200,6 +203,7 @@
 		startAt = '';
 		endAt = '';
 		endAtEnabled = false;
+		exactTimingDateOnly = false;
 		nominalAt = '';
 		toleranceMinutes = 60;
 		earliestAt = '';
@@ -212,6 +216,7 @@
 						? (formatTimestampForTimeZoneInput(source.timing.endAt, timeZone) ?? '')
 						: '';
 				endAtEnabled = source.timing.endAt !== undefined;
+				exactTimingDateOnly = source.timing.timePrecision === 'date';
 				break;
 			case 'approximate':
 				nominalAt = formatTimestampForTimeZoneInput(source.timing.nominalAt, timeZone) ?? '';
@@ -243,8 +248,8 @@
 		if (timingNeedsConfirmation) {
 			timingKind = 'exact';
 			startAt = suggestedStartDate ? `${suggestedStartDate}T` : '';
-			endAt = '';
-			endAtEnabled = false;
+			endAt = suggestedEndDate ? `${suggestedEndDate}T` : '';
+			endAtEnabled = suggestedEndDate !== undefined;
 		}
 	}
 
@@ -318,7 +323,7 @@
 			}
 
 			addLocationDraft({
-				address: '',
+				address: importedLocation.data.address ?? '',
 				googleMapsUrl: importedLocation.data.googleMapsUrl ?? '',
 				id: newIdentifier(),
 				isExpanded: true,
@@ -375,6 +380,9 @@
 		}
 
 		itemType = parsedType.data;
+		if (itemType !== 'accommodation') {
+			exactTimingDateOnly = false;
+		}
 		if (itemType === 'transport') {
 			addMissingTransportStops();
 		}
@@ -454,8 +462,10 @@
 		const previousTimeZone = startAtTimeZone;
 		switch (timingKind) {
 			case 'exact':
-				startAt = reformatInTimeZone(startAt, timeZone);
-				endAt = reformatInTimeZone(endAt, timeZone);
+				if (!exactTimingDateOnly) {
+					startAt = reformatInTimeZone(startAt, timeZone);
+					endAt = reformatInTimeZone(endAt, timeZone);
+				}
 				break;
 			case 'approximate':
 				nominalAt = reformatInTimeZone(nominalAt, timeZone);
@@ -524,6 +534,18 @@
 		timingKind = nextKind.data;
 	}
 
+	function changeExactTimingDateOnly(enabled: boolean): void {
+		exactTimingDateOnly = enabled;
+		if (!enabled) {
+			return;
+		}
+		const startDate = startAt.slice(0, 10);
+		const endDate = (endAtEnabled ? endAt : startAt).slice(0, 10);
+		startAt = `${startDate}T00:00`;
+		endAt = `${endDate}T23:59`;
+		endAtEnabled = true;
+	}
+
 	function locationValue(draft: LocationDraft): unknown {
 		const address = optionalText(draft.address);
 		const googleMapsUrl = optionalText(draft.googleMapsUrl);
@@ -556,7 +578,8 @@
 					kind: 'exact',
 					startAt: timestampValue(startAt, startAtTimeZone),
 					...override,
-					...(endAtEnabled && end ? { endAt: timestampValue(end, startAtTimeZone) } : {})
+					...(endAtEnabled && end ? { endAt: timestampValue(end, startAtTimeZone) } : {}),
+					...(exactTimingDateOnly ? { timePrecision: 'date' as const } : {})
 				};
 			}
 			case 'approximate':
@@ -993,9 +1016,11 @@
 						<legend>Schedule</legend>
 						{#if timingNeedsConfirmation}
 							<p class="timing-confirmation">
-								{suggestedStartDate
-									? `The imported link confirms ${suggestedStartDate}. Add the time before saving.`
-									: 'The imported link did not include a reliable time. Confirm the schedule before saving.'}
+								{suggestedStartDate && suggestedEndDate
+									? `The imported link confirms ${suggestedStartDate} to ${suggestedEndDate}. Add the check-in and check-out times before saving.`
+									: suggestedStartDate
+										? `The imported link confirms ${suggestedStartDate}. Add the time before saving.`
+										: 'The imported link did not include a reliable time. Confirm the schedule before saving.'}
 							</p>
 						{/if}
 						<label class="shiori-form-label">
@@ -1012,28 +1037,57 @@
 						</label>
 
 						{#if timingKind === 'exact'}
+							{#if itemType === 'accommodation'}
+								<label class="toggle-label">
+									<input
+										checked={exactTimingDateOnly}
+										onchange={(event) => changeExactTimingDateOnly(event.currentTarget.checked)}
+										type="checkbox"
+									/>
+									Check-in and check-out times are unknown
+								</label>
+							{/if}
 							<DateTimeInput
 								dateTime={startAt}
 								id="item-start"
-								label={timingNeedsConfirmation && suggestedStartDate ? 'Start time' : 'Start date and time'}
+								label={exactTimingDateOnly
+									? 'Check-in date'
+									: timingNeedsConfirmation && suggestedStartDate
+										? 'Start time'
+										: 'Start date and time'}
 								onDateTimeChange={(value) => (startAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
-								pickerMode={timingNeedsConfirmation && suggestedStartDate ? 'time' : 'date-time'}
+								pickerMode={exactTimingDateOnly
+									? 'date'
+									: timingNeedsConfirmation && suggestedStartDate
+										? 'time'
+										: 'date-time'}
 								timeZoneHint="Saved with this timing."
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
 							/>
-							<label class="toggle-label">
-								<input bind:checked={endAtEnabled} type="checkbox" />
-								Include an end time
-							</label>
+							{#if !exactTimingDateOnly}
+								<label class="toggle-label">
+									<input bind:checked={endAtEnabled} type="checkbox" />
+									Include an end time
+								</label>
+							{/if}
 							{#if endAtEnabled}
 								<DateTimeInput
 									dateTime={endAt}
 									id="item-end"
-									label="End date and time"
+									label={exactTimingDateOnly
+										? 'Check-out date'
+										: timingNeedsConfirmation && suggestedEndDate
+											? 'End time'
+											: 'End date and time'}
 									onDateTimeChange={(value) => (endAt = value)}
 									onTimeZoneChange={changeItemTimeZone}
+									pickerMode={exactTimingDateOnly
+										? 'date'
+										: timingNeedsConfirmation && suggestedEndDate
+											? 'time'
+											: 'date-time'}
 									timeZoneHint="Saved with this timing."
 									timeZone={startAtTimeZone}
 									{timeZoneOptions}

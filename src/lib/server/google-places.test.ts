@@ -6,7 +6,7 @@ const privateEnvironment = vi.hoisted(() => ({
 
 vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
 
-import { lookupGoogleAirport } from './google-places';
+import { lookupGoogleAirport, lookupGoogleMapsPlace } from './google-places';
 
 afterEach(() => {
 	privateEnvironment.GOOGLE_PLACES_API_KEY = undefined;
@@ -45,7 +45,8 @@ describe('Google Places airport lookup', () => {
 		await expect(lookupGoogleAirport('per')).resolves.toEqual({
 			coordinates: { latitude: -31.9403, longitude: 115.9672 },
 			googleMapsUrl: 'https://www.google.com/maps/place/Perth+Airport',
-			name: 'Perth Airport'
+			name: 'Perth Airport',
+			primaryType: 'airport'
 		});
 
 		const [requestUrl, requestOptions] = fetchMock.mock.calls[0] ?? [];
@@ -60,9 +61,53 @@ describe('Google Places airport lookup', () => {
 			headers: {
 				'content-type': 'application/json',
 				'X-Goog-Api-Key': 'test-key',
-				'X-Goog-FieldMask': 'places.displayName,places.googleMapsUri,places.location,places.primaryType'
+				'X-Goog-FieldMask':
+					'places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.location,places.primaryType,places.timeZone'
 			},
 			method: 'POST'
+		});
+	});
+
+	it('returns a Maps place address only when the place name and coordinates agree', async () => {
+		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					places: [
+						{
+							displayName: { text: 'ELE Hotel 樟葉' },
+							formattedAddress: '1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan',
+							location: { latitude: 34.8627692, longitude: 135.6777082 }
+						}
+					]
+				}),
+				{ status: 200, headers: { 'content-type': 'application/json' } }
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			lookupGoogleMapsPlace({
+				coordinates: { latitude: 34.8627692, longitude: 135.6777082 },
+				name: 'ELE Hotel 樟葉'
+			})
+		).resolves.toMatchObject({
+			address: '1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan',
+			name: 'ELE Hotel 樟葉'
+		});
+
+		const [, requestOptions] = fetchMock.mock.calls[0] ?? [];
+		expect(requestOptions).toMatchObject({
+			body: JSON.stringify({
+				locationBias: {
+					circle: {
+						center: { latitude: 34.8627692, longitude: 135.6777082 },
+						radius: 100
+					}
+				},
+				pageSize: 1,
+				textQuery: 'ELE Hotel 樟葉'
+			})
 		});
 	});
 
@@ -113,8 +158,8 @@ describe('Google Places airport lookup', () => {
 		);
 
 		await expect(Promise.all([first, second])).resolves.toEqual([
-			{ name: 'Melbourne Airport' },
-			{ name: 'Melbourne Airport' }
+			{ name: 'Melbourne Airport', primaryType: 'airport' },
+			{ name: 'Melbourne Airport', primaryType: 'airport' }
 		]);
 	});
 });

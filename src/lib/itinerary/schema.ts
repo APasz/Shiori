@@ -80,6 +80,48 @@ export function isGoogleFlightsUrl(value: string): boolean {
 	}
 }
 
+function isGoogleTravelUrl(url: URL): boolean {
+	return url.protocol === 'https:' && googleMapsHostnamePattern.test(url.hostname);
+}
+
+/** Returns whether a URL is a Google Hotels accommodation search. */
+export function isGoogleHotelsSearchUrl(value: string): boolean {
+	try {
+		const url = new URL(value);
+		return isGoogleTravelUrl(url) && url.pathname === '/travel/search';
+	} catch {
+		return false;
+	}
+}
+
+/** Returns whether a URL is a Google Hotels property page or its shareable short link. */
+export function isGoogleHotelPropertyUrl(value: string): boolean {
+	try {
+		const url = new URL(value);
+		const segments = url.pathname.split('/').filter((segment) => segment !== '');
+		const isPropertyPath =
+			segments.length === 4 &&
+			segments[0] === 'travel' &&
+			segments[1] === 'hotels' &&
+			(segments[2] === 'entity' || segments[2] === 's');
+		return isGoogleTravelUrl(url) && isPropertyPath && /^[A-Za-z0-9_-]{8,512}$/.test(segments[3] ?? '');
+	} catch {
+		return false;
+	}
+}
+
+/** Returns whether a URL is a supported Google Hotels search or property link. */
+export function isGoogleHotelsUrl(value: string): boolean {
+	return isGoogleHotelsSearchUrl(value) || isGoogleHotelPropertyUrl(value);
+}
+
+export const googleHotelPropertyUrlSchema = z
+	.string()
+	.url('Use an absolute Google Hotels property URL.')
+	.refine(isGoogleHotelPropertyUrl, 'Use a Google Hotels property or share link.');
+
+export const localTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a local time in 24-hour HH:MM form.');
+
 export const googleMapsUrlSchema = z
 	.string()
 	.url('Use an absolute Google Maps URL.')
@@ -238,6 +280,8 @@ const exactTimingSchema = z.strictObject({
 	kind: z.literal('exact'),
 	startAt: unixTimestampSchema,
 	endAt: unixTimestampSchema.optional(),
+	/** The exact timestamps bound calendar dates whose local times are intentionally unknown. */
+	timePrecision: z.literal('date').optional(),
 	timeZone: ianaTimeZoneSchema.optional()
 });
 const approximateTimingSchema = z.strictObject({

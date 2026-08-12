@@ -57,6 +57,35 @@ export class ExpiringCache<Value> {
 	}
 }
 
+export type MonthlyRequestLimitPolicy = Readonly<{
+	maximumRequests: number;
+}>;
+
+/** Limits billable provider calls for the current UTC calendar month within one server process. */
+export class MonthlyRequestLimit {
+	private month = '';
+	private requests = 0;
+
+	public constructor(private readonly policy: MonthlyRequestLimitPolicy) {
+		if (policy.maximumRequests < 1 || !Number.isInteger(policy.maximumRequests)) {
+			throw new Error('Monthly request limit must be a positive integer.');
+		}
+	}
+
+	public tryAcquire(now = new Date()): boolean {
+		const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+		if (currentMonth !== this.month) {
+			this.month = currentMonth;
+			this.requests = 0;
+		}
+		if (this.requests >= this.policy.maximumRequests) {
+			return false;
+		}
+		this.requests += 1;
+		return true;
+	}
+}
+
 export type ProviderRequestPolicy = Readonly<{
 	fallbackRetryDelayMilliseconds: number;
 	maximumRateLimitRetries: number;

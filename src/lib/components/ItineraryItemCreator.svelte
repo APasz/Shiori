@@ -1,12 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
+	import TimeZonePicker from '$lib/components/TimeZonePicker.svelte';
 	import {
 		apiErrorSchema,
+		editLockResponseSchema,
+		editSaveResponseSchema,
 		locationResolveResponseSchema,
 		itineraryItemImportResponseSchema,
 		type ItineraryItemImport
 	} from '$lib/editing/contracts';
+	import { accommodationStayDraft, type AccommodationStayValidation } from '$lib/itinerary/accommodation-stay';
+	import { addCalendarDays, formatCalendarDate } from '$lib/itinerary/calendar';
 	import {
 		transportJourneyDraftFromImport,
 		transportJourneyDraftSchema,
@@ -15,10 +20,15 @@
 	} from '$lib/itinerary/transport-journey';
 	import type { TransportJourneySchedule } from '$lib/itinerary/transport-schedule';
 	import { formatTimestampForTimeZoneInput } from '$lib/itinerary/zoned-time';
+	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import {
+		currencyCodeSchema,
+		reservationStatusSchema,
 		transportModeSchema,
+		type CurrencyCode,
 		type ItineraryItemType,
 		type ItineraryLink,
+		type ReservationStatus,
 		type TransportDetails
 	} from '$lib/itinerary/schema';
 
@@ -29,7 +39,8 @@
 		| 'transport-departure'
 		| 'transport-arrival'
 		| 'transport-details'
-		| 'transport-review';
+		| 'transport-review'
+		| 'accommodation-details';
 	type TransportEndpointKind = 'departure' | 'arrival';
 	type TransportEndpointMapProvider = 'google-maps' | 'open-railway-map';
 	type TransportEndpointDraft = {
@@ -42,16 +53,33 @@
 		kind: TransportEndpointKind;
 		provider: TransportEndpointMapProvider;
 	}>;
+	type AccommodationLocationDraft = {
+		address: string;
+		coordinates?: { latitude: number; longitude: number };
+		googleMapsUrl: string;
+		name: string;
+	};
+	type AccommodationPropertyStatus = Extract<ItineraryItemImport, { readonly type: 'accommodation' }>['propertyStatus'];
 
 	let {
 		tripId,
+		tripTimeZone,
+		localCurrency,
+		initialDate,
+		revision,
 		onDismiss,
+		onAccommodationSaved,
 		onManual,
 		onImported,
 		onTransportJourney
 	}: {
 		tripId: string;
+		tripTimeZone: string;
+		localCurrency: CurrencyCode;
+		initialDate?: string;
+		revision: number;
 		onDismiss: () => void;
+		onAccommodationSaved: () => Promise<void>;
 		onManual: (type: ItineraryItemType) => void;
 		onImported: (item: ItineraryItemImport) => void;
 		onTransportJourney: (journey: TransportJourneyDraft) => void;
@@ -73,11 +101,44 @@
 	let suggestedStartDate = $state('');
 	let transportSourceLinks = $state<ItineraryLink[]>([]);
 	let transportSchedule = $state<TransportJourneySchedule | undefined>(undefined);
+	let accommodationErrorMessage = $state('');
+	let accommodationItemId = $state('');
+	let accommodationLocationId = $state('');
+	let accommodationLocation = $state<AccommodationLocationDraft>({ address: '', googleMapsUrl: '', name: '' });
+	let accommodationCheckInDate = $state('');
+	let accommodationCheckInTime = $state('');
+	let accommodationCheckOutDate = $state('');
+	let accommodationCheckOutTime = $state('');
+	let accommodationPropertyStatus = $state<AccommodationPropertyStatus | null>(null);
+	let accommodationSourceLinks = $state<ItineraryLink[]>([]);
+	let accommodationTimeZone = $state('UTC');
+	let accommodationTimesKnown = $state(false);
+	let accommodationTimeZoneOptions = $state<TimeZoneSearchOption[]>([]);
+	let accommodationReservationEnabled = $state(false);
+	let accommodationReservationProvider = $state('');
+	let accommodationReservationReference = $state('');
+	let accommodationReservationStatus = $state<ReservationStatus>('confirmed');
+	let accommodationCostEnabled = $state(false);
+	let accommodationCostAmount = $state('');
+	let accommodationCostCurrency = $state<CurrencyCode>('AUD');
+	let accommodationCostPaid = $state(false);
+	let resolvingAccommodationLocation = $state(false);
+	let savingAccommodation = $state(false);
 
 	const transportModeOptions = transportModeSchema.options;
+	const accommodationReservationStatusOptions = reservationStatusSchema.options;
+	const currencyOptions = currencyCodeSchema.options;
 
 	function endpoint(): string {
 		return `/api/trips/${encodeURIComponent(tripId)}/items/import`;
+	}
+
+	function tripEndpoint(): string {
+		return `/api/trips/${encodeURIComponent(tripId)}`;
+	}
+
+	function itemEndpoint(): string {
+		return `${tripEndpoint()}/items`;
 	}
 
 	function locationResolveEndpoint(): string {
@@ -101,7 +162,7 @@
 		event.preventDefault();
 		const value = url.trim();
 		if (!value) {
-			errorMessage = 'Paste a Google Maps or Google Flights link first.';
+			errorMessage = 'Paste a Google Maps, Google Flights, or Google Hotels link first.';
 			return;
 		}
 
@@ -120,6 +181,11 @@
 				errorMessage = errorFrom(data, 'The link could not be imported.');
 				return;
 			}
+			const [onlyImportedItem] = imported.data.items;
+			if (imported.data.items.length === 1 && onlyImportedItem?.type === 'accommodation') {
+				startAccommodationStay(onlyImportedItem);
+				return;
+			}
 			importedItems = imported.data.items;
 			creatorState = 'review';
 		} catch {
@@ -133,6 +199,10 @@
 			startTransportJourney();
 			return;
 		}
+		if (type === 'accommodation') {
+			startAccommodationStay();
+			return;
+		}
 		dialogElement.close();
 		onManual(type);
 	}
@@ -140,6 +210,10 @@
 	function selectImportedItem(item: ItineraryItemImport): void {
 		if (item.type === 'transport') {
 			startTransportJourney(item);
+			return;
+		}
+		if (item.type === 'accommodation') {
+			startAccommodationStay(item);
 			return;
 		}
 		dialogElement.close();
@@ -153,7 +227,13 @@
 	}
 
 	function importedItemDescription(item: ItineraryItemImport): string {
-		if (item.type !== 'transport') {
+		if (item.type === 'accommodation') {
+			const destination = item.locations[0]?.name ?? item.title;
+			return item.suggestedStartDate && item.suggestedEndDate
+				? `${destination} · ${item.suggestedStartDate} to ${item.suggestedEndDate}`
+				: `Accommodation in ${destination}`;
+		}
+		if (item.type === 'activity') {
 			return 'Activity details were detected.';
 		}
 		const route = item.locations.map((location) => location.name).join(' → ');
@@ -172,6 +252,222 @@
 	function optionalText(value: string): string | undefined {
 		const trimmed = value.trim();
 		return trimmed === '' ? undefined : trimmed;
+	}
+
+	function emptyAccommodationLocation(): AccommodationLocationDraft {
+		return { address: '', googleMapsUrl: '', name: '' };
+	}
+
+	function startAccommodationStay(item?: Extract<ItineraryItemImport, { readonly type: 'accommodation' }>): void {
+		const location = item?.locations[0];
+		accommodationErrorMessage = '';
+		accommodationItemId = crypto.randomUUID();
+		accommodationLocationId = crypto.randomUUID();
+		accommodationLocation = location
+			? {
+					address: location.address ?? '',
+					googleMapsUrl: location.googleMapsUrl ?? '',
+					name: location.name,
+					...(location.coordinates ? { coordinates: location.coordinates } : {})
+				}
+			: { ...emptyAccommodationLocation(), name: item?.title ?? '' };
+		accommodationCheckInDate = item?.suggestedStartDate ?? initialDate ?? '';
+		accommodationCheckInTime = item?.suggestedCheckInTime ?? '';
+		accommodationCheckOutDate =
+			item?.suggestedEndDate ??
+			(accommodationDateIsValid(accommodationCheckInDate) ? (addCalendarDays(accommodationCheckInDate, 1) ?? '') : '');
+		accommodationCheckOutTime = item?.suggestedCheckOutTime ?? '';
+		accommodationPropertyStatus = item?.propertyStatus ?? null;
+		accommodationSourceLinks = item ? [...item.links] : [];
+		accommodationTimeZone = item?.suggestedTimeZone ?? tripTimeZone;
+		accommodationTimesKnown = item?.suggestedCheckInTime !== undefined && item.suggestedCheckOutTime !== undefined;
+		accommodationReservationEnabled = false;
+		accommodationReservationProvider = '';
+		accommodationReservationReference = '';
+		accommodationReservationStatus = 'confirmed';
+		accommodationCostEnabled = false;
+		accommodationCostAmount = '';
+		accommodationCostCurrency = localCurrency;
+		accommodationCostPaid = false;
+		creatorState = 'accommodation-details';
+	}
+
+	function accommodationDateIsValid(value: string): boolean {
+		return formatCalendarDate(value) !== null;
+	}
+
+	function minimumAccommodationCheckOutDate(): string | undefined {
+		return accommodationDateIsValid(accommodationCheckInDate) ? accommodationCheckInDate : undefined;
+	}
+
+	function hasGoogleHotelsSource(): boolean {
+		return accommodationSourceLinks.some((link) => link.label === 'Google Hotels');
+	}
+
+	function accommodationStayCandidate(): AccommodationStayValidation {
+		return accommodationStayDraft({
+			id: accommodationItemId,
+			locationId: accommodationLocationId,
+			title: accommodationLocation.name,
+			name: accommodationLocation.name,
+			address: accommodationLocation.address,
+			googleMapsUrl: accommodationLocation.googleMapsUrl,
+			...(accommodationLocation.coordinates ? { coordinates: accommodationLocation.coordinates } : {}),
+			checkInDate: accommodationCheckInDate,
+			...(accommodationTimesKnown ? { checkInTime: accommodationCheckInTime } : {}),
+			checkOutDate: accommodationCheckOutDate,
+			...(accommodationTimesKnown ? { checkOutTime: accommodationCheckOutTime } : {}),
+			links: accommodationSourceLinks,
+			timesKnown: accommodationTimesKnown,
+			timeZone: accommodationTimeZone,
+			...(accommodationReservationEnabled
+				? {
+						reservation: {
+							provider: accommodationReservationProvider,
+							reference: accommodationReservationReference,
+							status: accommodationReservationStatus
+						}
+					}
+				: {}),
+			...(accommodationCostEnabled
+				? {
+						cost: {
+							amount: accommodationCostAmount,
+							currency: accommodationCostCurrency,
+							status: accommodationCostPaid ? 'paid' : 'unpaid'
+						}
+					}
+				: {})
+		});
+	}
+
+	function accommodationStatusMessage(): string | null {
+		switch (accommodationPropertyStatus) {
+			case 'confirmed':
+				return 'Property details were confirmed from the selected Google link.';
+			case 'area-only':
+				return 'Google Hotels confirmed the stay dates, but this link names an area rather than a property. Paste the hotel’s Maps link to replace it.';
+			case 'unconfirmed':
+				return 'Google identified a likely property, but it could not be independently confirmed. Check the name or paste its Maps link.';
+			case null:
+				return null;
+		}
+	}
+
+	function returnToItemType(): void {
+		accommodationErrorMessage = '';
+		creatorState = 'entry';
+	}
+
+	async function resolveAccommodationLocation(): Promise<void> {
+		const url = accommodationLocation.googleMapsUrl.trim();
+		if (url === '') {
+			accommodationErrorMessage = 'Paste a Google Maps or Google Hotels property link to look up the property.';
+			return;
+		}
+
+		resolvingAccommodationLocation = true;
+		accommodationErrorMessage = '';
+		try {
+			const response = await fetch(locationResolveEndpoint(), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ url })
+			});
+			const data = await responseData(response);
+			const importedLocation = locationResolveResponseSchema.safeParse(data);
+			if (!response.ok || !importedLocation.success || !importedLocation.data.googleMapsUrl) {
+				accommodationErrorMessage = errorFrom(data, 'The property location could not be imported.');
+				return;
+			}
+			accommodationLocation.googleMapsUrl = importedLocation.data.googleMapsUrl;
+			accommodationLocation.name = importedLocation.data.name ?? accommodationLocation.name;
+			accommodationLocation.address = importedLocation.data.address ?? accommodationLocation.address;
+			accommodationLocation.coordinates = importedLocation.data.coordinates;
+			accommodationCheckInTime = importedLocation.data.checkInTime ?? accommodationCheckInTime;
+			accommodationCheckOutTime = importedLocation.data.checkOutTime ?? accommodationCheckOutTime;
+			accommodationTimeZone = importedLocation.data.timeZone ?? accommodationTimeZone;
+			accommodationPropertyStatus = 'confirmed';
+			if (
+				importedLocation.data.googleHotelsUrl &&
+				!accommodationSourceLinks.some((link) => link.url === importedLocation.data.googleHotelsUrl)
+			) {
+				accommodationSourceLinks = [
+					...accommodationSourceLinks,
+					{ label: 'Google Hotels', url: importedLocation.data.googleHotelsUrl }
+				];
+			}
+		} catch {
+			accommodationErrorMessage = 'The property location could not be imported because the server is unavailable.';
+		} finally {
+			resolvingAccommodationLocation = false;
+		}
+	}
+
+	function accommodationNightCount(): number | null {
+		if (!accommodationDateIsValid(accommodationCheckInDate) || !accommodationDateIsValid(accommodationCheckOutDate)) {
+			return null;
+		}
+		return Math.round(
+			(Date.parse(`${accommodationCheckOutDate}T00:00:00Z`) - Date.parse(`${accommodationCheckInDate}T00:00:00Z`)) /
+				86_400_000
+		);
+	}
+
+	async function releaseAccommodationLock(lockToken: string): Promise<boolean> {
+		try {
+			const response = await fetch(`${tripEndpoint()}/edit`, {
+				method: 'DELETE',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ lockToken })
+			});
+			return response.ok || response.status === 423;
+		} catch {
+			return false;
+		}
+	}
+
+	async function saveAccommodationStay(): Promise<void> {
+		const candidate = accommodationStayCandidate();
+		if (!candidate.valid) {
+			accommodationErrorMessage = candidate.error;
+			return;
+		}
+
+		savingAccommodation = true;
+		accommodationErrorMessage = '';
+		let lockToken: string | null = null;
+		let saved = false;
+		try {
+			const lockResponse = await fetch(`${tripEndpoint()}/edit`, { method: 'POST' });
+			const lockData = await responseData(lockResponse);
+			const lock = editLockResponseSchema.safeParse(lockData);
+			if (!lockResponse.ok || !lock.success) {
+				accommodationErrorMessage = errorFrom(lockData, 'The edit lock could not be acquired.');
+				return;
+			}
+			lockToken = lock.data.token;
+
+			const response = await fetch(itemEndpoint(), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ item: candidate.item, lockToken, revision })
+			});
+			const data = await responseData(response);
+			if (!response.ok || !editSaveResponseSchema.safeParse(data).success) {
+				accommodationErrorMessage = errorFrom(data, 'The accommodation could not be saved.');
+				return;
+			}
+			saved = true;
+			await onAccommodationSaved();
+		} catch {
+			accommodationErrorMessage = 'The accommodation could not be saved because the server is unavailable.';
+		} finally {
+			if (lockToken && !saved && !(await releaseAccommodationLock(lockToken))) {
+				accommodationErrorMessage = `${accommodationErrorMessage} The edit lock could not be released; it will expire automatically.`;
+			}
+			savingAccommodation = false;
+		}
 	}
 
 	function assignEndpoint(endpoint: TransportEndpointDraft, value: TransportJourneyDraft['departure']): void {
@@ -362,6 +658,7 @@
 	}
 
 	onMount(() => {
+		accommodationTimeZoneOptions = browserTimeZoneOptions();
 		dialogElement.showModal();
 	});
 </script>
@@ -381,7 +678,9 @@
 						? 'Review imported items'
 						: creatorState.startsWith('transport-')
 							? 'Add transport'
-							: 'Add an item'}
+							: creatorState.startsWith('accommodation-')
+								? 'Add accommodation'
+								: 'Add an item'}
 				</h2>
 			</div>
 			<form method="dialog"><button type="submit">Close</button></form>
@@ -395,7 +694,11 @@
 						<div>
 							<strong>{item.title}</strong>
 							<span>{importedItemDescription(item)}</span>
-							{#if item.suggestedStartDate}
+							{#if item.type === 'accommodation' && item.suggestedStartDate && item.suggestedEndDate}
+								<small
+									>Stay dates: {item.suggestedStartDate} to {item.suggestedEndDate}; review check-in and check-out.</small
+								>
+							{:else if item.suggestedStartDate}
 								<small>Suggested date: {item.suggestedStartDate}; confirm the time.</small>
 							{:else}
 								<small>Confirm the schedule before saving.</small>
@@ -558,10 +861,217 @@
 					{transportSchedule ? 'Continue to final review' : 'Continue to schedule'}
 				</button>
 			</div>
+		{:else if creatorState === 'accommodation-details'}
+			{@const stayNights = accommodationNightCount()}
+			<p class="wizard-progress">Accommodation review</p>
+			<p class="intro">Check the stay details, fill only what is missing, then save.</p>
+			<form
+				class="shiori-form"
+				onsubmit={(event) => {
+					event.preventDefault();
+					void saveAccommodationStay();
+				}}
+			>
+				{#if accommodationStatusMessage()}
+					<p class="schedule-found">{accommodationStatusMessage()}</p>
+				{/if}
+				<label class="shiori-form-label">
+					Property
+					<input
+						class="shiori-form-control"
+						bind:value={accommodationLocation.name}
+						placeholder="Hotel, hostel, apartment, or campsite"
+						required
+					/>
+				</label>
+				<label class="shiori-form-label">
+					Address <span class="field-hint">Optional</span>
+					<input class="shiori-form-control" bind:value={accommodationLocation.address} placeholder="Street address" />
+				</label>
+				<div class="maps-lookup">
+					<label class="shiori-form-label">
+						Google Maps or Google Hotels property link <span class="field-hint"
+							>Optional; we’ll fill in the property details we can.</span
+						>
+						<input
+							class="shiori-form-control"
+							bind:value={accommodationLocation.googleMapsUrl}
+							inputmode="url"
+							placeholder="Paste a Google Maps or Google Hotels property link"
+						/>
+					</label>
+					<button
+						class="shiori-form-button"
+						disabled={resolvingAccommodationLocation}
+						onclick={() => void resolveAccommodationLocation()}
+						type="button"
+					>
+						{resolvingAccommodationLocation ? 'Looking up…' : 'Look up link'}
+					</button>
+				</div>
+				<div class="field-grid">
+					<label class="shiori-form-label">
+						Check-in date
+						<input class="shiori-form-control" bind:value={accommodationCheckInDate} required type="date" />
+					</label>
+					<label class="shiori-form-label">
+						Check-out date
+						<input
+							class="shiori-form-control"
+							bind:value={accommodationCheckOutDate}
+							min={minimumAccommodationCheckOutDate()}
+							required
+							type="date"
+						/>
+					</label>
+				</div>
+				<label class="shiori-form-label">
+					Property time zone
+					<TimeZonePicker
+						id="accommodation-time-zone"
+						onSelect={(timeZone) => (accommodationTimeZone = timeZone)}
+						options={accommodationTimeZoneOptions}
+						value={accommodationTimeZone}
+					/>
+				</label>
+				<label class="toggle-label">
+					<input bind:checked={accommodationTimesKnown} type="checkbox" />
+					I know the check-in and check-out times
+				</label>
+				{#if accommodationTimesKnown}
+					<div class="field-grid">
+						<label class="shiori-form-label">
+							Check-in time
+							<input
+								class="shiori-form-control"
+								bind:value={accommodationCheckInTime}
+								required
+								step="300"
+								type="time"
+							/>
+						</label>
+						<label class="shiori-form-label">
+							Check-out time
+							<input
+								class="shiori-form-control"
+								bind:value={accommodationCheckOutTime}
+								required
+								step="300"
+								type="time"
+							/>
+						</label>
+					</div>
+					{#if hasGoogleHotelsSource() && (accommodationCheckInTime || accommodationCheckOutTime)}
+						<p class="schedule-found">Google Hotels supplied usual stay times. Confirm them against your booking.</p>
+					{/if}
+				{:else}
+					<p class="field-hint">
+						Times stay unknown; the itinerary will show the stay dates without inventing an exact time.
+					</p>
+				{/if}
+				<details class="optional-details">
+					<summary>Booking and cost <span class="field-hint">Optional</span></summary>
+					<div class="optional-details-content">
+						<label class="toggle-label">
+							<input bind:checked={accommodationReservationEnabled} type="checkbox" />
+							Add booking reference
+						</label>
+						{#if accommodationReservationEnabled}
+							<div class="field-grid">
+								<label class="shiori-form-label">
+									Provider <span class="field-hint">Optional</span>
+									<input
+										class="shiori-form-control"
+										bind:value={accommodationReservationProvider}
+										placeholder="Booking.com"
+									/>
+								</label>
+								<label class="shiori-form-label">
+									Reference <span class="field-hint">Optional</span>
+									<input
+										class="shiori-form-control"
+										bind:value={accommodationReservationReference}
+										placeholder="Confirmation number"
+									/>
+								</label>
+							</div>
+							<label class="shiori-form-label">
+								Booking status
+								<select class="shiori-form-control" bind:value={accommodationReservationStatus}>
+									{#each accommodationReservationStatusOptions as status (status)}
+										<option value={status}>{status}</option>
+									{/each}
+								</select>
+							</label>
+						{/if}
+						<label class="toggle-label">
+							<input bind:checked={accommodationCostEnabled} type="checkbox" />
+							Add cost
+						</label>
+						{#if accommodationCostEnabled}
+							<div class="field-grid">
+								<label class="shiori-form-label">
+									Amount
+									<input
+										class="shiori-form-control"
+										bind:value={accommodationCostAmount}
+										inputmode="decimal"
+										placeholder="0.00"
+										required
+									/>
+								</label>
+								<label class="shiori-form-label">
+									Currency
+									<select class="shiori-form-control" bind:value={accommodationCostCurrency}>
+										{#each currencyOptions as currency (currency)}
+											<option value={currency}>{currency}</option>
+										{/each}
+									</select>
+								</label>
+							</div>
+							<label class="toggle-label">
+								<input bind:checked={accommodationCostPaid} type="checkbox" />
+								Already paid
+							</label>
+						{/if}
+					</div>
+				</details>
+				<section class="journey-summary" aria-label="Accommodation summary">
+					<strong>{accommodationLocation.name || 'Accommodation'}</strong>
+					{#if optionalText(accommodationLocation.address)}<p>{optionalText(accommodationLocation.address)}</p>{/if}
+					<dl>
+						<div>
+							<dt>Stay</dt>
+							<dd>
+								{formatCalendarDate(accommodationCheckInDate) ?? accommodationCheckInDate} to {formatCalendarDate(
+									accommodationCheckOutDate
+								) ?? accommodationCheckOutDate}
+							</dd>
+						</div>
+						{#if stayNights !== null}<div>
+								<dt>Nights</dt>
+								<dd>{stayNights}</dd>
+							</div>{/if}
+						<div>
+							<dt>Times</dt>
+							<dd>
+								{accommodationTimesKnown ? `${accommodationCheckInTime} to ${accommodationCheckOutTime}` : 'Unknown'}
+							</dd>
+						</div>
+					</dl>
+				</section>
+				{#if accommodationErrorMessage}<p class="error" role="alert">{accommodationErrorMessage}</p>{/if}
+				<div class="wizard-actions">
+					<button class="text-button" onclick={returnToItemType} type="button">Back to item type</button>
+					<button class="shiori-form-button" disabled={savingAccommodation} type="submit">
+						{savingAccommodation ? 'Saving…' : 'Save accommodation'}
+					</button>
+				</div>
+			</form>
 		{:else}
 			<p class="intro">
-				Paste a Google Maps place or directions link, or a Google Flights link. We’ll prefill what we can, then you can
-				review it.
+				Paste a Google Maps place or directions link, a Google Flights link, or a Google Hotels search or property link.
+				We’ll prefill what we can, then you can review it.
 			</p>
 			<form class="shiori-form" onsubmit={importUrl}>
 				<label class="shiori-form-label">
@@ -570,7 +1080,7 @@
 						class="shiori-form-control"
 						bind:value={url}
 						inputmode="url"
-						placeholder="Paste a Google Maps or Google Flights link"
+						placeholder="Paste a Google Maps, Google Flights, or Google Hotels link"
 					/>
 				</label>
 				{#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
@@ -735,6 +1245,17 @@
 		font-weight: 400;
 	}
 
+	.toggle-label {
+		align-items: center;
+		display: flex;
+		font-weight: 700;
+		gap: 0.5rem;
+	}
+
+	.toggle-label input {
+		accent-color: var(--color-state-selection);
+	}
+
 	.journey-summary {
 		border: 1px solid var(--color-border-default);
 		display: grid;
@@ -748,6 +1269,22 @@
 		color: var(--color-text-secondary);
 		margin: 0;
 		padding: 0.75rem;
+	}
+
+	.optional-details {
+		border: 1px solid var(--color-border-default);
+		padding: 0.875rem;
+	}
+
+	.optional-details summary {
+		cursor: pointer;
+		font-weight: 700;
+	}
+
+	.optional-details-content {
+		display: grid;
+		gap: 0.875rem;
+		margin-top: 1rem;
 	}
 
 	.journey-summary p {

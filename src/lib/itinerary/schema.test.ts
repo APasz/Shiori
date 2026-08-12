@@ -26,6 +26,7 @@ describe('itinerary timing schema', () => {
 	it('accepts every supported timing shape', () => {
 		const timings = [
 			{ kind: 'exact', startAt: 1_775_952_000_000 },
+			{ kind: 'exact', startAt: 1_775_952_000_000, endAt: 1_775_955_600_000, timePrecision: 'date' },
 			{ kind: 'approximate', nominalAt: 1_775_952_000_000, toleranceMinutes: 60 },
 			{ kind: 'window', earliestAt: 1_775_952_000_000, latestAt: 1_775_955_600_000 }
 		] as const;

@@ -95,10 +95,15 @@ response honours `Retry-After` before one retry.
 
 Configure `GOOGLE_PLACES_API_KEY` with a Google Places API (New) key to resolve flight IATA airport
 codes to named locations and coordinates. Flight titles then use concise names such as `Perth > Kuala
-Lumpur`, rather than airport codes, and locations receive their Google Maps links. To avoid a
-misleading result, the lookup only accepts a single airport returned for an IATA-specific, strictly
-type-filtered search. Successful results are retained in a bounded process-local cache for seven days
+Lumpur`, rather than airport codes, and locations receive their Google Maps links. The same key can
+add a Google Maps link and coordinates to a Google Hotels destination import, and a street address to
+a Google Maps place link when Places confirms both the same name and a location within 100 metres. To
+avoid a misleading airport result, that lookup only accepts a single airport returned for an IATA-specific,
+strictly typed search. Successful results are retained in a bounded process-local cache for seven days
 and duplicate requests are coalesced.
+Google Places calls are capped at 4,500 per UTC month for each running Shiori process by default; set
+`GOOGLE_PLACES_MONTHLY_LIMIT` lower if required. This is defensive rather than a replacement for a Google
+Cloud quota and billing alert, because a server restart starts a new process-local counter.
 
 Configure `GOOGLE_ROUTES_API_KEY` with a Google Routes API key to enrich a selected Google Maps transit
 direction with its returned vehicle legs. Each returned train, coach, ferry, or other transit leg is prepared
@@ -131,15 +136,21 @@ published on or before the UTC payment date. Changing a trip's local currency af
 payments only; previous snapshots continue to show their original saved currency.
 
 The sudo owner can add, edit, and delete itinerary items from the itinerary page. New items begin
-with an import-first dialog: Google Maps place and directions links, plus selected Google Flights
-links, prefill the fields that can be parsed safely. Transport imports and manual transport creation
-use a four-step journey flow: departure, arrival, journey details, then review. Each endpoint can be
-looked up from an optional Google Maps link or OpenRailwayMap permalink, and the original map link is
-retained. OpenRailwayMap contributes a station name and/or its map position only; it does not provide
-journey schedules, so rail times still need confirmation. The final schedule and save step remains in
-the shared editor, so a missing or unreliable time must still be confirmed before saving. Manual
-activity and accommodation creation remain available from the same dialog. Items are ordered and
-grouped by their timestamps in each viewer's local calendar. Edits use one trip-wide lock, so changes
-cannot race with an open editor. Persisted edit locks are cleared when a server process starts; the
-sudo owner can also force close an active edit session from the Access page when a browser session
-has become stuck.
+with an import-first dialog: Google Maps place and directions links, selected Google Flights links,
+and Google Hotels search or property links prefill the fields that can be parsed safely. Hotels imports create an
+accommodation item from the destination or selected property and the link's check-in/check-out dates. Property
+links can also provide the hotel's published check-in and check-out times. When a Hotels link has a selected
+property, Shiori resolves that property's name, street address, and map coordinates instead of using the broader
+search area. Accommodation imports and manual accommodation creation use one focused stay review: property,
+dates, property-local time zone, optional times, then optional booking and cost. When times are unknown,
+Shiori saves the stay as a date-only range rather than inventing an exact time. Transport imports
+and manual transport creation use a four-step journey flow: departure,
+arrival, journey details, then review. Each endpoint can be looked up from an optional Google Maps link
+or OpenRailwayMap permalink, and the original map link is retained. OpenRailwayMap contributes a station
+name and/or its map position only; it does not provide journey schedules, so rail times still need
+confirmation. The final transport schedule and save step remains in the shared editor, so a missing or unreliable
+time must still be confirmed before saving. Advanced changes remain available in the shared editor after any
+item is created. Items are ordered and grouped by their timestamps in each viewer's local calendar.
+Edits use one trip-wide lock, so changes cannot race with an open editor. Persisted edit locks are cleared
+when a server process starts; the sudo owner can also force close an active edit session from the Access
+page when a browser session has become stuck.

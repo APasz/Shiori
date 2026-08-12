@@ -11,10 +11,11 @@ function requiredTimestamp(value: string): number {
 }
 
 describe('browser-local itinerary presentation', () => {
-	it('groups exact, approximate, and window timings by their local start date', () => {
+	it('groups exact, approximate, and window timings on every local day they cover', () => {
 		const morning = requiredTimestamp('2026-04-12T09:00');
 		const afternoon = requiredTimestamp('2026-04-12T14:00');
 		const nextMorning = requiredTimestamp('2026-04-13T09:00');
+		const checkout = requiredTimestamp('2026-04-13T13:00');
 		const firstDay = formatLocalTimestamp(morning);
 		const secondDay = formatLocalTimestamp(nextMorning);
 		if (!firstDay || !secondDay) {
@@ -30,6 +31,10 @@ describe('browser-local itinerary presentation', () => {
 				}
 			},
 			{
+				id: 'overnight',
+				timing: { kind: 'exact' as const, startAt: afternoon + 3 * 3_600_000, endAt: checkout }
+			},
+			{
 				id: 'second',
 				timing: { kind: 'approximate' as const, nominalAt: afternoon, toleranceMinutes: 30 }
 			},
@@ -40,11 +45,11 @@ describe('browser-local itinerary presentation', () => {
 		expect(groupItemsByLocalDay(items)).toEqual([
 			{
 				date: firstDay.date,
-				items: [items[2], items[1]]
+				items: [items[3], items[2], items[1]]
 			},
 			{
 				date: secondDay.date,
-				items: [items[0]]
+				items: [items[0], items[1]]
 			}
 		]);
 	});
