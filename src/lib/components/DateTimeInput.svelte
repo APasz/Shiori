@@ -31,26 +31,30 @@
 		id,
 		dateTime,
 		label,
+		minimumDate,
 		pickerMode = 'date-time',
 		dialogPlacement = 'center',
 		pickerPresentation = 'popover',
+		showTimeZonePicker = true,
 		timeZoneHint = 'Used to interpret this value; not saved.',
-		timeZone,
-		timeZoneOptions,
+		timeZone = 'UTC',
+		timeZoneOptions = [],
 		onDateTimeChange,
-		onTimeZoneChange
+		onTimeZoneChange = () => undefined
 	}: {
 		id: string;
 		dateTime: string;
 		label: string;
+		minimumDate?: string;
 		pickerMode?: PickerMode;
 		dialogPlacement?: DialogPlacement;
 		pickerPresentation?: PickerPresentation;
+		showTimeZonePicker?: boolean;
 		timeZoneHint?: string;
-		timeZone: string;
-		timeZoneOptions: TimeZoneSearchOption[];
+		timeZone?: string;
+		timeZoneOptions?: TimeZoneSearchOption[];
 		onDateTimeChange: (value: string) => void;
-		onTimeZoneChange: (timeZone: string) => void;
+		onTimeZoneChange?: (timeZone: string) => void;
 	} = $props();
 	let pickerElement: HTMLDivElement;
 	let dialogElement = $state<HTMLDialogElement>();
@@ -222,6 +226,7 @@
 							aria-pressed={day.date === datePart(dateTime)}
 							class:outside-month={!day.inCurrentMonth}
 							class:selected={day.date === datePart(dateTime)}
+							disabled={minimumDate !== undefined && day.date < minimumDate}
 							onclick={() => onDateTimeChange(replaceDatePart(dateTime, day.date))}
 							type="button"
 						>
@@ -248,7 +253,7 @@
 	</div>
 {/snippet}
 
-<div class="date-time-grid">
+<div class:single-column={!showTimeZonePicker} class="date-time-grid">
 	<div bind:this={pickerElement} class="date-time-picker shiori-form-label" onfocusout={closeAfterFocusChange}>
 		<span>
 			{label}
@@ -291,10 +296,12 @@
 			{/if}
 		{/if}
 	</div>
-	<div class="shiori-form-label">
-		<label for={`${id}-time-zone`}>Time zone <span class="field-hint">{timeZoneHint}</span></label>
-		<TimeZonePicker id={`${id}-time-zone`} onSelect={onTimeZoneChange} options={timeZoneOptions} value={timeZone} />
-	</div>
+	{#if showTimeZonePicker}
+		<div class="shiori-form-label">
+			<label for={`${id}-time-zone`}>Time zone <span class="field-hint">{timeZoneHint}</span></label>
+			<TimeZonePicker id={`${id}-time-zone`} onSelect={onTimeZoneChange} options={timeZoneOptions} value={timeZone} />
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -302,6 +309,10 @@
 		display: grid;
 		gap: 0.875rem;
 		grid-template-columns: minmax(15rem, 1fr) minmax(13rem, 1.25fr);
+	}
+
+	.date-time-grid.single-column {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.date-time-picker {
@@ -423,6 +434,12 @@
 
 	.days button.outside-month {
 		color: var(--color-text-muted);
+	}
+
+	.days button:disabled {
+		color: var(--color-text-muted);
+		cursor: not-allowed;
+		opacity: 0.45;
 	}
 
 	.days button[aria-current='date'] {

@@ -18,6 +18,7 @@ const transportTitleSuffixPattern =
 	/\s+(?:(?:international|domestic|regional)\s+)?airport$|\s+(?:railway\s+)?station$/i;
 
 export const transportJourneyEndpointSchema = z.strictObject({
+	code: nonEmptyTextSchema.optional(),
 	coordinates: locationCoordinatesSchema.optional(),
 	googleMapsUrl: googleMapsUrlSchema.optional(),
 	name: nonEmptyTextSchema,
@@ -47,6 +48,7 @@ function locationForEndpoint(
 		id: crypto.randomUUID(),
 		name: endpoint.name,
 		role,
+		...(endpoint.code ? { code: endpoint.code } : {}),
 		...(endpoint.coordinates ? { coordinates: endpoint.coordinates } : {}),
 		...(endpoint.googleMapsUrl ? { googleMapsUrl: endpoint.googleMapsUrl } : {}),
 		...(endpoint.openRailwayMapUrl ? { openRailwayMapUrl: endpoint.openRailwayMapUrl } : {})
@@ -81,12 +83,14 @@ export function transportJourneyDraftFromImport(itemImport: ItineraryItemImport)
 	return {
 		departure: {
 			name: departure.name,
+			...(departure.code ? { code: departure.code } : {}),
 			...(departure.coordinates ? { coordinates: departure.coordinates } : {}),
 			...(departure.googleMapsUrl ? { googleMapsUrl: departure.googleMapsUrl } : {}),
 			...(departure.openRailwayMapUrl ? { openRailwayMapUrl: departure.openRailwayMapUrl } : {})
 		},
 		arrival: {
 			name: arrival.name,
+			...(arrival.code ? { code: arrival.code } : {}),
 			...(arrival.coordinates ? { coordinates: arrival.coordinates } : {}),
 			...(arrival.googleMapsUrl ? { googleMapsUrl: arrival.googleMapsUrl } : {}),
 			...(arrival.openRailwayMapUrl ? { openRailwayMapUrl: arrival.openRailwayMapUrl } : {})

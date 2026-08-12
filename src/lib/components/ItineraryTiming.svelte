@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatItineraryTiming, formatItineraryTimingForDay } from '$lib/itinerary/timing';
-	import type { ItineraryTiming } from '$lib/itinerary/schema';
+	import {
+		formatAccommodationTiming,
+		formatAccommodationTimingForDay,
+		formatAccommodationTimingForDayParts,
+		formatAccommodationTimingParts,
+		formatItineraryTiming,
+		formatItineraryTimingForDay,
+		type TimingDisplayPart
+	} from '$lib/itinerary/timing';
+	import type { ItineraryItem, ItineraryTiming } from '$lib/itinerary/schema';
 	import { timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 
@@ -9,28 +17,43 @@
 		timing,
 		timeZone,
 		day,
-		includeDate = false
+		includeDate = false,
+		itemType
 	}: {
 		timing: ItineraryTiming;
 		timeZone: string;
 		day?: string;
 		includeDate?: boolean;
+		itemType?: ItineraryItem['type'];
 	} = $props();
 	let browserReady = $state(false);
+
+	function formatTiming(displayTimeZone: string, dayTimeZone?: string): string | null {
+		if (day) {
+			return itemType === 'accommodation'
+				? formatAccommodationTimingForDay(timing, day, displayTimeZone, dayTimeZone)
+				: formatItineraryTimingForDay(timing, day, displayTimeZone, dayTimeZone);
+		}
+		return itemType === 'accommodation'
+			? formatAccommodationTiming(timing, includeDate, displayTimeZone)
+			: formatItineraryTiming(timing, includeDate, displayTimeZone);
+	}
+
+	function formatTimingParts(displayTimeZone: string, dayTimeZone?: string): readonly TimingDisplayPart[] | null {
+		if (itemType !== 'accommodation') {
+			return null;
+		}
+		return day
+			? formatAccommodationTimingForDayParts(timing, day, displayTimeZone, dayTimeZone)
+			: formatAccommodationTimingParts(timing, includeDate, displayTimeZone);
+	}
+
+	const viewerParts = $derived(browserReady ? formatTimingParts(viewerContext.timeZone, viewerContext.timeZone) : null);
+	const localParts = $derived(browserReady ? formatTimingParts(timeZone, viewerContext.timeZone) : null);
 	const viewerLabel = $derived(
-		browserReady
-			? day
-				? formatItineraryTimingForDay(timing, day, viewerContext.timeZone, viewerContext.timeZone)
-				: formatItineraryTiming(timing, includeDate, viewerContext.timeZone)
-			: null
+		browserReady && !viewerParts ? formatTiming(viewerContext.timeZone, viewerContext.timeZone) : null
 	);
-	const localLabel = $derived(
-		browserReady
-			? day
-				? formatItineraryTimingForDay(timing, day, timeZone, viewerContext.timeZone)
-				: formatItineraryTiming(timing, includeDate, timeZone)
-			: null
-	);
+	const localLabel = $derived(browserReady && !localParts ? formatTiming(timeZone, viewerContext.timeZone) : null);
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
 
 	onMount(() => {
@@ -39,9 +62,32 @@
 </script>
 
 <span class:uncertain={timing.kind === 'approximate' || timing.kind === 'window'} class="itinerary-timing">
-	<span>{viewerLabel ?? 'Localizing…'}</span>
+	{#if viewerParts}
+		<span class="timing-parts">
+			{#each viewerParts as part (`${part.label ?? ''}:${part.value}`)}
+				<span class="timing-part">
+					{#if part.label}<span class="timing-context">{part.label}</span>{/if}
+					<span>{part.value}</span>
+				</span>
+			{/each}
+		</span>
+	{:else}
+		<span>{viewerLabel ?? 'Localizing…'}</span>
+	{/if}
 	{#if showLocalTime && localLabel}
-		<span class="local-time">{localLabel} {timeZoneShortLabel(timeZone)}</span>
+		{#if localParts}
+			<span class="local-time timing-parts">
+				{#each localParts as part (`${part.label ?? ''}:${part.value}`)}
+					<span class="timing-part">
+						{#if part.label}<span class="timing-context">{part.label}</span>{/if}
+						<span>{part.value}</span>
+					</span>
+				{/each}
+				<span class="time-zone-label">{timeZoneShortLabel(timeZone)}</span>
+			</span>
+		{:else}
+			<span class="local-time">{localLabel} {timeZoneShortLabel(timeZone)}</span>
+		{/if}
 	{/if}
 </span>
 
@@ -53,11 +99,39 @@
 		font-weight: 700;
 	}
 
+	.timing-parts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.timing-part {
+		display: grid;
+		gap: 0.0625rem;
+	}
+
+	.timing-context,
+	.time-zone-label {
+		color: var(--color-text-secondary);
+		font-size: 0.6875rem;
+		font-weight: 500;
+		line-height: 1.1;
+	}
+
 	.local-time {
 		color: var(--color-text-secondary);
 		font-size: 0.6875rem;
 		font-weight: 500;
 		white-space: nowrap;
+	}
+
+	.local-time .timing-context,
+	.local-time .time-zone-label {
+		font-size: 0.625rem;
+	}
+
+	.time-zone-label {
+		align-self: end;
 	}
 
 	.uncertain {

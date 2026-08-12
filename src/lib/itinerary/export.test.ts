@@ -23,6 +23,7 @@ const itinerary = itinerarySchema.parse({
 			links: [{ label: 'Operator', url: 'https://example.com/operator' }],
 			locations: [
 				{
+					code: 'TYO',
 					coordinates: { latitude: 35.6812, longitude: 139.7671 },
 					id: 'tokyo',
 					name: 'Tokyo Station',
@@ -72,12 +73,14 @@ describe('itinerary exports', () => {
 			start: { at: '2026-04-12T00:00:00.000Z', timeZone: 'Asia/Tokyo' }
 		});
 		expect(firstItem.locations[0]).toMatchObject({
+			code: 'TYO',
 			coordinates: { latitude: 35.6812, longitude: 139.7671 },
 			name: 'Tokyo Station',
 			role: 'departure'
 		});
 		expect(firstItem.transport).toMatchObject({ mode: 'rail' });
 		expect(firstItem.transport.stops[0]).toMatchObject({
+			code: 'TYO',
 			location: 'Tokyo Station',
 			scheduledAt: expect.any(Object)
 		});

@@ -474,6 +474,7 @@
 													>
 														<ItineraryTiming
 															day={day.date}
+															itemType={item.type}
 															timing={item.timing}
 															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
 														/>
@@ -487,6 +488,7 @@
 													<div class="item-summary" style={itemTypeAccentStyle(item.type)}>
 														<ItineraryTiming
 															day={day.date}
+															itemType={item.type}
 															timing={item.timing}
 															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
 														/>

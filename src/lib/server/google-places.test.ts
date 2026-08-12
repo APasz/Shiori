@@ -18,7 +18,7 @@ describe('Google Places airport lookup', () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal('fetch', fetchMock);
 
-		await expect(lookupGoogleAirport('PER')).resolves.toBeNull();
+		await expect(lookupGoogleAirport('PER')).resolves.toEqual({ kind: 'unresolved' });
 
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
@@ -43,10 +43,13 @@ describe('Google Places airport lookup', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		await expect(lookupGoogleAirport('per')).resolves.toEqual({
-			coordinates: { latitude: -31.9403, longitude: 115.9672 },
-			googleMapsUrl: 'https://www.google.com/maps/place/Perth+Airport',
-			name: 'Perth Airport',
-			primaryType: 'airport'
+			kind: 'resolved',
+			place: {
+				coordinates: { latitude: -31.9403, longitude: 115.9672 },
+				googleMapsUrl: 'https://www.google.com/maps/place/Perth+Airport',
+				name: 'Perth Airport',
+				primaryType: 'airport'
+			}
 		});
 
 		const [requestUrl, requestOptions] = fetchMock.mock.calls[0] ?? [];
@@ -111,9 +114,9 @@ describe('Google Places airport lookup', () => {
 		});
 	});
 
-	it('rejects a response that is ambiguous or not typed as an airport', async () => {
+	it('returns multiple airport matches for user selection', async () => {
 		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
-		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue(
@@ -129,9 +132,38 @@ describe('Google Places airport lookup', () => {
 			)
 		);
 
-		await expect(lookupGoogleAirport('SYD')).resolves.toBeNull();
+		await expect(lookupGoogleAirport('SYD')).resolves.toEqual({
+			candidates: [
+				{ name: 'Sydney Airport', primaryType: 'airport' },
+				{ name: 'Sydney West Airport', primaryType: 'airport' }
+			],
+			kind: 'ambiguous'
+		});
+		expect(info).toHaveBeenCalledWith('Google Places returned multiple airport candidates; user selection required.', {
+			airportCode: 'SYD',
+			candidateCount: 2,
+			primaryTypes: ['airport']
+		});
+	});
+
+	it('reports the candidate count and returned types when no airport can be used', async () => {
+		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ places: [{ displayName: { text: 'Sydney' }, primaryType: 'locality' }] }), {
+					status: 200,
+					headers: { 'content-type': 'application/json' }
+				})
+			)
+		);
+
+		await expect(lookupGoogleAirport('LAX')).resolves.toEqual({ kind: 'unresolved' });
 		expect(warning).toHaveBeenCalledWith('Google Places did not return a usable airport location.', {
-			airportCode: 'SYD'
+			airportCode: 'LAX',
+			candidateCount: 0,
+			primaryTypes: ['locality']
 		});
 	});
 
@@ -158,8 +190,8 @@ describe('Google Places airport lookup', () => {
 		);
 
 		await expect(Promise.all([first, second])).resolves.toEqual([
-			{ name: 'Melbourne Airport', primaryType: 'airport' },
-			{ name: 'Melbourne Airport', primaryType: 'airport' }
+			{ kind: 'resolved', place: { name: 'Melbourne Airport', primaryType: 'airport' } },
+			{ kind: 'resolved', place: { name: 'Melbourne Airport', primaryType: 'airport' } }
 		]);
 	});
 });

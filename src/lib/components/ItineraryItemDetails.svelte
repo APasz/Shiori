@@ -46,7 +46,12 @@
 	}
 
 	function transportStopLabel(locationId: string): string {
-		return findLocation(locationId)?.name ?? locationId;
+		const location = findLocation(locationId);
+		return location ? locationLabel(location) : locationId;
+	}
+
+	function locationLabel(location: ItineraryLocation): string {
+		return location.code ? `${location.name} (${location.code})` : location.name;
 	}
 
 	function paidAtLabel(paidAt: number): string {
@@ -66,13 +71,14 @@
 	style={itemTypeAccentStyle(item.type)}
 >
 	<div class="details" data-dialog-scroll-area>
-		<div class="heading" data-dialog-drag-handle>
+		<div aria-hidden="true" class="drag-handle" data-dialog-drag-handle></div>
+		<div class="heading">
 			<div>
 				<p class="eyebrow">{item.type}</p>
 				<h2 id="item-details-heading">{item.title}</h2>
 			</div>
 			<div class="heading-actions">
-				<ItineraryTiming includeDate timing={item.timing} timeZone={timingTimeZone} />
+				<ItineraryTiming includeDate itemType={item.type} timing={item.timing} timeZone={timingTimeZone} />
 				{#if canEdit}
 					<button class="edit-button" onclick={startEditing} type="button">Edit</button>
 				{/if}
@@ -91,11 +97,11 @@
 							{#if location.googleMapsUrl}
 								<strong>
 									<a href={location.googleMapsUrl} rel="external noopener noreferrer" target="_blank">
-										{location.name}
+										{locationLabel(location)}
 									</a>
 								</strong>
 							{:else}
-								<strong>{location.name}</strong>
+								<strong>{locationLabel(location)}</strong>
 							{/if}
 							{#if location.openRailwayMapUrl}
 								<a
@@ -275,6 +281,22 @@
 		max-height: calc(100dvh - 2rem);
 		overflow-y: auto;
 		padding: clamp(1.25rem, 4vw, 2rem);
+	}
+
+	.drag-handle {
+		align-items: center;
+		display: flex;
+		height: 0.75rem;
+		justify-content: center;
+		margin: -0.5rem 0 0.75rem;
+	}
+
+	.drag-handle::before {
+		background: var(--color-border-strong);
+		border-radius: 999px;
+		content: '';
+		height: 0.25rem;
+		width: 2.5rem;
 	}
 
 	.heading,

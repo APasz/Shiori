@@ -24,6 +24,8 @@ const selectedKyotoHotelsUrl =
 const hotelShareUrl = 'https://www.google.com/travel/hotels/s/jqZoDPSDyUE5pcq16';
 const resolvedHotelShareUrl =
 	'https://www.google.com.au/travel/hotels/entity/CgsI54Ov_PqD7beHARAB?ts=CAEaIAoCGgASGhIUCgcI6g8QCxgCEgcI6g8QCxgEGAIyAggCKgkKBToDQVVEGgA';
+const selectedKagoshimaHotelUrl =
+	'https://www.google.com/travel/hotels/entity/ChoIxcGlvN3r497pARoNL2cvMTF2ajMxcW56NBAB?q=accommodation%20kagoshima&ts=CAESBgoCCAMQARo3ChkSFQoIL20vMDQ5d206CUthZ29zaGltYRoAEhoSFAoHCOoPEAoYGxIHCOoPEAoYHBgBMgIIASoJCgU6A0FVRBoA';
 const eleHotelMapsUrl =
 	'https://www.google.com/maps/place/ELE+Hotel+%E6%A8%9F%E8%91%89/@34.8627692,135.6751333,1405m/data=!3m1!1e3!4m11!3m10!1s0x60011babd174ef51:0x876fb41faf8bc1e7!5m4!1s2026-11-02!2i2!4m1!1i2!8m2!3d34.8627692!4d135.6777082!16s%2Fg%2F11rmvc847r';
 
@@ -415,6 +417,78 @@ describe('Google itinerary import', () => {
 		);
 	});
 
+	it('prefills a Google Hotels property from its Knowledge Graph entity when its page is unavailable', async () => {
+		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(new Response('<html><body>Google Travel</body></html>'))
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						itemListElement: [
+							{
+								result: {
+									'@id': '/g/11vj31qnz4',
+									'@type': ['Hotel'],
+									name: 'Example Kagoshima Hotel'
+								}
+							}
+						]
+					}),
+					{ headers: { 'content-type': 'application/json' } }
+				)
+			)
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						places: [
+							{
+								displayName: { text: 'Example Kagoshima Hotel' },
+								formattedAddress: '1-2-3 Tenmonkan, Kagoshima, Japan',
+								googleMapsUri:
+									'https://www.google.com/maps/place/Example+Kagoshima+Hotel/data=!4m2!3m1!1s0x0:0x0!16s%2Fg%2F11vj31qnz4',
+								location: { latitude: 31.59, longitude: 130.55 },
+								primaryType: 'lodging',
+								timeZone: 'Asia/Tokyo'
+							}
+						]
+					}),
+					{ headers: { 'content-type': 'application/json' } }
+				)
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleItineraryUrl(selectedKagoshimaHotelUrl)).resolves.toEqual([
+			expect.objectContaining({
+				type: 'accommodation',
+				title: 'Example Kagoshima Hotel',
+				propertyStatus: 'confirmed',
+				suggestedStartDate: '2026-10-27',
+				suggestedEndDate: '2026-10-28',
+				suggestedTimeZone: 'Asia/Tokyo',
+				locations: [
+					expect.objectContaining({
+						address: '1-2-3 Tenmonkan, Kagoshima, Japan',
+						coordinates: { latitude: 31.59, longitude: 130.55 },
+						googleMapsUrl:
+							'https://www.google.com/maps/place/Example+Kagoshima+Hotel/data=!4m2!3m1!1s0x0:0x0!16s%2Fg%2F11vj31qnz4',
+						name: 'Example Kagoshima Hotel',
+						role: 'primary'
+					})
+				]
+			})
+		]);
+
+		const [, knowledgeGraphRequest] = fetchMock.mock.calls[1] ?? [];
+		expect(knowledgeGraphRequest).toMatchObject({ signal: expect.any(AbortSignal) });
+		expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).toEqual({
+			includedType: 'lodging',
+			pageSize: 5,
+			strictTypeFiltering: true,
+			textQuery: 'Example Kagoshima Hotel, accommodation kagoshima'
+		});
+	});
+
 	it('enriches a Google Hotels destination with Google Places coordinates when configured', async () => {
 		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
 		const fetchMock = vi.fn().mockResolvedValue(
@@ -517,15 +591,113 @@ describe('Google itinerary import', () => {
 				title: 'Perth > Kuala Lumpur',
 				locations: [
 					expect.objectContaining({
+						code: 'PER',
 						coordinates: { latitude: -31.9403, longitude: 115.9672 },
 						googleMapsUrl: 'https://www.google.com/maps/place/Perth+Airport',
 						name: 'Perth Airport',
 						role: 'departure'
 					}),
 					expect.objectContaining({
+						code: 'KUL',
 						coordinates: { latitude: 2.7456, longitude: 101.7072 },
 						googleMapsUrl: 'https://www.google.com/maps/place/Kuala+Lumpur+International+Airport',
 						name: 'Kuala Lumpur International Airport',
+						role: 'arrival'
+					})
+				]
+			})
+		]);
+	});
+
+	it('includes ambiguous airport candidates for the transport review flow', async () => {
+		const tfs = Buffer.from(['OKA', '2026-10-27', 'KOJ', '6J', '86'].join('\0')).toString('base64url');
+		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({
+							places: [
+								{
+									displayName: { text: 'Naha Airport' },
+									formattedAddress: 'Naha, Okinawa, Japan',
+									location: { latitude: 26.1958, longitude: 127.6459 },
+									primaryType: 'airport'
+								},
+								{
+									displayName: { text: 'Okinawa Airport' },
+									formattedAddress: 'Okinawa, Japan',
+									location: { latitude: 26.3342, longitude: 127.8056 },
+									primaryType: 'airport'
+								}
+							]
+						}),
+						{ status: 200, headers: { 'content-type': 'application/json' } }
+					)
+				)
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({
+							places: [
+								{
+									displayName: { text: 'Kagoshima Airport' },
+									formattedAddress: 'Kirishima, Kagoshima, Japan',
+									location: { latitude: 31.8034, longitude: 130.7194 },
+									primaryType: 'airport'
+								},
+								{
+									displayName: { text: 'Kagoshima New Airport' },
+									formattedAddress: 'Kagoshima, Japan',
+									location: { latitude: 31.807, longitude: 130.727 },
+									primaryType: 'airport'
+								}
+							]
+						}),
+						{ status: 200, headers: { 'content-type': 'application/json' } }
+					)
+				)
+		);
+
+		await expect(
+			resolveGoogleItineraryUrl(`https://www.google.com/travel/flights/booking?tfs=${tfs}`)
+		).resolves.toEqual([
+			expect.objectContaining({
+				title: 'OKA > KOJ',
+				locations: [
+					expect.objectContaining({
+						airportCandidates: [
+							{
+								address: 'Naha, Okinawa, Japan',
+								coordinates: { latitude: 26.1958, longitude: 127.6459 },
+								name: 'Naha Airport'
+							},
+							{
+								address: 'Okinawa, Japan',
+								coordinates: { latitude: 26.3342, longitude: 127.8056 },
+								name: 'Okinawa Airport'
+							}
+						],
+						code: 'OKA',
+						name: 'OKA',
+						role: 'departure'
+					}),
+					expect.objectContaining({
+						airportCandidates: [
+							{
+								address: 'Kirishima, Kagoshima, Japan',
+								coordinates: { latitude: 31.8034, longitude: 130.7194 },
+								name: 'Kagoshima Airport'
+							},
+							{
+								address: 'Kagoshima, Japan',
+								coordinates: { latitude: 31.807, longitude: 130.727 },
+								name: 'Kagoshima New Airport'
+							}
+						],
+						code: 'KOJ',
+						name: 'KOJ',
 						role: 'arrival'
 					})
 				]
@@ -588,11 +760,13 @@ describe('Google itinerary import', () => {
 				title: 'Kansai > Sydney Kingsford Smith',
 				locations: [
 					expect.objectContaining({
+						code: 'KIX',
 						googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Kansai+International+Airport',
 						name: 'Kansai International Airport',
 						role: 'departure'
 					}),
 					expect.objectContaining({
+						code: 'SYD',
 						googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Sydney+Kingsford+Smith+Airport',
 						name: 'Sydney Kingsford Smith Airport',
 						role: 'arrival'

@@ -211,20 +211,44 @@ function destinationFromTravelState(bytes: Uint8Array): string | null {
 	return destinations.size === 1 ? ([...destinations][0] ?? null) : null;
 }
 
-function hasKnowledgeGraphId(bytes: Uint8Array, depth = 0): boolean {
+function collectKnowledgeGraphIds(bytes: Uint8Array, ids: Set<string>, depth = 0): void {
 	if (depth >= maximumProtoDepth) {
-		return false;
+		return;
 	}
 	const fields = parseProtoFields(bytes);
 	if (!fields) {
-		return false;
+		return;
 	}
-	return fields.some(
-		(field) =>
-			field.wireType === 2 &&
-			(knowledgeGraphIdPattern.test(Buffer.from(field.value).toString('utf8')) ||
-				hasKnowledgeGraphId(field.value, depth + 1))
-	);
+	for (const field of fields) {
+		if (field.wireType !== 2) {
+			continue;
+		}
+		const id = Buffer.from(field.value).toString('utf8');
+		if (knowledgeGraphIdPattern.test(id)) {
+			ids.add(id);
+		}
+		collectKnowledgeGraphIds(field.value, ids, depth + 1);
+	}
+}
+
+function knowledgeGraphIds(bytes: Uint8Array): Set<string> {
+	const ids = new Set<string>();
+	collectKnowledgeGraphIds(bytes, ids);
+	return ids;
+}
+
+function hasKnowledgeGraphId(bytes: Uint8Array): boolean {
+	return knowledgeGraphIds(bytes).size > 0;
+}
+
+/** Returns the one stable Knowledge Graph ID embedded in a Google Hotels entity token. */
+export function knowledgeGraphIdFromHotelEntityToken(entityToken: string): string | null {
+	const normalized = entityTokenPattern.test(entityToken) ? normalizedBase64(entityToken) : null;
+	if (!normalized) {
+		return null;
+	}
+	const ids = knowledgeGraphIds(Buffer.from(normalized, 'base64'));
+	return ids.size === 1 ? ([...ids][0] ?? null) : null;
 }
 
 function entityTokenFromQueryState(bytes: Uint8Array, depth = 0): string | null {
@@ -350,6 +374,12 @@ function selectedHotelEntityUrl(searchUrl: URL, entityToken: string): URL {
 	const url = new URL(`/travel/hotels/entity/${entityToken}`, searchUrl.origin);
 	url.searchParams.set('hl', 'en');
 	return url;
+}
+
+/** Returns the entity token from a canonical Google Hotels property URL. */
+export function hotelEntityTokenFromPropertyUrl(url: URL): string | null {
+	const entityToken = url.pathname.match(/^\/travel\/hotels\/entity\/([^/]+)$/)?.[1];
+	return entityToken && entityTokenPattern.test(entityToken) ? entityToken : null;
 }
 
 async function fetchSelectedHotelPage(url: URL): Promise<Response | null> {

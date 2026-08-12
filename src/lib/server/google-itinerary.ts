@@ -8,10 +8,14 @@ import {
 import { lookupAeroDataBoxFlightSchedule } from '$lib/server/aerodatabox';
 import {
 	GoogleHotelPropertyResolveError,
+	hotelEntityTokenFromPropertyUrl,
+	knowledgeGraphIdFromHotelEntityToken,
+	parseGoogleHotelsStayDates,
 	parseGoogleHotelsSearch,
 	resolveGoogleHotelProperty,
 	resolveGoogleHotelPropertyUrl
 } from '$lib/server/google-hotels';
+import { lookupGoogleKnowledgeGraphEntity } from '$lib/server/google-knowledge-graph';
 import {
 	GoogleMapsResolveError,
 	enrichGoogleMapsLocation,
@@ -23,7 +27,10 @@ import {
 import {
 	lookupGoogleAccommodationDestination,
 	lookupGoogleAirport,
-	lookupGoogleMapsPlace
+	lookupGoogleHotelPlace,
+	lookupGoogleMapsPlace,
+	type GoogleAirportLookup,
+	type GooglePlace
 } from '$lib/server/google-places';
 import { lookupGoogleTimeZone } from '$lib/server/google-time-zone';
 import {
@@ -352,9 +359,24 @@ async function flightImport(url: URL, leg: FlightLeg): Promise<ItineraryItemImpo
 					localDate: leg.startDate
 				})
 			: null;
-	const [departurePlace, arrivalPlace] = schedule
-		? [null, null]
+	const [departureLookup, arrivalLookup]: [GoogleAirportLookup | undefined, GoogleAirportLookup | undefined] = schedule
+		? [undefined, undefined]
 		: await Promise.all([lookupGoogleAirport(leg.origin), lookupGoogleAirport(leg.destination)]);
+	const departurePlace = departureLookup?.kind === 'resolved' ? departureLookup.place : undefined;
+	const arrivalPlace = arrivalLookup?.kind === 'resolved' ? arrivalLookup.place : undefined;
+	const airportCandidates = (
+		lookup: GoogleAirportLookup | undefined
+	): ItineraryItemImport['locations'][number]['airportCandidates'] =>
+		lookup?.kind === 'ambiguous'
+			? lookup.candidates.map((place: GooglePlace) => ({
+					name: place.name,
+					...(place.address ? { address: place.address } : {}),
+					...(place.coordinates ? { coordinates: place.coordinates } : {}),
+					...(place.googleMapsUrl ? { googleMapsUrl: place.googleMapsUrl } : {})
+				}))
+			: undefined;
+	const departureCandidates = airportCandidates(departureLookup);
+	const arrivalCandidates = airportCandidates(arrivalLookup);
 	const departureName = schedule?.departure.name ?? departurePlace?.name ?? leg.origin;
 	const arrivalName = schedule?.arrival.name ?? arrivalPlace?.name ?? leg.destination;
 	const departureCoordinates = schedule?.departure.coordinates ?? departurePlace?.coordinates;
@@ -367,15 +389,19 @@ async function flightImport(url: URL, leg: FlightLeg): Promise<ItineraryItemImpo
 		suggestedStartDate: leg.startDate,
 		locations: [
 			{
+				code: leg.origin,
 				name: departureName,
 				role: 'departure',
 				googleMapsUrl: departureGoogleMapsUrl,
+				...(departureCandidates ? { airportCandidates: departureCandidates } : {}),
 				...(departureCoordinates ? { coordinates: departureCoordinates } : {})
 			},
 			{
+				code: leg.destination,
 				name: arrivalName,
 				role: 'arrival',
 				googleMapsUrl: arrivalGoogleMapsUrl,
+				...(arrivalCandidates ? { airportCandidates: arrivalCandidates } : {}),
 				...(arrivalCoordinates ? { coordinates: arrivalCoordinates } : {})
 			}
 		],
@@ -404,17 +430,29 @@ async function hotelsImport(url: URL): Promise<ItineraryItemImport> {
 	const property = search.selectedHotelEntityToken
 		? await resolveGoogleHotelProperty(url, search.selectedHotelEntityToken)
 		: null;
+	const knowledgeGraphId =
+		!property && search.selectedHotelEntityToken
+			? knowledgeGraphIdFromHotelEntityToken(search.selectedHotelEntityToken)
+			: null;
+	const knowledgeGraphEntity = knowledgeGraphId ? await lookupGoogleKnowledgeGraphEntity(knowledgeGraphId) : null;
 	const propertyPlace =
 		property?.coordinates && property.name
 			? await lookupGoogleMapsPlace({ coordinates: property.coordinates, name: property.name })
-			: null;
-	const locationName = property?.name ?? search.destination;
+			: knowledgeGraphEntity && knowledgeGraphId
+				? await lookupGoogleHotelPlace({
+						destination: search.destination,
+						knowledgeGraphId,
+						name: knowledgeGraphEntity.name
+					})
+				: null;
+	const propertyName = property?.name ?? knowledgeGraphEntity?.name;
+	const locationName = propertyName ?? search.destination;
 	const locationAddress = propertyPlace?.address ?? property?.address;
-	const place = property ? null : await lookupGoogleAccommodationDestination(search.destination);
+	const place = propertyName ? null : await lookupGoogleAccommodationDestination(search.destination);
 	return {
 		type: 'accommodation',
-		title: property?.name ?? `Accommodation in ${search.destination}`,
-		propertyStatus: property ? 'confirmed' : search.selectedHotelEntityToken ? 'unconfirmed' : 'area-only',
+		title: propertyName ?? `Accommodation in ${search.destination}`,
+		propertyStatus: propertyName ? 'confirmed' : search.selectedHotelEntityToken ? 'unconfirmed' : 'area-only',
 		suggestedStartDate: search.checkIn,
 		suggestedEndDate: search.checkOut,
 		...((propertyPlace?.timeZone ?? place?.timeZone)
@@ -436,6 +474,38 @@ async function hotelsImport(url: URL): Promise<ItineraryItemImport> {
 		links: [{ label: 'Google Hotels', url: url.toString() }],
 		...(property?.checkInTime ? { suggestedCheckInTime: property.checkInTime } : {}),
 		...(property?.checkOutTime ? { suggestedCheckOutTime: property.checkOutTime } : {})
+	};
+}
+
+async function knowledgeGraphHotelPropertyImport(url: URL): Promise<ItineraryItemImport | null> {
+	const entityToken = hotelEntityTokenFromPropertyUrl(url);
+	const knowledgeGraphId = entityToken ? knowledgeGraphIdFromHotelEntityToken(entityToken) : null;
+	const entity = knowledgeGraphId ? await lookupGoogleKnowledgeGraphEntity(knowledgeGraphId) : null;
+	if (!entity || !knowledgeGraphId) {
+		return null;
+	}
+	const place = await lookupGoogleHotelPlace({
+		destination: url.searchParams.get('q') ?? undefined,
+		knowledgeGraphId,
+		name: entity.name
+	});
+	const dates = parseGoogleHotelsStayDates(url);
+	return {
+		type: 'accommodation',
+		title: entity.name,
+		propertyStatus: 'confirmed',
+		...(dates ? { suggestedStartDate: dates.checkIn, suggestedEndDate: dates.checkOut } : {}),
+		...(place?.timeZone ? { suggestedTimeZone: place.timeZone } : {}),
+		locations: [
+			{
+				name: entity.name,
+				role: 'primary',
+				googleMapsUrl: place?.googleMapsUrl ?? googleMapsSearchUrl(place?.address ?? entity.name),
+				...(place?.address ? { address: place.address } : {}),
+				...(place?.coordinates ? { coordinates: place.coordinates } : {})
+			}
+		],
+		links: [{ label: 'Google Hotels', url: url.toString() }]
 	};
 }
 
@@ -470,6 +540,10 @@ async function hotelPropertyImport(url: URL): Promise<ItineraryItemImport> {
 		};
 	} catch (error: unknown) {
 		if (error instanceof GoogleHotelPropertyResolveError) {
+			const knowledgeGraphImport = await knowledgeGraphHotelPropertyImport(url);
+			if (knowledgeGraphImport) {
+				return knowledgeGraphImport;
+			}
 			throw new GoogleItineraryImportError(error.status, error.message);
 		}
 		throw error;

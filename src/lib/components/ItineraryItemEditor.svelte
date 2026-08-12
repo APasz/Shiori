@@ -53,6 +53,7 @@
 
 	type LocationDraft = {
 		address: string;
+		code: string;
 		googleMapsUrl: string;
 		id: string;
 		isExpanded: boolean;
@@ -172,6 +173,7 @@
 	function locationDraft(location: ItineraryLocation): LocationDraft {
 		return {
 			address: location.address ?? '',
+			code: location.code ?? '',
 			googleMapsUrl: location.googleMapsUrl ?? '',
 			id: location.id,
 			isExpanded: false,
@@ -276,6 +278,7 @@
 	function addLocation(): void {
 		const location: LocationDraft = {
 			address: '',
+			code: '',
 			googleMapsUrl: '',
 			id: newIdentifier(),
 			isExpanded: true,
@@ -324,6 +327,7 @@
 
 			addLocationDraft({
 				address: importedLocation.data.address ?? '',
+				code: '',
 				googleMapsUrl: importedLocation.data.googleMapsUrl ?? '',
 				id: newIdentifier(),
 				isExpanded: true,
@@ -548,6 +552,7 @@
 
 	function locationValue(draft: LocationDraft): unknown {
 		const address = optionalText(draft.address);
+		const code = optionalText(draft.code);
 		const googleMapsUrl = optionalText(draft.googleMapsUrl);
 		const openRailwayMapUrl = optionalText(draft.openRailwayMapUrl);
 		const hasCoordinates = draft.latitude.trim() !== '' || draft.longitude.trim() !== '';
@@ -555,6 +560,7 @@
 			id: draft.id.trim(),
 			role: draft.role,
 			name: draft.name.trim(),
+			...(code ? { code } : {}),
 			...(address ? { address } : {}),
 			...(googleMapsUrl ? { googleMapsUrl } : {}),
 			...(openRailwayMapUrl ? { openRailwayMapUrl } : {}),
@@ -1180,6 +1186,10 @@
 											<label class="shiori-form-label">
 												Name
 												<input class="shiori-form-control" bind:value={location.name} />
+											</label>
+											<label class="shiori-form-label">
+												Code <span class="field-hint">Optional</span>
+												<input class="shiori-form-control" bind:value={location.code} placeholder="KIX" />
 											</label>
 											<label class="shiori-form-label">
 												Role

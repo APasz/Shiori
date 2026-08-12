@@ -91,8 +91,17 @@ export const itineraryItemImportRequestSchema = z.strictObject({
 	url: externalUrlSchema
 });
 
+const importedAirportCandidateSchema = z.strictObject({
+	address: z.string().trim().min(1).optional(),
+	coordinates: locationCoordinatesSchema.optional(),
+	googleMapsUrl: googleMapsUrlSchema.optional(),
+	name: z.string().trim().min(1)
+});
+
 const importedLocationSchema = z.strictObject({
 	address: z.string().trim().min(1).optional(),
+	airportCandidates: z.array(importedAirportCandidateSchema).min(2).optional(),
+	code: z.string().trim().min(1).optional(),
 	coordinates: locationCoordinatesSchema.optional(),
 	googleMapsUrl: googleMapsUrlSchema.optional(),
 	name: z.string().trim().min(1),

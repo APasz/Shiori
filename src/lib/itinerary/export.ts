@@ -82,6 +82,7 @@ type ExportedTiming =
 	  }>;
 
 type ExportedLocation = Readonly<{
+	code?: string;
 	role: ItineraryLocation['role'];
 	name: string;
 	address?: string;
@@ -91,6 +92,7 @@ type ExportedLocation = Readonly<{
 }>;
 
 type ExportedTransportStop = Readonly<{
+	code?: string;
 	location: string;
 	scheduledAt?: ExportedTimestamp;
 	platform?: string;
@@ -208,6 +210,7 @@ function exportLocations(item: ItineraryItem, includeCoordinates: boolean): Expo
 	return item.locations.map((location) => ({
 		role: location.role,
 		name: location.name,
+		...(location.code === undefined ? {} : { code: location.code }),
 		...(location.address === undefined ? {} : { address: location.address }),
 		...(includeCoordinates && location.coordinates !== undefined ? { coordinates: location.coordinates } : {}),
 		...(location.googleMapsUrl === undefined ? {} : { googleMapsUrl: location.googleMapsUrl }),
@@ -215,8 +218,8 @@ function exportLocations(item: ItineraryItem, includeCoordinates: boolean): Expo
 	}));
 }
 
-function locationName(item: ItineraryItem, locationId: string): string {
-	return item.locations.find((location) => location.id === locationId)?.name ?? locationId;
+function locationForId(item: ItineraryItem, locationId: string): ItineraryLocation | undefined {
+	return item.locations.find((location) => location.id === locationId);
 }
 
 function exportTransport(
@@ -229,19 +232,23 @@ function exportTransport(
 		...(item.transport.operator === undefined ? {} : { operator: item.transport.operator }),
 		...(item.transport.serviceNumber === undefined ? {} : { serviceNumber: item.transport.serviceNumber }),
 		...(item.transport.seat === undefined ? {} : { seat: item.transport.seat }),
-		stops: item.transport.stops.map((stop) => ({
-			location: locationName(item, stop.locationId),
-			...(stop.scheduledAt === undefined
-				? {}
-				: {
-						scheduledAt: exportTimestamp(
-							stop.scheduledAt,
-							resolveTransportStopTimeZone(stop, timingTimeZone),
-							useEpochTimestamps
-						)
-					}),
-			...(stop.platform === undefined ? {} : { platform: stop.platform })
-		}))
+		stops: item.transport.stops.map((stop) => {
+			const location = locationForId(item, stop.locationId);
+			return {
+				location: location?.name ?? stop.locationId,
+				...(location?.code === undefined ? {} : { code: location.code }),
+				...(stop.scheduledAt === undefined
+					? {}
+					: {
+							scheduledAt: exportTimestamp(
+								stop.scheduledAt,
+								resolveTransportStopTimeZone(stop, timingTimeZone),
+								useEpochTimestamps
+							)
+						}),
+				...(stop.platform === undefined ? {} : { platform: stop.platform })
+			};
+		})
 	};
 }
 
@@ -384,12 +391,13 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 	if (item.locations && item.locations.length > 0) {
 		lines.push('   Locations:');
 		for (const location of item.locations) {
+			const code = location.code === undefined ? '' : ` · ${location.code}`;
 			const address = location.address === undefined ? '' : ` — ${location.address}`;
 			const coordinates =
 				location.coordinates === undefined
 					? ''
 					: ` · ${location.coordinates.latitude}, ${location.coordinates.longitude}`;
-			lines.push(`     - ${location.name} (${location.role})${address}${coordinates}`);
+			lines.push(`     - ${location.name} (${location.role})${code}${address}${coordinates}`);
 		}
 	}
 	if (item.transport) {
@@ -398,9 +406,10 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 		);
 		lines.push(`   Transport: ${item.transport.mode}${details.length === 0 ? '' : ` · ${details.join(' · ')}`}`);
 		for (const stop of item.transport.stops) {
+			const code = stop.code === undefined ? '' : ` · ${stop.code}`;
 			const schedule = stop.scheduledAt === undefined ? '' : ` — ${timestampText(stop.scheduledAt)}`;
 			const platform = stop.platform === undefined ? '' : ` · Platform ${stop.platform}`;
-			lines.push(`     - ${stop.location}${schedule}${platform}`);
+			lines.push(`     - ${stop.location}${code}${schedule}${platform}`);
 		}
 	}
 	if (item.reservation) {

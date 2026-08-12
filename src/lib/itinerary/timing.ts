@@ -84,14 +84,35 @@ function dateRangeLabel(startAt: number, endAt: number, timeZone: string | undef
 	return start.date === end.date ? `${startDate} · time unknown` : `${startDate} – ${endDate} · times unknown`;
 }
 
-function timingRangeLabelForDay(
+function accommodationDateRangeLabel(startAt: number, endAt: number, timeZone: string | undefined): string | null {
+	const start = formatTimestamp(startAt, timeZone);
+	const end = formatTimestamp(endAt, timeZone);
+	if (!start || !end) {
+		return null;
+	}
+	const startDate = formatCalendarDate(start.date);
+	const endDate = formatCalendarDate(end.date);
+	return startDate && endDate ? `Check-in ${startDate} · Check-out ${endDate} · times unknown` : null;
+}
+
+export type TimingDisplayPart = Readonly<{
+	label?: 'From' | 'To';
+	value: string;
+}>;
+
+type TimingDayRange = Readonly<{
+	endTime: string;
+	position: 'both' | 'continues' | 'end' | 'start';
+	startTime: string;
+}>;
+
+function timingRangeForDay(
 	startAt: number,
 	endAt: number,
 	date: string,
-	prefix: string,
 	timeZone: string | undefined,
 	dayTimeZone: string | undefined
-): string | null {
+): TimingDayRange | null {
 	const start = formatTimestamp(startAt, timeZone);
 	const end = formatTimestamp(endAt, timeZone);
 	const dayStart = formatTimestamp(startAt, dayTimeZone);
@@ -100,15 +121,39 @@ function timingRangeLabelForDay(
 		return null;
 	}
 	if (dayStart.date === dayEnd.date) {
-		return startAt === endAt ? `${prefix}${start.time}` : `${prefix}${start.time}–${end.time}`;
+		return { endTime: end.time, position: startAt === endAt ? 'start' : 'both', startTime: start.time };
 	}
 	if (date === dayStart.date) {
-		return `${prefix}${start.time}`;
+		return { endTime: end.time, position: 'start', startTime: start.time };
 	}
 	if (date === dayEnd.date) {
-		return `${prefix}${end.time}`;
+		return { endTime: end.time, position: 'end', startTime: start.time };
 	}
-	return 'Continues';
+	return { endTime: end.time, position: 'continues', startTime: start.time };
+}
+
+function timingRangeLabelForDay(
+	startAt: number,
+	endAt: number,
+	date: string,
+	prefix: string,
+	timeZone: string | undefined,
+	dayTimeZone: string | undefined
+): string | null {
+	const range = timingRangeForDay(startAt, endAt, date, timeZone, dayTimeZone);
+	if (!range) {
+		return null;
+	}
+	switch (range.position) {
+		case 'both':
+			return `${prefix}${range.startTime}–${range.endTime}`;
+		case 'start':
+			return `${prefix}${range.startTime}`;
+		case 'end':
+			return `${prefix}${range.endTime}`;
+		case 'continues':
+			return 'Continues';
+	}
 }
 
 export function formatItineraryTiming(timing: ItineraryTiming, includeDate = false, timeZone?: string): string | null {
@@ -129,6 +174,51 @@ export function formatItineraryTiming(timing: ItineraryTiming, includeDate = fal
 			return window ? `~${window}` : null;
 		}
 	}
+}
+
+function timingDisplayPartsLabel(parts: readonly TimingDisplayPart[]): string {
+	return parts.map((part) => (part.label ? `${part.label} ${part.value}` : part.value)).join(' · ');
+}
+
+/** Returns the check-in and check-out timing display parts for an accommodation item. */
+export function formatAccommodationTimingParts(
+	timing: ItineraryTiming,
+	includeDate = false,
+	timeZone?: string
+): readonly TimingDisplayPart[] | null {
+	if (timing.kind !== 'exact' || timing.timePrecision === 'date') {
+		return null;
+	}
+	const start = timestampLabel(timing.startAt, includeDate, timeZone);
+	if (!start) {
+		return null;
+	}
+	if (timing.endAt === undefined) {
+		return [{ label: 'From', value: start }];
+	}
+	const end = timestampLabel(timing.endAt, includeDate, timeZone);
+	return end
+		? [
+				{ label: 'From', value: start },
+				{ label: 'To', value: end }
+			]
+		: null;
+}
+
+/** Formats accommodation timings with explicit check-in and check-out boundaries. */
+export function formatAccommodationTiming(
+	timing: ItineraryTiming,
+	includeDate = false,
+	timeZone?: string
+): string | null {
+	if (timing.kind !== 'exact') {
+		return formatItineraryTiming(timing, includeDate, timeZone);
+	}
+	if (timing.timePrecision === 'date') {
+		return accommodationDateRangeLabel(timing.startAt, timing.endAt ?? timing.startAt, timeZone);
+	}
+	const parts = formatAccommodationTimingParts(timing, includeDate, timeZone);
+	return parts ? timingDisplayPartsLabel(parts) : null;
 }
 
 /** Formats only the timing information relevant to one viewer-local itinerary day. */
@@ -166,4 +256,50 @@ export function formatItineraryTimingForDay(
 		case 'window':
 			return timingRangeLabelForDay(timing.earliestAt, timing.latestAt, date, '~', timeZone, dayTimeZone);
 	}
+}
+
+/** Returns the check-in or check-out timing display part relevant to one viewer-local itinerary day. */
+export function formatAccommodationTimingForDayParts(
+	timing: ItineraryTiming,
+	date: string,
+	timeZone?: string,
+	dayTimeZone: string | undefined = timeZone
+): readonly TimingDisplayPart[] | null {
+	if (timing.kind !== 'exact' || timing.timePrecision === 'date') {
+		return null;
+	}
+	const range = timingRangeForDay(timing.startAt, timing.endAt ?? timing.startAt, date, timeZone, dayTimeZone);
+	if (!range) {
+		return null;
+	}
+	switch (range.position) {
+		case 'both':
+			return [
+				{ label: 'From', value: range.startTime },
+				{ label: 'To', value: range.endTime }
+			];
+		case 'start':
+			return [{ label: 'From', value: range.startTime }];
+		case 'end':
+			return [{ label: 'To', value: range.endTime }];
+		case 'continues':
+			return [{ value: 'Stay continues' }];
+	}
+}
+
+/** Formats accommodation timing relevant to one viewer-local itinerary day. */
+export function formatAccommodationTimingForDay(
+	timing: ItineraryTiming,
+	date: string,
+	timeZone?: string,
+	dayTimeZone: string | undefined = timeZone
+): string | null {
+	if (timing.kind !== 'exact') {
+		return formatItineraryTimingForDay(timing, date, timeZone, dayTimeZone);
+	}
+	if (timing.timePrecision === 'date') {
+		return formatItineraryTimingForDay(timing, date, timeZone, dayTimeZone);
+	}
+	const parts = formatAccommodationTimingForDayParts(timing, date, timeZone, dayTimeZone);
+	return parts ? timingDisplayPartsLabel(parts) : null;
 }

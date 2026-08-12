@@ -98,8 +98,13 @@ codes to named locations and coordinates. Flight titles then use concise names s
 Lumpur`, rather than airport codes, and locations receive their Google Maps links. The same key can
 add a Google Maps link and coordinates to a Google Hotels destination import, and a street address to
 a Google Maps place link when Places confirms both the same name and a location within 100 metres. To
-avoid a misleading airport result, that lookup only accepts a single airport returned for an IATA-specific,
-strictly typed search. Successful results are retained in a bounded process-local cache for seven days
+prefill a selected Google Hotels property when Google does not expose its page details, also enable the
+Google Knowledge Graph Search API for this key and permit it in the key's API restrictions. Shiori uses
+the property's stable Knowledge Graph ID to confirm the returned Google Maps place before accepting its
+name, address, coordinates, and Maps URL.
+To avoid a misleading airport result, an IATA-specific, strictly typed search is used automatically only when
+it returns one airport. When it returns multiple airports, Shiori asks the user to select the correct one.
+Successful results are retained in a bounded process-local cache for seven days
 and duplicate requests are coalesced.
 Google Places calls are capped at 4,500 per UTC month for each running Shiori process by default; set
 `GOOGLE_PLACES_MONTHLY_LIMIT` lower if required. This is defensive rather than a replacement for a Google

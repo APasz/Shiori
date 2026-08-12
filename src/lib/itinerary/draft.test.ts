@@ -9,8 +9,8 @@ describe('imported itinerary item drafts', () => {
 			type: 'transport',
 			title: 'JQ13 from SYD to KIX',
 			locations: [
-				{ name: 'SYD', role: 'departure' },
-				{ name: 'KIX', role: 'arrival' }
+				{ code: 'SYD', name: 'Sydney Airport', role: 'departure' },
+				{ code: 'KIX', name: 'Kansai International Airport', role: 'arrival' }
 			],
 			links: [{ label: 'Google Flights', url: 'https://www.google.com/travel/flights/booking' }],
 			transport: { mode: 'air', operator: 'Jetstar', serviceNumber: '13' }
@@ -28,5 +28,11 @@ describe('imported itinerary item drafts', () => {
 				stops: [{ locationId: item.locations[0]?.id }, { locationId: item.locations[1]?.id }]
 			}
 		});
+		expect(item.locations).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ code: 'SYD', name: 'Sydney Airport' }),
+				expect.objectContaining({ code: 'KIX', name: 'Kansai International Airport' })
+			])
+		);
 	});
 });

@@ -12,8 +12,8 @@ describe('transport journey drafts', () => {
 	it('creates a transport item with linked departure and arrival stops', () => {
 		const item = createTransportJourneyItem(
 			{
-				departure: { name: 'Melbourne Airport', coordinates: { latitude: -37.6708, longitude: 144.843 } },
-				arrival: { name: 'Tokyo Haneda Airport' },
+				departure: { code: 'MEL', name: 'Melbourne Airport', coordinates: { latitude: -37.6708, longitude: 144.843 } },
+				arrival: { code: 'HND', name: 'Tokyo Haneda Airport' },
 				mode: 'air',
 				operator: 'Jetstar',
 				serviceNumber: '35',
@@ -26,8 +26,8 @@ describe('transport journey drafts', () => {
 		expect(itineraryItemSchema.parse(item)).toMatchObject({
 			title: 'Melbourne > Tokyo Haneda',
 			locations: [
-				{ name: 'Melbourne Airport', role: 'departure' },
-				{ name: 'Tokyo Haneda Airport', role: 'arrival' }
+				{ code: 'MEL', name: 'Melbourne Airport', role: 'departure' },
+				{ code: 'HND', name: 'Tokyo Haneda Airport', role: 'arrival' }
 			],
 			transport: {
 				mode: 'air',
@@ -72,8 +72,8 @@ describe('transport journey drafts', () => {
 			title: 'JQ13 from SYD to KIX',
 			suggestedStartDate: '2026-10-27',
 			locations: [
-				{ name: 'SYD', role: 'departure' },
-				{ name: 'KIX', role: 'arrival' }
+				{ code: 'SYD', name: 'Sydney Airport', role: 'departure' },
+				{ code: 'KIX', name: 'Kansai International Airport', role: 'arrival' }
 			],
 			links: [{ label: 'Google Flights', url: 'https://www.google.com/travel/flights/booking' }],
 			transport: { mode: 'air', operator: 'Jetstar', serviceNumber: '13' }
@@ -82,8 +82,8 @@ describe('transport journey drafts', () => {
 		const journey = transportJourneyDraftFromImport(itemImport);
 
 		expect(journey).toEqual({
-			departure: { name: 'SYD' },
-			arrival: { name: 'KIX' },
+			departure: { code: 'SYD', name: 'Sydney Airport' },
+			arrival: { code: 'KIX', name: 'Kansai International Airport' },
 			mode: 'air',
 			operator: 'Jetstar',
 			serviceNumber: '13',

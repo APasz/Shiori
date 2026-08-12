@@ -196,6 +196,8 @@ export const locationSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
 	role: locationRoleSchema,
 	name: nonEmptyTextSchema,
+	/** An airport or provider-specific transport-stop code. */
+	code: nonEmptyTextSchema.optional(),
 	address: nonEmptyTextSchema.optional(),
 	coordinates: locationCoordinatesSchema.optional(),
 	googleMapsUrl: googleMapsUrlSchema.optional(),

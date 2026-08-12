@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatItineraryTiming, formatItineraryTimingForDay } from './timing';
+import {
+	formatAccommodationTiming,
+	formatAccommodationTimingForDay,
+	formatAccommodationTimingForDayParts,
+	formatAccommodationTimingParts,
+	formatItineraryTiming,
+	formatItineraryTimingForDay
+} from './timing';
 
 describe('daily itinerary timing', () => {
 	it('shows an overnight item start and end time only on their applicable days', () => {
@@ -46,5 +53,27 @@ describe('daily itinerary timing', () => {
 		expect(formatItineraryTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in time unknown');
 		expect(formatItineraryTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBe('Stay continues');
 		expect(formatItineraryTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out time unknown');
+	});
+
+	it('labels accommodation check-in and check-out boundaries', () => {
+		const timing = {
+			kind: 'exact' as const,
+			startAt: Date.UTC(2026, 9, 29, 6, 0),
+			endAt: Date.UTC(2026, 10, 1, 1, 0)
+		};
+
+		expect(formatAccommodationTiming(timing, true, 'Asia/Tokyo')).toBe(
+			'From 29 Oct 2026, 15:00 · To 01 Nov 2026, 10:00'
+		);
+		expect(formatAccommodationTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('From 15:00');
+		expect(formatAccommodationTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBe('Stay continues');
+		expect(formatAccommodationTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('To 10:00');
+		expect(formatAccommodationTimingParts(timing, true, 'Asia/Tokyo')).toEqual([
+			{ label: 'From', value: '29 Oct 2026, 15:00' },
+			{ label: 'To', value: '01 Nov 2026, 10:00' }
+		]);
+		expect(formatAccommodationTimingForDayParts(timing, '2026-11-01', 'Asia/Tokyo')).toEqual([
+			{ label: 'To', value: '10:00' }
+		]);
 	});
 });

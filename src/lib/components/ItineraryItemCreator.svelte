@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import TimeZonePicker from '$lib/components/TimeZonePicker.svelte';
 	import {
@@ -15,6 +16,7 @@
 	import {
 		transportJourneyDraftFromImport,
 		transportJourneyDraftSchema,
+		transportRouteTitle,
 		transportJourneyTitle,
 		type TransportJourneyDraft
 	} from '$lib/itinerary/transport-journey';
@@ -44,6 +46,7 @@
 	type TransportEndpointKind = 'departure' | 'arrival';
 	type TransportEndpointMapProvider = 'google-maps' | 'open-railway-map';
 	type TransportEndpointDraft = {
+		code?: string;
 		coordinates?: { latitude: number; longitude: number };
 		googleMapsUrl: string;
 		name: string;
@@ -60,6 +63,13 @@
 		name: string;
 	};
 	type AccommodationPropertyStatus = Extract<ItineraryItemImport, { readonly type: 'accommodation' }>['propertyStatus'];
+	type ImportedTransportItem = Extract<ItineraryItemImport, { readonly type: 'transport' }>;
+	type ImportedAirportCandidate = NonNullable<ImportedTransportItem['locations'][number]['airportCandidates']>[number];
+	type AirportCandidateResolution = Readonly<{
+		candidates: ImportedAirportCandidate[];
+		code: string;
+		selectedIndex: number | null;
+	}>;
 
 	let {
 		tripId,
@@ -101,6 +111,7 @@
 	let suggestedStartDate = $state('');
 	let transportSourceLinks = $state<ItineraryLink[]>([]);
 	let transportSchedule = $state<TransportJourneySchedule | undefined>(undefined);
+	let airportCandidateResolutions = $state<Partial<Record<TransportEndpointKind, AirportCandidateResolution>>>({});
 	let accommodationErrorMessage = $state('');
 	let accommodationItemId = $state('');
 	let accommodationLocationId = $state('');
@@ -300,6 +311,24 @@
 		return accommodationDateIsValid(accommodationCheckInDate) ? accommodationCheckInDate : undefined;
 	}
 
+	function accommodationDateTime(date: string, time: string): string {
+		return `${date}T${time}`;
+	}
+
+	function setAccommodationCheckInDateTime(value: string): void {
+		accommodationCheckInDate = value.slice(0, 10);
+		if (accommodationTimesKnown) {
+			accommodationCheckInTime = value.slice(11);
+		}
+	}
+
+	function setAccommodationCheckOutDateTime(value: string): void {
+		accommodationCheckOutDate = value.slice(0, 10);
+		if (accommodationTimesKnown) {
+			accommodationCheckOutTime = value.slice(11);
+		}
+	}
+
 	function hasGoogleHotelsSource(): boolean {
 		return accommodationSourceLinks.some((link) => link.label === 'Google Hotels');
 	}
@@ -471,6 +500,7 @@
 	}
 
 	function assignEndpoint(endpoint: TransportEndpointDraft, value: TransportJourneyDraft['departure']): void {
+		endpoint.code = value.code;
 		endpoint.name = value.name;
 		endpoint.googleMapsUrl = value.googleMapsUrl ?? '';
 		endpoint.openRailwayMapUrl = value.openRailwayMapUrl ?? '';
@@ -490,6 +520,7 @@
 			suggestedStartDate = journey.suggestedStartDate ?? '';
 			transportSourceLinks = journey.sourceLinks;
 			transportSchedule = journey.schedule;
+			airportCandidateResolutions = airportCandidateResolutionsForImport(item);
 		} else {
 			departure = emptyTransportEndpoint();
 			arrival = emptyTransportEndpoint();
@@ -500,6 +531,7 @@
 			suggestedStartDate = '';
 			transportSourceLinks = [];
 			transportSchedule = undefined;
+			airportCandidateResolutions = {};
 		}
 		creatorState = item && transportSchedule ? 'transport-review' : 'transport-departure';
 	}
@@ -512,11 +544,66 @@
 		return kind === 'departure' ? 'departure' : 'arrival';
 	}
 
+	function airportCandidateResolutionsForImport(
+		item: ImportedTransportItem
+	): Partial<Record<TransportEndpointKind, AirportCandidateResolution>> {
+		const resolutions: Partial<Record<TransportEndpointKind, AirportCandidateResolution>> = {};
+		for (const kind of ['departure', 'arrival'] as const) {
+			const location = item.locations.find((candidate) => candidate.role === kind);
+			if (location?.code && location.airportCandidates) {
+				resolutions[kind] = { candidates: [...location.airportCandidates], code: location.code, selectedIndex: null };
+			}
+		}
+		return resolutions;
+	}
+
+	function airportCandidateResolution(kind: TransportEndpointKind): AirportCandidateResolution | undefined {
+		return airportCandidateResolutions[kind];
+	}
+
+	function selectAirportCandidate(kind: TransportEndpointKind, selectedIndex: number): void {
+		const resolution = airportCandidateResolution(kind);
+		const candidate = resolution?.candidates[selectedIndex];
+		if (!resolution || !candidate) {
+			return;
+		}
+		const endpointDraft = endpointFor(kind);
+		const previousRouteTitle = transportRouteTitle(departure.name, arrival.name);
+		endpointDraft.name = candidate.name;
+		endpointDraft.googleMapsUrl = candidate.googleMapsUrl ?? '';
+		endpointDraft.coordinates = candidate.coordinates;
+		if (transportTitle === previousRouteTitle) {
+			transportTitle = transportRouteTitle(departure.name, arrival.name);
+		}
+		airportCandidateResolutions = {
+			...airportCandidateResolutions,
+			[kind]: { ...resolution, selectedIndex }
+		};
+		transportErrorMessage = '';
+	}
+
+	function useDifferentAirportLocation(kind: TransportEndpointKind): void {
+		const resolution = airportCandidateResolution(kind);
+		if (!resolution) {
+			return;
+		}
+		const endpointDraft = endpointFor(kind);
+		endpointDraft.name = endpointDraft.code ?? '';
+		endpointDraft.coordinates = undefined;
+		endpointDraft.googleMapsUrl = '';
+		const updatedResolutions = { ...airportCandidateResolutions };
+		delete updatedResolutions[kind];
+		airportCandidateResolutions = updatedResolutions;
+		transportErrorMessage = '';
+	}
+
 	function endpointValue(endpointDraft: TransportEndpointDraft): TransportJourneyDraft['departure'] {
+		const code = optionalText(endpointDraft.code ?? '');
 		const googleMapsUrl = optionalText(endpointDraft.googleMapsUrl);
 		const openRailwayMapUrl = optionalText(endpointDraft.openRailwayMapUrl);
 		return {
 			name: endpointDraft.name.trim(),
+			...(code ? { code } : {}),
 			...(googleMapsUrl ? { googleMapsUrl } : {}),
 			...(openRailwayMapUrl ? { openRailwayMapUrl } : {}),
 			...(endpointDraft.coordinates ? { coordinates: endpointDraft.coordinates } : {})
@@ -540,6 +627,10 @@
 	function moveToTransportEndpoint(event: SubmitEvent, kind: TransportEndpointKind): void {
 		event.preventDefault();
 		const endpointDraft = endpointFor(kind);
+		if (airportCandidateResolution(kind)?.selectedIndex === null) {
+			transportErrorMessage = `Choose the ${endpointLabel(kind)} airport or enter a different location.`;
+			return;
+		}
 		if (endpointDraft.name.trim() === '') {
 			transportErrorMessage = `Enter the ${endpointLabel(kind)} place, airport, station, or address.`;
 			return;
@@ -712,6 +803,7 @@
 		{:else if creatorState === 'transport-departure' || creatorState === 'transport-arrival'}
 			{@const endpointKind: TransportEndpointKind = creatorState === 'transport-departure' ? 'departure' : 'arrival'}
 			{@const endpointDraft = endpointFor(endpointKind)}
+			{@const candidateResolution = airportCandidateResolution(endpointKind)}
 			<p class="wizard-progress">
 				Step {endpointKind === 'departure' ? '1' : '2'} of 4 · {endpointLabel(endpointKind)}
 			</p>
@@ -720,6 +812,31 @@
 				address is enough.
 			</p>
 			<form class="shiori-form" onsubmit={(event) => moveToTransportEndpoint(event, endpointKind)}>
+				{#if candidateResolution}
+					<fieldset class="airport-candidate-picker">
+						<legend>Choose the airport for {candidateResolution.code}</legend>
+						<p>Google found more than one airport match. Select the one used by this journey.</p>
+						<div class="airport-candidate-options">
+							{#each candidateResolution.candidates as candidate, index (index)}
+								<label class="airport-candidate-choice">
+									<input
+										checked={candidateResolution.selectedIndex === index}
+										name={`airport-candidate-${endpointKind}`}
+										onchange={() => selectAirportCandidate(endpointKind, index)}
+										type="radio"
+									/>
+									<span>
+										<strong>{candidate.name}</strong>
+										{#if candidate.address}<small>{candidate.address}</small>{/if}
+									</span>
+								</label>
+							{/each}
+						</div>
+						<button class="text-button" onclick={() => useDifferentAirportLocation(endpointKind)} type="button">
+							Use a different place
+						</button>
+					</fieldset>
+				{/if}
 				<label class="shiori-form-label">
 					{endpointKind === 'departure' ? 'Departure' : 'Arrival'}
 					<input
@@ -910,20 +1027,23 @@
 					</button>
 				</div>
 				<div class="field-grid">
-					<label class="shiori-form-label">
-						Check-in date
-						<input class="shiori-form-control" bind:value={accommodationCheckInDate} required type="date" />
-					</label>
-					<label class="shiori-form-label">
-						Check-out date
-						<input
-							class="shiori-form-control"
-							bind:value={accommodationCheckOutDate}
-							min={minimumAccommodationCheckOutDate()}
-							required
-							type="date"
-						/>
-					</label>
+					<DateTimeInput
+						dateTime={accommodationDateTime(accommodationCheckInDate, accommodationCheckInTime)}
+						id="accommodation-check-in-date"
+						label="Check-in date"
+						onDateTimeChange={setAccommodationCheckInDateTime}
+						pickerMode="date"
+						showTimeZonePicker={false}
+					/>
+					<DateTimeInput
+						dateTime={accommodationDateTime(accommodationCheckOutDate, accommodationCheckOutTime)}
+						id="accommodation-check-out-date"
+						label="Check-out date"
+						minimumDate={minimumAccommodationCheckOutDate()}
+						onDateTimeChange={setAccommodationCheckOutDateTime}
+						pickerMode="date"
+						showTimeZonePicker={false}
+					/>
 				</div>
 				<label class="shiori-form-label">
 					Property time zone
@@ -940,26 +1060,22 @@
 				</label>
 				{#if accommodationTimesKnown}
 					<div class="field-grid">
-						<label class="shiori-form-label">
-							Check-in time
-							<input
-								class="shiori-form-control"
-								bind:value={accommodationCheckInTime}
-								required
-								step="300"
-								type="time"
-							/>
-						</label>
-						<label class="shiori-form-label">
-							Check-out time
-							<input
-								class="shiori-form-control"
-								bind:value={accommodationCheckOutTime}
-								required
-								step="300"
-								type="time"
-							/>
-						</label>
+						<DateTimeInput
+							dateTime={accommodationDateTime(accommodationCheckInDate, accommodationCheckInTime)}
+							id="accommodation-check-in-time"
+							label="Check-in time"
+							onDateTimeChange={setAccommodationCheckInDateTime}
+							pickerMode="time"
+							showTimeZonePicker={false}
+						/>
+						<DateTimeInput
+							dateTime={accommodationDateTime(accommodationCheckOutDate, accommodationCheckOutTime)}
+							id="accommodation-check-out-time"
+							label="Check-out time"
+							onDateTimeChange={setAccommodationCheckOutDateTime}
+							pickerMode="time"
+							showTimeZonePicker={false}
+						/>
 					</div>
 					{#if hasGoogleHotelsSource() && (accommodationCheckInTime || accommodationCheckOutTime)}
 						<p class="schedule-found">Google Hotels supplied usual stay times. Confirm them against your booking.</p>
@@ -1269,6 +1385,51 @@
 		color: var(--color-text-secondary);
 		margin: 0;
 		padding: 0.75rem;
+	}
+
+	.airport-candidate-picker {
+		border: 1px solid var(--color-border-default);
+		display: grid;
+		gap: 0.75rem;
+		margin: 0;
+		padding: 1rem;
+	}
+
+	.airport-candidate-picker legend {
+		font-weight: 700;
+		padding: 0 0.25rem;
+	}
+
+	.airport-candidate-picker p {
+		color: var(--color-text-secondary);
+		margin: 0;
+	}
+
+	.airport-candidate-options {
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.airport-candidate-choice {
+		align-items: start;
+		border: 1px solid var(--color-border-default);
+		cursor: pointer;
+		display: flex;
+		gap: 0.625rem;
+		padding: 0.75rem;
+	}
+
+	.airport-candidate-choice:has(input:checked) {
+		border-color: var(--color-state-selection);
+	}
+
+	.airport-candidate-choice span {
+		display: grid;
+		gap: 0.25rem;
+	}
+
+	.airport-candidate-choice small {
+		color: var(--color-text-muted);
 	}
 
 	.optional-details {
