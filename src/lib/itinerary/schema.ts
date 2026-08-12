@@ -177,37 +177,32 @@ export const reservationSchema = z.strictObject({
 	status: reservationStatusSchema
 });
 
-const minorAmountSchema = z
+export const minorUnitAmountSchema = z
 	.number()
 	.int('Use a whole number of minor currency units.')
 	.min(0, 'Use an amount no less than zero.')
 	.max(1_000_000_000_000, 'Use an amount no greater than 1,000,000,000,000 minor units.');
 
-export const monetaryAmountSchema = z.strictObject({
-	amountMinor: minorAmountSchema.min(1, 'Use an amount greater than zero.'),
+const costAmountSchema = z.strictObject({
+	amount: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
 	currency: currencyCodeSchema
 });
 
-const convertedMonetaryAmountSchema = z.strictObject({
-	amountMinor: minorAmountSchema,
-	currency: currencyCodeSchema
-});
-
-export const costDraftSchema = z.strictObject({
-	amount: monetaryAmountSchema,
+export const costDraftSchema = costAmountSchema.extend({
 	status: costStatusSchema
 });
 
 const costPaymentSchema = z.strictObject({
 	exchangeRate: z.number().finite('Use a finite exchange rate.').positive('Use an exchange rate greater than zero.'),
 	rateDate: calendarDateSchema,
-	localAmount: convertedMonetaryAmountSchema,
+	localAmount: minorUnitAmountSchema,
+	localCurrency: currencyCodeSchema,
 	paidAt: unixTimestampSchema
 });
 
 export const costSchema = z.discriminatedUnion('status', [
-	z.strictObject({ amount: monetaryAmountSchema, status: z.literal('unpaid') }),
-	z.strictObject({ amount: monetaryAmountSchema, payment: costPaymentSchema, status: z.literal('paid') })
+	costAmountSchema.extend({ status: z.literal('unpaid') }),
+	costAmountSchema.extend({ payment: costPaymentSchema, status: z.literal('paid') })
 ]);
 
 const transportStopSchema = z.strictObject({
@@ -402,6 +397,6 @@ export type Reservation = z.infer<typeof reservationSchema>;
 export type ReservationStatus = z.infer<typeof reservationStatusSchema>;
 export type TransportDetails = z.infer<typeof transportDetailsSchema>;
 export type CurrencyCode = z.infer<typeof currencyCodeSchema>;
-export type MonetaryAmount = z.infer<typeof monetaryAmountSchema>;
+export type CostAmount = z.infer<typeof costAmountSchema>;
 export type Cost = z.infer<typeof costSchema>;
 export type CostDraft = z.infer<typeof costDraftSchema>;

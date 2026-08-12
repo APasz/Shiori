@@ -18,10 +18,12 @@ const testItinerary = {
 			notes: [],
 			links: [],
 			cost: {
-				amount: { amountMinor: 12_500, currency: 'USD' },
+				amount: 12_500,
+				currency: 'USD',
 				payment: {
 					exchangeRate: 1.2,
-					localAmount: { amountMinor: 15_000, currency: 'AUD' },
+					localAmount: 15_000,
+					localCurrency: 'AUD',
 					paidAt: 1_775_952_000_000,
 					rateDate: '2026-04-03'
 				},

@@ -11,10 +11,13 @@ import {
 	type TripAccessRole
 } from '$lib/itinerary/access';
 import {
+	calendarDateSchema,
+	currencyCodeSchema,
 	itineraryIdentifierSchema,
 	itineraryItemDraftSchema,
 	itineraryItemSchema,
 	itinerarySchema,
+	minorUnitAmountSchema,
 	tripDetailsSchema,
 	unixTimestampSchema,
 	type Cost,
@@ -22,7 +25,7 @@ import {
 	type Itinerary,
 	type ItineraryItem,
 	type ItineraryItemDraft,
-	type MonetaryAmount,
+	type CostAmount,
 	type TripDetails
 } from '$lib/itinerary/schema';
 import { currencyFractionDigits } from '$lib/money';
@@ -31,7 +34,8 @@ import { lookupEcbConversionRate } from './ecb-exchange-rates';
 
 const sessionLifetimeMilliseconds = 7 * 24 * 60 * 60 * 1000;
 const editLockLifetimeMilliseconds = 10 * 60 * 1000;
-const storedDataVersion = 6;
+const legacyStoredDataVersion = 6;
+const storedDataVersion = 7;
 const tripStructureLockTargetId = 'trip-structure';
 const jsonIndentation = 4;
 
@@ -46,6 +50,43 @@ const passwordSchema = z
 const timestampSchema = unixTimestampSchema;
 
 const shareRoleSchema = z.enum(['user', 'admin']);
+const supportedStoredDataVersionSchema = z.union([z.literal(legacyStoredDataVersion), z.literal(storedDataVersion)]);
+
+const legacyMonetaryAmountSchema = z.strictObject({
+	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
+	currency: currencyCodeSchema
+});
+const legacyConvertedMonetaryAmountSchema = z.strictObject({
+	amountMinor: minorUnitAmountSchema,
+	currency: currencyCodeSchema
+});
+const legacyCostSchema = z.discriminatedUnion('status', [
+	z.strictObject({ amount: legacyMonetaryAmountSchema, status: z.literal('unpaid') }),
+	z.strictObject({
+		amount: legacyMonetaryAmountSchema,
+		payment: z.strictObject({
+			exchangeRate: z.number().finite().positive(),
+			localAmount: legacyConvertedMonetaryAmountSchema,
+			paidAt: unixTimestampSchema,
+			rateDate: calendarDateSchema
+		}),
+		status: z.literal('paid')
+	})
+]);
+const legacyStoredTripFileEnvelopeSchema = z
+	.object({
+		version: z.literal(legacyStoredDataVersion),
+		trip: z
+			.object({
+				itinerary: z
+					.object({
+						items: z.array(z.unknown())
+					})
+					.passthrough()
+			})
+			.passthrough()
+	})
+	.passthrough();
 
 const storedUserSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
@@ -90,19 +131,19 @@ const storedEditLockSchema = z.strictObject({
 });
 
 const storedUsersFileSchema = z.strictObject({
-	version: z.literal(storedDataVersion),
+	version: supportedStoredDataVersionSchema,
 	users: z.array(storedUserSchema)
 });
 const storedSharesFileSchema = z.strictObject({
-	version: z.literal(storedDataVersion),
+	version: supportedStoredDataVersionSchema,
 	shares: z.array(storedShareSchema)
 });
 const storedSessionsFileSchema = z.strictObject({
-	version: z.literal(storedDataVersion),
+	version: supportedStoredDataVersionSchema,
 	sessions: z.array(storedSessionSchema)
 });
 const storedEditLocksFileSchema = z.strictObject({
-	version: z.literal(storedDataVersion),
+	version: supportedStoredDataVersionSchema,
 	editLocks: z.array(storedEditLockSchema)
 });
 const storedTripFileSchema = z.strictObject({
@@ -291,6 +332,10 @@ type ManagedTripDataFile = {
 	path: string;
 	slug: string;
 };
+type ReadStoredDataResult = {
+	data: StoredData;
+	migrationRequired: boolean;
+};
 
 export type AuthenticatedUser = Pick<z.infer<typeof storedUserSchema>, 'id' | 'username'>;
 export type ShareRole = z.infer<typeof shareRoleSchema>;
@@ -425,7 +470,65 @@ async function tripDataFiles(): Promise<ManagedTripDataFile[]> {
 		}));
 }
 
-async function readSplitStoredData(): Promise<StoredData> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function migrateLegacyCost(cost: unknown): unknown {
+	const parsedCost = legacyCostSchema.safeParse(cost);
+	if (!parsedCost.success) {
+		return cost;
+	}
+
+	const flattenedCost = {
+		amount: parsedCost.data.amount.amountMinor,
+		currency: parsedCost.data.amount.currency,
+		status: parsedCost.data.status
+	};
+	if (parsedCost.data.status === 'unpaid') {
+		return flattenedCost;
+	}
+
+	return {
+		...flattenedCost,
+		payment: {
+			exchangeRate: parsedCost.data.payment.exchangeRate,
+			localAmount: parsedCost.data.payment.localAmount.amountMinor,
+			localCurrency: parsedCost.data.payment.localAmount.currency,
+			paidAt: parsedCost.data.payment.paidAt,
+			rateDate: parsedCost.data.payment.rateDate
+		}
+	};
+}
+
+function migrateLegacyTripFile(file: unknown): { file: unknown; migrationRequired: boolean } {
+	const parsedFile = legacyStoredTripFileEnvelopeSchema.safeParse(file);
+	if (!parsedFile.success) {
+		return { file, migrationRequired: false };
+	}
+
+	return {
+		file: {
+			...parsedFile.data,
+			version: storedDataVersion,
+			trip: {
+				...parsedFile.data.trip,
+				itinerary: {
+					...parsedFile.data.trip.itinerary,
+					items: parsedFile.data.trip.itinerary.items.map((item) => {
+						if (!isRecord(item) || !Object.hasOwn(item, 'cost')) {
+							return item;
+						}
+						return { ...item, cost: migrateLegacyCost(item.cost) };
+					})
+				}
+			}
+		},
+		migrationRequired: true
+	};
+}
+
+async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 	const missingFiles = globalDataPaths.filter((filePath) => !existsSync(filePath));
 	if (missingFiles.length > 0) {
 		throw new Error(
@@ -448,31 +551,43 @@ async function readSplitStoredData(): Promise<StoredData> {
 	const shares = storedSharesFileSchema.parse(sharesFile);
 	const sessions = storedSessionsFileSchema.parse(sessionsFile);
 	const editLocks = storedEditLocksFileSchema.parse(editLocksFile);
-	const trips = tripFiles.map(({ file, slug }) => {
+	const migratedTripFiles = tripFiles.map(({ file, slug }) => ({
+		...migrateLegacyTripFile(file),
+		slug
+	}));
+	const trips = migratedTripFiles.map(({ file, slug }) => {
 		const trip = storedTripFileSchema.parse(file).trip;
 		return storedTripSchema.parse({ ...trip, slug });
 	});
 
-	return storedDataSchema.parse({
-		version: storedDataVersion,
-		users: users.users,
-		trips,
-		shares: shares.shares,
-		sessions: sessions.sessions,
-		editLocks: editLocks.editLocks
-	});
+	return {
+		data: storedDataSchema.parse({
+			version: storedDataVersion,
+			users: users.users,
+			trips,
+			shares: shares.shares,
+			sessions: sessions.sessions,
+			editLocks: editLocks.editLocks
+		}),
+		migrationRequired:
+			users.version === legacyStoredDataVersion ||
+			shares.version === legacyStoredDataVersion ||
+			sessions.version === legacyStoredDataVersion ||
+			editLocks.version === legacyStoredDataVersion ||
+			migratedTripFiles.some((tripFile) => tripFile.migrationRequired)
+	};
 }
 
-async function readStoredData(): Promise<StoredData> {
+async function readStoredData(): Promise<ReadStoredDataResult> {
 	if (hasSplitData()) {
 		return readSplitStoredData();
 	}
-	return defaultData();
+	return { data: defaultData(), migrationRequired: false };
 }
 
 async function clearPersistedEditLocksAtStartup(): Promise<void> {
-	const data = await readStoredData();
-	if (data.editLocks.length === 0) {
+	const { data, migrationRequired } = await readStoredData();
+	if (data.editLocks.length === 0 && !migrationRequired) {
 		return;
 	}
 
@@ -483,7 +598,7 @@ async function clearPersistedEditLocksAtStartup(): Promise<void> {
 async function readData(): Promise<StoredData> {
 	startupLockCleanup ??= clearPersistedEditLocksAtStartup();
 	await startupLockCleanup;
-	return readStoredData();
+	return (await readStoredData()).data;
 }
 
 async function synchronizeDirectory(directoryPath: string): Promise<void> {
@@ -703,15 +818,15 @@ function findItemIndex(itinerary: Itinerary, itemId: string): number {
 	return itinerary.items.findIndex((item) => item.id === itemId);
 }
 
-function sameMonetaryAmount(left: MonetaryAmount, right: MonetaryAmount): boolean {
-	return left.amountMinor === right.amountMinor && left.currency === right.currency;
+function sameCostAmount(left: CostAmount, right: CostAmount): boolean {
+	return left.amount === right.amount && left.currency === right.currency;
 }
 
-function convertedMinorAmount(amount: MonetaryAmount, localCurrency: CurrencyCode, exchangeRate: number): number {
+function convertedAmount(amount: CostAmount, localCurrency: CurrencyCode, exchangeRate: number): number {
 	const chargedFractionDigits = currencyFractionDigits(amount.currency);
 	const localFractionDigits = currencyFractionDigits(localCurrency);
 	const converted = Math.round(
-		(amount.amountMinor * exchangeRate * 10 ** localFractionDigits) / 10 ** chargedFractionDigits
+		(amount.amount * exchangeRate * 10 ** localFractionDigits) / 10 ** chargedFractionDigits
 	);
 	if (!Number.isSafeInteger(converted) || converted < 0 || converted > 1_000_000_000_000) {
 		throw new StoreError(400, 'The converted cost is outside Shiori’s supported range.');
@@ -730,7 +845,7 @@ async function persistedItemForCost(
 	}
 
 	if (existingItem?.cost?.status === 'paid') {
-		if (!sameMonetaryAmount(cost.amount, existingItem.cost.amount)) {
+		if (!sameCostAmount(cost, existingItem.cost)) {
 			throw new StoreError(400, 'Set this cost to unpaid and save before changing its charged amount or currency.');
 		}
 		return itineraryItemSchema.parse({ ...item, cost: existingItem.cost });
@@ -738,7 +853,7 @@ async function persistedItemForCost(
 
 	const paidAt = timestamp();
 	const exchangeRate = await lookupEcbConversionRate({
-		chargedCurrency: cost.amount.currency,
+		chargedCurrency: cost.currency,
 		localCurrency,
 		paidAt
 	});
@@ -751,13 +866,12 @@ async function persistedItemForCost(
 
 	const paidCost: Cost = {
 		amount: cost.amount,
+		currency: cost.currency,
 		payment: {
 			exchangeRate: exchangeRate.localCurrencyPerChargedCurrency,
 			rateDate: exchangeRate.effectiveDate,
-			localAmount: {
-				amountMinor: convertedMinorAmount(cost.amount, localCurrency, exchangeRate.localCurrencyPerChargedCurrency),
-				currency: localCurrency
-			},
+			localAmount: convertedAmount(cost, localCurrency, exchangeRate.localCurrencyPerChargedCurrency),
+			localCurrency,
 			paidAt
 		},
 		status: 'paid'

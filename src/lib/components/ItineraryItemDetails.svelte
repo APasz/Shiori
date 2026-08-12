@@ -176,21 +176,21 @@
 				<h3 id="cost-heading">Cost</h3>
 				<dl>
 					<dt>Charged</dt>
-					<dd>{formatMonetaryAmount(item.cost.amount)}</dd>
+					<dd>{formatMonetaryAmount(item.cost.amount, item.cost.currency)}</dd>
 					<dt>Status</dt>
 					<dd>{item.cost.status === 'paid' ? 'Paid' : 'Unpaid'}</dd>
 					{#if item.cost.status === 'paid'}
 						<dt>Local equivalent</dt>
 						<dd>
-							{formatMonetaryAmount(item.cost.payment.localAmount)}
-							{#if item.cost.payment.localAmount.currency !== localCurrency}
+							{formatMonetaryAmount(item.cost.payment.localAmount, item.cost.payment.localCurrency)}
+							{#if item.cost.payment.localCurrency !== localCurrency}
 								<span class="cost-note">Saved before the trip currency changed to {localCurrency}.</span>
 							{/if}
 						</dd>
 						<dt>Rate</dt>
 						<dd>
-							1 {item.cost.amount.currency} = {exchangeRateLabel(item.cost.payment.exchangeRate)}
-							{item.cost.payment.localAmount.currency}
+							1 {item.cost.currency} = {exchangeRateLabel(item.cost.payment.exchangeRate)}
+							{item.cost.payment.localCurrency}
 						</dd>
 						<dt>Reference rate date</dt>
 						<dd>{item.cost.payment.rateDate}</dd>

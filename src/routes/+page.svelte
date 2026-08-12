@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import ItineraryExporter from '$lib/components/ItineraryExporter.svelte';
 	import ItineraryItemDetails from '$lib/components/ItineraryItemDetails.svelte';
 	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
 	import ItineraryItemEditor from '$lib/components/ItineraryItemEditor.svelte';
@@ -51,6 +52,7 @@
 
 	let editingItem = $state<EditingItem | null>(null);
 	let creatingItem = $state(false);
+	let exportingItinerary = $state(false);
 	let itemCreationLocalDay = $state<string | undefined>(undefined);
 	let editingTripMode = $state<'create' | 'edit' | null>(null);
 	let switchingTrips = $state(false);
@@ -394,6 +396,7 @@
 			{:else}
 				<a href={resolve('/login')}>Sign in</a>
 			{/if}
+			<button onclick={() => (exportingItinerary = true)} type="button">Export</button>
 			{#if detailedTrip?.canEdit}
 				<details bind:open={tripOverflowOpen} class="trip-overflow">
 					<summary aria-label="Trip options" title="Trip options">•••</summary>
@@ -561,6 +564,10 @@
 
 	{#if detailedTrip && switchingTrips}
 		<TripSwitcher currentSlug={detailedTrip.slug} onDismiss={() => (switchingTrips = false)} trips={data.trips} />
+	{/if}
+
+	{#if exportingItinerary}
+		<ItineraryExporter {itinerary} onDismiss={() => (exportingItinerary = false)} />
 	{/if}
 </main>
 

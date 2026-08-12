@@ -25,10 +25,10 @@
 		type ItineraryLocation,
 		type ReservationStatus,
 		type ItineraryTiming,
-		type MonetaryAmount,
+		type CostAmount,
 		type TransportDetails
 	} from '$lib/itinerary/schema';
-	import { amountMinorFromInput, currencyFractionDigits } from '$lib/money';
+	import { amountFromInput, currencyFractionDigits } from '$lib/money';
 	import {
 		formatTimestampForTimeZoneInput,
 		isValidIanaTimeZone,
@@ -231,8 +231,8 @@
 		reservationReference = source.reservation?.reference ?? '';
 		reservationStatus = source.reservation?.status ?? 'pending';
 		costEnabled = source.cost !== undefined;
-		costAmount = source.cost ? amountInputValue(source.cost.amount) : '';
-		costCurrency = source.cost?.amount.currency ?? localCurrency;
+		costAmount = source.cost ? amountInputValue(source.cost) : '';
+		costCurrency = source.cost?.currency ?? localCurrency;
 		costPaid = source.cost?.status === 'paid';
 		transportMode = source.type === 'transport' ? source.transport.mode : 'other';
 		transportOperator = source.type === 'transport' ? (source.transport.operator ?? '') : '';
@@ -385,14 +385,14 @@
 		return trimmed === '' ? undefined : trimmed;
 	}
 
-	function amountInputValue(amount: MonetaryAmount): string {
+	function amountInputValue(amount: CostAmount): string {
 		const fractionDigits = currencyFractionDigits(amount.currency);
 		if (fractionDigits === 0) {
-			return String(amount.amountMinor);
+			return String(amount.amount);
 		}
 		const scale = 10 ** fractionDigits;
-		const whole = Math.floor(amount.amountMinor / scale);
-		const fraction = String(amount.amountMinor % scale).padStart(fractionDigits, '0');
+		const whole = Math.floor(amount.amount / scale);
+		const fraction = String(amount.amount % scale).padStart(fractionDigits, '0');
 		return `${whole}.${fraction}`;
 	}
 
@@ -401,10 +401,8 @@
 			return undefined;
 		}
 		return {
-			amount: {
-				amountMinor: amountMinorFromInput(costAmount, costCurrency) ?? Number.NaN,
-				currency: costCurrency
-			},
+			amount: amountFromInput(costAmount, costCurrency) ?? Number.NaN,
+			currency: costCurrency,
 			status: costPaid ? 'paid' : 'unpaid'
 		};
 	}
@@ -679,8 +677,8 @@
 		if (!costEnabled) {
 			return null;
 		}
-		const amountMinor = amountMinorFromInput(costAmount, costCurrency);
-		if (amountMinor === null || amountMinor < 1) {
+		const amount = amountFromInput(costAmount, costCurrency);
+		if (amount === null || amount < 1) {
 			return `Cost: enter a positive ${costCurrency} amount with no more than ${currencyFractionDigits(costCurrency)} decimal places.`;
 		}
 		return null;

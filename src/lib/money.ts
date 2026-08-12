@@ -1,4 +1,4 @@
-import { type CurrencyCode, type MonetaryAmount } from '$lib/itinerary/schema';
+import { type CurrencyCode } from '$lib/itinerary/schema';
 
 const amountInputPattern = /^(?<whole>0|[1-9]\d*)(?:\.(?<fraction>\d+))?$/;
 
@@ -8,7 +8,7 @@ export function currencyFractionDigits(currency: CurrencyCode): number {
 }
 
 /** Parses a user-entered decimal amount into an exact integer number of currency minor units. */
-export function amountMinorFromInput(value: string, currency: CurrencyCode): number | null {
+export function amountFromInput(value: string, currency: CurrencyCode): number | null {
 	const match = amountInputPattern.exec(value.trim());
 	if (!match?.groups) {
 		return null;
@@ -26,11 +26,11 @@ export function amountMinorFromInput(value: string, currency: CurrencyCode): num
 }
 
 /** Formats an exact minor-unit monetary amount for display in the viewer's locale. */
-export function formatMonetaryAmount(amount: MonetaryAmount, locales?: string | string[]): string {
-	const fractionDigits = currencyFractionDigits(amount.currency);
+export function formatMonetaryAmount(amount: number, currency: CurrencyCode, locales?: string | string[]): string {
+	const fractionDigits = currencyFractionDigits(currency);
 	return new Intl.NumberFormat(locales, {
-		currency: amount.currency,
+		currency,
 		currencyDisplay: 'code',
 		style: 'currency'
-	}).format(amount.amountMinor / 10 ** fractionDigits);
+	}).format(amount / 10 ** fractionDigits);
 }
