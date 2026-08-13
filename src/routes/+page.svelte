@@ -13,12 +13,14 @@
 	import { apiErrorSchema, editSaveResponseSchema, type ItineraryItemImport } from '$lib/editing/contracts';
 	import { addCalendarDays, calendarMonthForDate } from '$lib/itinerary/calendar';
 	import { createEmptyItineraryItem, createItineraryItemFromImport } from '$lib/itinerary/draft';
+	import type { PublicItineraryItem } from '$lib/itinerary/access';
 	import { createTransportJourneyItem, type TransportJourneyDraft } from '$lib/itinerary/transport-journey';
 	import {
 		defaultItemTimestamp,
 		formatLocalDay,
 		getItineraryDateRange,
-		getLocalItineraryDays
+		getLocalItineraryDays,
+		partitionDayItems
 	} from '$lib/itinerary/presentation';
 	import type { ItineraryItem, ItineraryItemType } from '$lib/itinerary/schema';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
@@ -80,6 +82,8 @@
 	const dateRange = $derived(
 		localScheduleReady ? getItineraryDateRange(itinerary.items, viewerContext.timeZone) : null
 	);
+
+	type DayItem = ItineraryItem | PublicItineraryItem;
 
 	function getDetailedTrip(trip: TripView): DetailedTripView | null {
 		return trip.access === 'visitor' ? null : trip;
@@ -378,6 +382,56 @@
 	});
 </script>
 
+{#snippet dayItem(item: DayItem, dayDate: string, display: 'stay' | 'timeline')}
+	<li class={display === 'stay' ? 'stay-row' : 'item-row'}>
+		{#if detailedTrip}
+			<button
+				type="button"
+				class={display === 'stay' ? 'stay-button' : 'item-button'}
+				class:selected={selectedItemId === item.id}
+				aria-haspopup="dialog"
+				aria-pressed={selectedItemId === item.id}
+				onclick={() => (selectedItemId = item.id)}
+				style={itemTypeAccentStyle(item.type)}
+			>
+				<ItineraryTiming
+					day={dayDate}
+					itemType={item.type}
+					timing={item.timing}
+					timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
+				/>
+				{#if display === 'timeline'}
+					<span class="item-type">{itemTypeLabels[item.type]}</span>
+				{/if}
+				<span class:item-title={display === 'timeline'} class:stay-title={display === 'stay'}>
+					<span data-item-title-text>{item.title}</span>
+				</span>
+				{#if display === 'timeline'}
+					<ItineraryItemIllustration {item} />
+				{/if}
+			</button>
+		{:else}
+			<div class={display === 'stay' ? 'stay-summary' : 'item-summary'} style={itemTypeAccentStyle(item.type)}>
+				<ItineraryTiming
+					day={dayDate}
+					itemType={item.type}
+					timing={item.timing}
+					timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
+				/>
+				{#if display === 'timeline'}
+					<span class="item-type">{itemTypeLabels[item.type]}</span>
+				{/if}
+				<span class:item-title={display === 'timeline'} class:stay-title={display === 'stay'}>
+					<span data-item-title-text>{item.title}</span>
+				</span>
+				{#if display === 'timeline'}
+					<ItineraryItemIllustration {item} />
+				{/if}
+			</div>
+		{/if}
+	</li>
+{/snippet}
+
 <svelte:head>
 	<title>Shiori · Travel itineraries</title>
 	<meta name="description" content="A server-authoritative travel itinerary, validated by Shiori." />
@@ -453,53 +507,27 @@
 			{:else}
 				<div class="days">
 					{#each localDays as day, index (day.date)}
+						{@const dayItems = partitionDayItems(day.items)}
+						{@const { stays, timelineItems } = dayItems}
 						<details class="day" open={isDayOpen(day.date)} ontoggle={(event) => changeDayDisclosure(day.date, event)}>
 							<summary><h3>Day {index + 1}: {formatLocalDay(day.date)}</h3></summary>
 							<div class="day-content">
-								{#if day.items.length === 0}
+								{#if stays.length > 0}
+									<section aria-label={`Stays on ${formatLocalDay(day.date)}`} class="stay-block">
+										<h4>Stays</h4>
+										<ul class="stay-list">
+											{#each stays as item (item.id)}
+												{@render dayItem(item, day.date, 'stay')}
+											{/each}
+										</ul>
+									</section>
+								{/if}
+								{#if timelineItems.length === 0 && stays.length === 0}
 									<p class="empty-day">No items planned for this day.</p>
-								{:else}
+								{:else if timelineItems.length > 0}
 									<ul>
-										{#each day.items as item (item.id)}
-											<li class="item-row">
-												{#if detailedTrip}
-													<button
-														type="button"
-														class="item-button"
-														class:selected={selectedItemId === item.id}
-														aria-haspopup="dialog"
-														aria-pressed={selectedItemId === item.id}
-														onclick={() => (selectedItemId = item.id)}
-														style={itemTypeAccentStyle(item.type)}
-													>
-														<ItineraryTiming
-															day={day.date}
-															itemType={item.type}
-															timing={item.timing}
-															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
-														/>
-														<span class="item-type">{itemTypeLabels[item.type]}</span>
-														<span class="item-title"
-															><span class="item-title-text" data-item-title-text>{item.title}</span></span
-														>
-														<ItineraryItemIllustration {item} />
-													</button>
-												{:else}
-													<div class="item-summary" style={itemTypeAccentStyle(item.type)}>
-														<ItineraryTiming
-															day={day.date}
-															itemType={item.type}
-															timing={item.timing}
-															timeZone={resolveTimingTimeZone(item.timing, itinerary.timeZone)}
-														/>
-														<span class="item-type">{itemTypeLabels[item.type]}</span>
-														<span class="item-title"
-															><span class="item-title-text" data-item-title-text>{item.title}</span></span
-														>
-														<ItineraryItemIllustration {item} />
-													</div>
-												{/if}
-											</li>
+										{#each timelineItems as item (item.id)}
+											{@render dayItem(item, day.date, 'timeline')}
 										{/each}
 									</ul>
 								{/if}
@@ -839,6 +867,63 @@
 		border-top: 1px solid var(--color-border-subtle);
 	}
 
+	.stay-block {
+		border: 1px solid var(--color-border-default);
+		border-left: 3px solid var(--color-item-type-accommodation);
+		margin: 0 0 0.875rem;
+	}
+
+	.stay-block h4 {
+		color: var(--color-item-type-accommodation);
+		font-size: 0.6875rem;
+		letter-spacing: 0.08em;
+		margin: 0;
+		padding: 0.375rem 0.5rem;
+		text-transform: uppercase;
+	}
+
+	.stay-row {
+		padding: 0;
+	}
+
+	.stay-button,
+	.stay-summary {
+		align-items: start;
+		background: transparent;
+		border: 1px solid transparent;
+		color: inherit;
+		display: grid;
+		font: inherit;
+		gap: 0.5rem;
+		grid-template-columns: minmax(0, 1fr) max-content;
+		padding: 0.5rem;
+		text-align: left;
+		width: 100%;
+	}
+
+	.stay-button:hover {
+		border-color: var(--item-accent);
+	}
+
+	.stay-button.selected {
+		box-shadow: inset 3px 0 var(--color-state-selection);
+	}
+
+	.stay-button :global(.itinerary-timing),
+	.stay-summary :global(.itinerary-timing) {
+		grid-column: 2;
+		grid-row: 1;
+	}
+
+	.stay-title {
+		align-self: center;
+		color: var(--item-accent);
+		font-weight: 600;
+		grid-column: 1;
+		grid-row: 1;
+		min-width: 0;
+	}
+
 	.item-button,
 	.item-summary {
 		align-items: center;
@@ -860,6 +945,7 @@
 	}
 
 	.item-button:focus-visible,
+	.stay-button:focus-visible,
 	nav a:focus-visible,
 	nav button:focus-visible {
 		outline: 3px solid var(--color-state-focus);

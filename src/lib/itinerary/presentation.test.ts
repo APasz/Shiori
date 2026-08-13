@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getItineraryDateRange, getLocalItineraryDays, groupItemsByLocalDay } from './presentation';
+import { getItineraryDateRange, getLocalItineraryDays, groupItemsByLocalDay, partitionDayItems } from './presentation';
 import { formatLocalTimestamp, localDateTimeToUnixMilliseconds } from './time';
 
 function requiredTimestamp(value: string): number {
@@ -11,6 +11,18 @@ function requiredTimestamp(value: string): number {
 }
 
 describe('browser-local itinerary presentation', () => {
+	it('separates accommodation stays from the chronological action timeline without reordering either', () => {
+		const transport = { id: 'flight', type: 'transport' as const };
+		const firstStay = { id: 'day-hotel', type: 'accommodation' as const };
+		const activity = { id: 'museum', type: 'activity' as const };
+		const secondStay = { id: 'late-check-in', type: 'accommodation' as const };
+
+		expect(partitionDayItems([transport, firstStay, activity, secondStay])).toEqual({
+			stays: [firstStay, secondStay],
+			timelineItems: [transport, activity]
+		});
+	});
+
 	it('groups exact, approximate, and window timings on every local day they cover', () => {
 		const morning = requiredTimestamp('2026-04-12T09:00');
 		const afternoon = requiredTimestamp('2026-04-12T14:00');

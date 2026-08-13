@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import DateRangeInput from '$lib/components/DateRangeInput.svelte';
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import TimeZonePicker from '$lib/components/TimeZonePicker.svelte';
@@ -307,12 +308,13 @@
 		return formatCalendarDate(value) !== null;
 	}
 
-	function minimumAccommodationCheckOutDate(): string | undefined {
-		return accommodationDateIsValid(accommodationCheckInDate) ? accommodationCheckInDate : undefined;
-	}
-
 	function accommodationDateTime(date: string, time: string): string {
 		return `${date}T${time}`;
+	}
+
+	function setAccommodationDateRange(range: Readonly<{ checkInDate: string; checkOutDate: string }>): void {
+		accommodationCheckInDate = range.checkInDate;
+		accommodationCheckOutDate = range.checkOutDate;
 	}
 
 	function setAccommodationCheckInDateTime(value: string): void {
@@ -917,10 +919,15 @@
 				{#if transportSchedule}
 					<p class="schedule-found">The imported scheduled times will be kept for the final review.</p>
 				{:else}
-					<label class="shiori-form-label">
-						Departure date <span class="field-hint">Optional; used to prefill the schedule.</span>
-						<input class="shiori-form-control" bind:value={suggestedStartDate} type="date" />
-					</label>
+					<DateTimeInput
+						dateTime={`${suggestedStartDate}T`}
+						id="transport-departure-date"
+						label="Departure date"
+						onDateTimeChange={(value) => (suggestedStartDate = value.slice(0, 10))}
+						pickerMode="date"
+						showTimeZonePicker={false}
+					/>
+					<p class="field-hint">Optional; used to prefill the schedule.</p>
 				{/if}
 				<label class="shiori-form-label">
 					Journey title <span class="field-hint">Optional; a route title is generated otherwise.</span>
@@ -1026,25 +1033,12 @@
 						{resolvingAccommodationLocation ? 'Looking up…' : 'Look up link'}
 					</button>
 				</div>
-				<div class="field-grid">
-					<DateTimeInput
-						dateTime={accommodationDateTime(accommodationCheckInDate, accommodationCheckInTime)}
-						id="accommodation-check-in-date"
-						label="Check-in date"
-						onDateTimeChange={setAccommodationCheckInDateTime}
-						pickerMode="date"
-						showTimeZonePicker={false}
-					/>
-					<DateTimeInput
-						dateTime={accommodationDateTime(accommodationCheckOutDate, accommodationCheckOutTime)}
-						id="accommodation-check-out-date"
-						label="Check-out date"
-						minimumDate={minimumAccommodationCheckOutDate()}
-						onDateTimeChange={setAccommodationCheckOutDateTime}
-						pickerMode="date"
-						showTimeZonePicker={false}
-					/>
-				</div>
+				<DateRangeInput
+					checkInDate={accommodationCheckInDate}
+					checkOutDate={accommodationCheckOutDate}
+					id="accommodation-stay-dates"
+					onDateRangeChange={setAccommodationDateRange}
+				/>
 				<label class="shiori-form-label">
 					Property time zone
 					<TimeZonePicker

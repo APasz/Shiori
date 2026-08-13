@@ -35,6 +35,8 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
+		"@internationalized/date": "^3.12.3",
+		"bits-ui": "^2.18.1",
 		"yaml": "^2.9.0",
 		"zod": "^4.4.3"
 	},

@@ -74,12 +74,11 @@
 	{:else}
 		<span>{viewerLabel ?? 'Localizing…'}</span>
 	{/if}
-	{#if showLocalTime && localLabel}
+	{#if showLocalTime && (localParts || localLabel)}
 		{#if localParts}
 			<span class="local-time timing-parts">
 				{#each localParts as part (`${part.label ?? ''}:${part.value}`)}
 					<span class="timing-part">
-						{#if part.label}<span class="timing-context">{part.label}</span>{/if}
 						<span>{part.value}</span>
 					</span>
 				{/each}
@@ -125,7 +124,6 @@
 		white-space: nowrap;
 	}
 
-	.local-time .timing-context,
 	.local-time .time-zone-label {
 		font-size: 0.625rem;
 	}

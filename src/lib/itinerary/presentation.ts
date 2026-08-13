@@ -1,5 +1,5 @@
 import { addCalendarDays, formatCalendarDate } from './calendar';
-import type { ItineraryTiming } from './schema';
+import type { ItineraryItem, ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
 import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
@@ -10,11 +10,35 @@ type TimedItem = Readonly<{
 	id: string;
 	timing: ItineraryTiming;
 }>;
+type ItemWithType = Readonly<{
+	type: ItineraryItem['type'];
+}>;
 
 export type LocalItineraryDay<Item extends TimedItem> = Readonly<{
 	date: string;
 	items: Item[];
 }>;
+
+export type DayItemPartition<Item extends ItemWithType> = Readonly<{
+	stays: Item[];
+	timelineItems: Item[];
+}>;
+
+/** Separates accommodation context from the chronological action timeline without changing either order. */
+export function partitionDayItems<Item extends ItemWithType>(items: readonly Item[]): DayItemPartition<Item> {
+	const stays: Item[] = [];
+	const timelineItems: Item[] = [];
+
+	for (const item of items) {
+		if (item.type === 'accommodation') {
+			stays.push(item);
+		} else {
+			timelineItems.push(item);
+		}
+	}
+
+	return { stays, timelineItems };
+}
 
 function timestampForViewer(timestamp: number, timeZone: string | undefined) {
 	return timeZone ? formatTimestampInTimeZone(timestamp, timeZone) : formatLocalTimestamp(timestamp);
