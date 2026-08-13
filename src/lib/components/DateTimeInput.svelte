@@ -86,6 +86,10 @@
 	function setDate(value: DateValue | undefined): void {
 		if (value) {
 			onDateTimeChange(replaceDatePart(dateTime, value.toString()));
+			return;
+		}
+		if (pickerMode === 'date') {
+			onDateTimeChange('');
 		}
 	}
 

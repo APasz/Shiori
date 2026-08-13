@@ -319,12 +319,25 @@ describe('JSON store', () => {
 		await store.saveItem({
 			item: {
 				...createEmptyItineraryItem('activity', 'paid-item', Date.UTC(2026, 0, 3)),
-				cost: { amountMinor: 10_000, currency: 'USD', status: 'paid' },
+				cost: { amountMinor: 10_000, currency: 'USD', scheduledPaymentDate: '2026-01-03', status: 'paid' },
 				title: 'paid-item'
 			},
 			itemId: 'paid-item',
 			lockToken: lock.token,
 			revision: trip.revision,
+			tripId: trip.id,
+			userId: owner.id
+		});
+		const updateLock = await store.acquireItemLock({ itemId: 'paid-item', tripId: trip.id, userId: owner.id });
+		await store.saveItem({
+			item: {
+				...createEmptyItineraryItem('activity', 'paid-item', Date.UTC(2026, 0, 3)),
+				cost: { amountMinor: 10_000, currency: 'USD', scheduledPaymentDate: '2026-01-04', status: 'paid' },
+				title: 'paid-item'
+			},
+			itemId: 'paid-item',
+			lockToken: updateLock.token,
+			revision: trip.revision + 1,
 			tripId: trip.id,
 			userId: owner.id
 		});
@@ -337,6 +350,7 @@ describe('JSON store', () => {
 		expect(savedItem?.cost).toEqual({
 			amountMinor: 10_000,
 			currency: 'USD',
+			scheduledPaymentDate: '2026-01-04',
 			payment: {
 				exchangeRate: 1.2,
 				localAmountMinor: 12_000,

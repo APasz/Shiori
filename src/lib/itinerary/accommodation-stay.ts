@@ -12,6 +12,7 @@ import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 type AccommodationCostInput = Readonly<{
 	amount: string;
 	currency: CurrencyCode;
+	scheduledPaymentDate?: string;
 	status: 'paid' | 'unpaid';
 }>;
 
@@ -125,7 +126,14 @@ export function accommodationStayDraft(input: AccommodationStayInput): Accommoda
 				}
 			: {}),
 		...(input.cost && costAmountMinor !== null
-			? { cost: { amountMinor: costAmountMinor, currency: input.cost.currency, status: input.cost.status } }
+			? {
+					cost: {
+						amountMinor: costAmountMinor,
+						currency: input.cost.currency,
+						...(input.cost.scheduledPaymentDate ? { scheduledPaymentDate: input.cost.scheduledPaymentDate } : {}),
+						status: input.cost.status
+					}
+				}
 			: {})
 	});
 	return candidate.success

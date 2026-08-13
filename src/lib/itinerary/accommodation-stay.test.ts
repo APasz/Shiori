@@ -11,7 +11,7 @@ describe('accommodation stay drafts', () => {
 			checkOutDate: '2026-11-04',
 			checkOutTime: '10:00',
 			coordinates: { latitude: 34.8627692, longitude: 135.6777082 },
-			cost: { amount: '125.50', currency: 'AUD', status: 'unpaid' },
+			cost: { amount: '125.50', currency: 'AUD', scheduledPaymentDate: '2026-11-01', status: 'unpaid' },
 			googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=ELE+Hotel+Kuzuha',
 			id: 'ele-hotel-kuzuha',
 			links: [{ label: 'Google Hotels', url: 'https://www.google.com/travel/search' }],
@@ -31,7 +31,7 @@ describe('accommodation stay drafts', () => {
 					startAt: Date.UTC(2026, 10, 2, 6),
 					endAt: Date.UTC(2026, 10, 4, 1)
 				},
-				cost: { amountMinor: 12_550, currency: 'AUD', status: 'unpaid' },
+				cost: { amountMinor: 12_550, currency: 'AUD', scheduledPaymentDate: '2026-11-01', status: 'unpaid' },
 				reservation: { provider: 'Agoda', reference: 'ABC123', status: 'confirmed' }
 			}
 		});

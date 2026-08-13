@@ -110,11 +110,13 @@ type ExportedCost =
 	| Readonly<{
 			amountMinor: number;
 			currency: CurrencyCode;
+			scheduledPaymentDate?: string;
 			status: 'unpaid';
 	  }>
 	| Readonly<{
 			amountMinor: number;
 			currency: CurrencyCode;
+			scheduledPaymentDate?: string;
 			status: 'paid';
 			payment: Readonly<{
 				exchangeRate: number;
@@ -127,11 +129,13 @@ type ExportedCost =
 	| Readonly<{
 			amount: number;
 			currency: CurrencyCode;
+			scheduledPaymentDate?: string;
 			status: 'unpaid';
 	  }>
 	| Readonly<{
 			amount: number;
 			currency: CurrencyCode;
+			scheduledPaymentDate?: string;
 			status: 'paid';
 			payment: Readonly<{
 				exchangeRate: number;
@@ -257,14 +261,16 @@ function normalizeCostAmount(amount: number, currency: CurrencyCode): number {
 }
 
 function exportCost(cost: Cost, options: ItineraryExportOptions): ExportedCost {
+	const scheduledPaymentDate = cost.scheduledPaymentDate ? { scheduledPaymentDate: cost.scheduledPaymentDate } : {};
 	if (!options.normalizeCostAmounts) {
 		if (cost.status === 'unpaid') {
-			return { amountMinor: cost.amountMinor, currency: cost.currency, status: 'unpaid' };
+			return { amountMinor: cost.amountMinor, currency: cost.currency, ...scheduledPaymentDate, status: 'unpaid' };
 		}
 
 		return {
 			amountMinor: cost.amountMinor,
 			currency: cost.currency,
+			...scheduledPaymentDate,
 			status: 'paid',
 			payment: {
 				exchangeRate: cost.payment.exchangeRate,
@@ -278,12 +284,13 @@ function exportCost(cost: Cost, options: ItineraryExportOptions): ExportedCost {
 
 	const amount = normalizeCostAmount(cost.amountMinor, cost.currency);
 	if (cost.status === 'unpaid') {
-		return { amount, currency: cost.currency, status: 'unpaid' };
+		return { amount, currency: cost.currency, ...scheduledPaymentDate, status: 'unpaid' };
 	}
 
 	return {
 		amount,
 		currency: cost.currency,
+		...scheduledPaymentDate,
 		status: 'paid',
 		payment: {
 			exchangeRate: cost.payment.exchangeRate,
@@ -420,6 +427,9 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 			? monetaryAmountText(item.cost.amount, item.cost.currency, true)
 			: monetaryAmountText(item.cost.amountMinor, item.cost.currency, false);
 		lines.push(`   Cost: ${costText} (${item.cost.status})`);
+		if (item.cost.scheduledPaymentDate) {
+			lines.push(`     Scheduled payment: ${item.cost.scheduledPaymentDate}`);
+		}
 	}
 	if (item.notes && item.notes.length > 0) {
 		lines.push('   Notes:');

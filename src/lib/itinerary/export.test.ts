@@ -9,6 +9,7 @@ const itinerary = itinerarySchema.parse({
 			cost: {
 				amountMinor: 12_500,
 				currency: 'USD',
+				scheduledPaymentDate: '2026-04-04',
 				payment: {
 					exchangeRate: 1.2,
 					localAmountMinor: 15_000,
@@ -86,6 +87,7 @@ describe('itinerary exports', () => {
 		});
 		expect(firstItem.reservation).toEqual({ provider: 'JR', reference: 'ABC123', status: 'confirmed' });
 		expect(firstItem.cost).toMatchObject({ amount: 125, currency: 'USD', status: 'paid' });
+		expect(firstItem.cost).toMatchObject({ scheduledPaymentDate: '2026-04-04' });
 		expect(firstItem).not.toHaveProperty('id');
 		expect(firstItem.locations[0]).not.toHaveProperty('id');
 		expect(firstItem.transport.stops[0]).not.toHaveProperty('locationId');
@@ -133,6 +135,7 @@ describe('itinerary exports', () => {
 		expect(exported.items[0].locations[0]).not.toHaveProperty('coordinates');
 		expect(text).toContain('When: 1775952000000 (epoch milliseconds; Asia/Tokyo)');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
+		expect(text).toContain('Scheduled payment: 2026-04-04');
 	});
 
 	it('preserves explicit minor-unit fields when cost normalization is disabled', () => {

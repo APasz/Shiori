@@ -134,6 +134,7 @@
 	let accommodationCostAmount = $state('');
 	let accommodationCostCurrency = $state<CurrencyCode>('AUD');
 	let accommodationCostPaid = $state(false);
+	let accommodationCostScheduledPaymentDate = $state('');
 	let resolvingAccommodationLocation = $state(false);
 	let savingAccommodation = $state(false);
 
@@ -301,6 +302,7 @@
 		accommodationCostAmount = '';
 		accommodationCostCurrency = localCurrency;
 		accommodationCostPaid = false;
+		accommodationCostScheduledPaymentDate = '';
 		creatorState = 'accommodation-details';
 	}
 
@@ -365,6 +367,9 @@
 						cost: {
 							amount: accommodationCostAmount,
 							currency: accommodationCostCurrency,
+							...(accommodationCostScheduledPaymentDate
+								? { scheduledPaymentDate: accommodationCostScheduledPaymentDate }
+								: {}),
 							status: accommodationCostPaid ? 'paid' : 'unpaid'
 						}
 					}
@@ -1139,10 +1144,20 @@
 									</select>
 								</label>
 							</div>
-							<label class="toggle-label">
-								<input bind:checked={accommodationCostPaid} type="checkbox" />
-								Already paid
-							</label>
+							<div class="field-grid">
+								<label class="toggle-label">
+									<input bind:checked={accommodationCostPaid} type="checkbox" />
+									Already paid
+								</label>
+								<DateTimeInput
+									dateTime={`${accommodationCostScheduledPaymentDate}T`}
+									id="accommodation-cost-scheduled-payment-date"
+									label="Scheduled payment date"
+									onDateTimeChange={(value) => (accommodationCostScheduledPaymentDate = value.slice(0, 10))}
+									pickerMode="date"
+									showTimeZonePicker={false}
+								/>
+							</div>
 						{/if}
 					</div>
 				</details>

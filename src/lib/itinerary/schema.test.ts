@@ -88,6 +88,7 @@ describe('cost schemas', () => {
 		const paidCost = {
 			amountMinor: 12_500,
 			currency: 'USD',
+			scheduledPaymentDate: '2026-04-04',
 			status: 'paid'
 		} as const;
 		const item = { ...itemBase, cost: paidCost, timing: { kind: 'exact' as const, startAt: 1_775_952_000_000 } };

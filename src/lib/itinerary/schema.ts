@@ -232,7 +232,11 @@ const costAmountSchema = z.strictObject({
 	currency: currencyCodeSchema
 });
 
-export const costDraftSchema = costAmountSchema.extend({
+const costBaseSchema = costAmountSchema.extend({
+	scheduledPaymentDate: calendarDateSchema.optional()
+});
+
+export const costDraftSchema = costBaseSchema.extend({
 	status: costStatusSchema
 });
 
@@ -245,8 +249,8 @@ const costPaymentSchema = z.strictObject({
 });
 
 export const costSchema = z.discriminatedUnion('status', [
-	costAmountSchema.extend({ status: z.literal('unpaid') }),
-	costAmountSchema.extend({ payment: costPaymentSchema, status: z.literal('paid') })
+	costBaseSchema.extend({ status: z.literal('unpaid') }),
+	costBaseSchema.extend({ payment: costPaymentSchema, status: z.literal('paid') })
 ]);
 
 const transportStopSchema = z.strictObject({

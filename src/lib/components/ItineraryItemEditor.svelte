@@ -146,6 +146,7 @@
 	let costAmount = $state('');
 	let costCurrency = $state<CurrencyCode>('AUD');
 	let costPaid = $state(false);
+	let costScheduledPaymentDate = $state('');
 	let transportMode = $state<TransportDetails['mode']>('other');
 	let transportOperator = $state('');
 	let transportServiceNumber = $state('');
@@ -241,6 +242,7 @@
 		costAmount = source.cost ? amountInputValue(source.cost) : '';
 		costCurrency = source.cost?.currency ?? localCurrency;
 		costPaid = source.cost?.status === 'paid';
+		costScheduledPaymentDate = source.cost?.scheduledPaymentDate ?? '';
 		transportMode = source.type === 'transport' ? source.transport.mode : 'other';
 		transportOperator = source.type === 'transport' ? (source.transport.operator ?? '') : '';
 		transportServiceNumber = source.type === 'transport' ? (source.transport.serviceNumber ?? '') : '';
@@ -412,9 +414,11 @@
 		if (!costEnabled) {
 			return undefined;
 		}
+		const scheduledPaymentDate = optionalText(costScheduledPaymentDate);
 		return {
 			amountMinor: amountMinorFromInput(costAmount, costCurrency) ?? Number.NaN,
 			currency: costCurrency,
+			...(scheduledPaymentDate ? { scheduledPaymentDate } : {}),
 			status: costPaid ? 'paid' : 'unpaid'
 		};
 	}
@@ -1360,10 +1364,20 @@
 									</select>
 								</label>
 							</div>
-							<label class="toggle-label">
-								<input bind:checked={costPaid} type="checkbox" />
-								Mark as paid
-							</label>
+							<div class="field-grid">
+								<label class="toggle-label">
+									<input bind:checked={costPaid} type="checkbox" />
+									Mark as paid
+								</label>
+								<DateTimeInput
+									dateTime={`${costScheduledPaymentDate}T`}
+									id="cost-scheduled-payment-date"
+									label="Scheduled payment date"
+									onDateTimeChange={(value) => (costScheduledPaymentDate = value.slice(0, 10))}
+									pickerMode="date"
+									showTimeZonePicker={false}
+								/>
+							</div>
 							{#if costPaid}
 								<p class="field-hint">
 									Shiori saves the ECB rate and {localCurrency} equivalent when you save this paid cost.

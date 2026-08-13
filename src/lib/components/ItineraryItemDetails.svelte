@@ -3,6 +3,7 @@
 	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
+	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { CurrencyCode, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
 	import { formatMonetaryAmount } from '$lib/money';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
@@ -185,6 +186,10 @@
 					<dd>{formatMonetaryAmount(item.cost.amountMinor, item.cost.currency)}</dd>
 					<dt>Status</dt>
 					<dd>{item.cost.status === 'paid' ? 'Paid' : 'Unpaid'}</dd>
+					{#if item.cost.scheduledPaymentDate}
+						<dt>Scheduled payment</dt>
+						<dd>{formatCalendarDate(item.cost.scheduledPaymentDate)}</dd>
+					{/if}
 					{#if item.cost.status === 'paid'}
 						<dt>Local equivalent</dt>
 						<dd>
