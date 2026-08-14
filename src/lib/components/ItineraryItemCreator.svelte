@@ -96,7 +96,7 @@
 		onTransportJourney: (journey: TransportJourneyDraft) => void;
 	} = $props();
 
-	let dialogElement: HTMLDialogElement;
+	let dialogElement = $state<HTMLDialogElement | undefined>(undefined);
 	let url = $state('');
 	let errorMessage = $state('');
 	let creatorState = $state<CreatorState>('entry');
@@ -144,6 +144,13 @@
 
 	function endpoint(): string {
 		return `/api/trips/${encodeURIComponent(tripId)}/items/import`;
+	}
+
+	function requireDialogElement(): HTMLDialogElement {
+		if (!dialogElement) {
+			throw new Error('The item creator dialog is unavailable.');
+		}
+		return dialogElement;
 	}
 
 	function tripEndpoint(): string {
@@ -216,7 +223,7 @@
 			startAccommodationStay();
 			return;
 		}
-		dialogElement.close();
+		requireDialogElement().close();
 		onManual(type);
 	}
 
@@ -229,7 +236,7 @@
 			startAccommodationStay(item);
 			return;
 		}
-		dialogElement.close();
+		requireDialogElement().close();
 		onImported(item);
 	}
 
@@ -681,7 +688,7 @@
 			creatorState = 'transport-details';
 			return;
 		}
-		dialogElement.close();
+		requireDialogElement().close();
 		onTransportJourney(journey.data);
 	}
 
@@ -757,7 +764,7 @@
 
 	onMount(() => {
 		accommodationTimeZoneOptions = browserTimeZoneOptions();
-		dialogElement.showModal();
+		requireDialogElement().showModal();
 	});
 </script>
 
@@ -929,6 +936,7 @@
 						id="transport-departure-date"
 						label="Departure date"
 						onDateTimeChange={(value) => (suggestedStartDate = value.slice(0, 10))}
+						portalTarget={dialogElement}
 						pickerMode="date"
 						showTimeZonePicker={false}
 					/>
@@ -1043,6 +1051,7 @@
 					checkOutDate={accommodationCheckOutDate}
 					id="accommodation-stay-dates"
 					onDateRangeChange={setAccommodationDateRange}
+					portalTarget={dialogElement}
 				/>
 				<label class="shiori-form-label">
 					Property time zone
@@ -1064,6 +1073,7 @@
 							id="accommodation-check-in-time"
 							label="Check-in time"
 							onDateTimeChange={setAccommodationCheckInDateTime}
+							portalTarget={dialogElement}
 							pickerMode="time"
 							showTimeZonePicker={false}
 						/>
@@ -1072,6 +1082,7 @@
 							id="accommodation-check-out-time"
 							label="Check-out time"
 							onDateTimeChange={setAccommodationCheckOutDateTime}
+							portalTarget={dialogElement}
 							pickerMode="time"
 							showTimeZonePicker={false}
 						/>
@@ -1154,6 +1165,7 @@
 									id="accommodation-cost-scheduled-payment-date"
 									label="Scheduled payment date"
 									onDateTimeChange={(value) => (accommodationCostScheduledPaymentDate = value.slice(0, 10))}
+									portalTarget={dialogElement}
 									pickerMode="date"
 									showTimeZonePicker={false}
 								/>
@@ -1239,6 +1251,7 @@
 		color: var(--color-text-primary);
 		max-height: calc(100dvh - 2rem);
 		max-width: min(38rem, calc(100% - 2rem));
+		overflow: visible;
 		padding: 0;
 		width: 100%;
 	}
@@ -1251,6 +1264,7 @@
 		background: var(--color-surface-raised);
 		border: 1px solid var(--color-border-strong);
 		max-height: calc(100dvh - 2rem);
+		overflow-x: clip;
 		overflow-y: auto;
 		padding: clamp(1.25rem, 4vw, 2rem);
 	}

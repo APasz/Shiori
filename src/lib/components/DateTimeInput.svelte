@@ -22,6 +22,7 @@
 		pickerMode = 'date-time',
 		dialogPlacement: _dialogPlacement = 'center',
 		pickerPresentation = 'popover',
+		portalTarget,
 		showTimeZonePicker = true,
 		timeZoneHint = 'Used to interpret this value; not saved.',
 		timeZone = 'UTC',
@@ -36,6 +37,7 @@
 		pickerMode?: PickerMode;
 		dialogPlacement?: DialogPlacement;
 		pickerPresentation?: PickerPresentation;
+		portalTarget?: HTMLElement;
 		showTimeZonePicker?: boolean;
 		timeZoneHint?: string;
 		timeZone?: string;
@@ -138,50 +140,54 @@
 					{/snippet}
 				</DatePicker.Input>
 			</div>
-			<DatePicker.Content
-				align="start"
-				class={calendarContentClass}
-				preventScroll={pickerPresentation === 'dialog'}
-				sideOffset={6}
-				trapFocus={pickerPresentation === 'dialog'}
-			>
-				<DatePicker.Calendar class="calendar-panel">
-					{#snippet children({ months, weekdays })}
-						<DatePicker.Header class="calendar-header">
-							<DatePicker.PrevButton aria-label="Previous month" class="calendar-navigation">‹</DatePicker.PrevButton>
-							<div class="calendar-selects">
-								<DatePicker.MonthSelect class="calendar-select" monthFormat="long" />
-								<DatePicker.YearSelect class="calendar-select" />
-							</div>
-							<DatePicker.NextButton aria-label="Next month" class="calendar-navigation">›</DatePicker.NextButton>
-						</DatePicker.Header>
-						<div class="calendar-months">
-							{#each months as month (month.value.toString())}
-								<DatePicker.Grid class="calendar-grid">
-									<DatePicker.GridHead>
-										<DatePicker.GridRow>
-											{#each weekdays as weekday (weekday)}
-												<DatePicker.HeadCell class="calendar-weekday">{weekday}</DatePicker.HeadCell>
-											{/each}
-										</DatePicker.GridRow>
-									</DatePicker.GridHead>
-									<DatePicker.GridBody>
-										{#each month.weeks as weekDates, weekIndex (`${month.value}-${weekIndex}`)}
+			<DatePicker.Portal disabled={portalTarget === undefined} to={portalTarget}>
+				<DatePicker.Content
+					align="start"
+					class={calendarContentClass}
+					collisionPadding={16}
+					preventScroll={pickerPresentation === 'dialog'}
+					sideOffset={6}
+					strategy="fixed"
+					trapFocus={pickerPresentation === 'dialog'}
+				>
+					<DatePicker.Calendar class="calendar-panel">
+						{#snippet children({ months, weekdays })}
+							<DatePicker.Header class="calendar-header">
+								<DatePicker.PrevButton aria-label="Previous month" class="calendar-navigation">‹</DatePicker.PrevButton>
+								<div class="calendar-selects">
+									<DatePicker.MonthSelect class="calendar-select" monthFormat="long" />
+									<DatePicker.YearSelect class="calendar-select" />
+								</div>
+								<DatePicker.NextButton aria-label="Next month" class="calendar-navigation">›</DatePicker.NextButton>
+							</DatePicker.Header>
+							<div class="calendar-months">
+								{#each months as month (month.value.toString())}
+									<DatePicker.Grid class="calendar-grid">
+										<DatePicker.GridHead>
 											<DatePicker.GridRow>
-												{#each weekDates as date (date.toString())}
-													<DatePicker.Cell class="calendar-cell" {date} month={month.value}>
-														<DatePicker.Day class="calendar-day">{date.day}</DatePicker.Day>
-													</DatePicker.Cell>
+												{#each weekdays as weekday (weekday)}
+													<DatePicker.HeadCell class="calendar-weekday">{weekday}</DatePicker.HeadCell>
 												{/each}
 											</DatePicker.GridRow>
-										{/each}
-									</DatePicker.GridBody>
-								</DatePicker.Grid>
-							{/each}
-						</div>
-					{/snippet}
-				</DatePicker.Calendar>
-			</DatePicker.Content>
+										</DatePicker.GridHead>
+										<DatePicker.GridBody>
+											{#each month.weeks as weekDates, weekIndex (`${month.value}-${weekIndex}`)}
+												<DatePicker.GridRow>
+													{#each weekDates as date (date.toString())}
+														<DatePicker.Cell class="calendar-cell" {date} month={month.value}>
+															<DatePicker.Day class="calendar-day">{date.day}</DatePicker.Day>
+														</DatePicker.Cell>
+													{/each}
+												</DatePicker.GridRow>
+											{/each}
+										</DatePicker.GridBody>
+									</DatePicker.Grid>
+								{/each}
+							</div>
+						{/snippet}
+					</DatePicker.Calendar>
+				</DatePicker.Content>
+			</DatePicker.Portal>
 		</DatePicker.Root>
 	{/if}
 	{#if pickerMode === 'date-time'}

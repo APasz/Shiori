@@ -162,7 +162,7 @@
 <dialog
 	bind:this={dialogElement}
 	aria-labelledby="trip-editor-heading"
-	use:draggableDialog={{ canDismiss: confirmDiscard, handleSelector: '[data-dialog-drag-handle]' }}
+	use:draggableDialog={{ handleSelector: '[data-dialog-drag-handle]' }}
 	oncancel={handleDialogCancel}
 	onclose={onDismiss}
 >

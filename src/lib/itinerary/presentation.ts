@@ -13,31 +13,106 @@ type TimedItem = Readonly<{
 type ItemWithType = Readonly<{
 	type: ItineraryItem['type'];
 }>;
+type TimedItemWithType = TimedItem & ItemWithType;
 
 export type LocalItineraryDay<Item extends TimedItem> = Readonly<{
 	date: string;
 	items: Item[];
 }>;
 
-export type DayItemPartition<Item extends ItemWithType> = Readonly<{
-	stays: Item[];
-	timelineItems: Item[];
+export type DayTimelineEntry<Item extends TimedItemWithType> =
+	| Readonly<{
+			item: Item;
+			kind: 'item';
+			timestamp: number;
+	  }>
+	| Readonly<{
+			boundary: 'check-in' | 'check-out';
+			item: Item;
+			kind: 'stay-boundary';
+			timestamp: number;
+	  }>;
+
+export type DayItemPartition<Item extends TimedItemWithType> = Readonly<{
+	arrivingStays: Item[];
+	ongoingStays: Item[];
+	timelineEntries: DayTimelineEntry<Item>[];
 }>;
 
-/** Separates accommodation context from the chronological action timeline without changing either order. */
-export function partitionDayItems<Item extends ItemWithType>(items: readonly Item[]): DayItemPartition<Item> {
-	const stays: Item[] = [];
-	const timelineItems: Item[] = [];
+type DayBounds = Readonly<{
+	dayEnd: number;
+	dayStart: number;
+}>;
+
+function dayBounds(date: string, timeZone: string): DayBounds {
+	const dayStart = zonedDateTimeToUnixMilliseconds(`${date}T00:00`, timeZone);
+	const followingDate = addCalendarDays(date, 1);
+	const dayEnd = followingDate ? zonedDateTimeToUnixMilliseconds(`${followingDate}T00:00`, timeZone) : null;
+	if (dayStart === null || dayEnd === null) {
+		throw new Error(`Cannot determine day bounds for ${date} in ${timeZone}.`);
+	}
+	return { dayEnd, dayStart };
+}
+
+function timelineEntryOrder<Item extends TimedItemWithType>(
+	left: DayTimelineEntry<Item>,
+	right: DayTimelineEntry<Item>
+): number {
+	if (left.timestamp !== right.timestamp) {
+		return left.timestamp - right.timestamp;
+	}
+	if (left.kind !== right.kind) {
+		return left.kind === 'stay-boundary' ? -1 : 1;
+	}
+	if (left.kind === 'stay-boundary' && right.kind === 'stay-boundary' && left.boundary !== right.boundary) {
+		return left.boundary === 'check-out' ? -1 : 1;
+	}
+	return left.item.id.localeCompare(right.item.id);
+}
+
+function isTimestampOnDay(timestamp: number, bounds: DayBounds): boolean {
+	return timestamp >= bounds.dayStart && timestamp < bounds.dayEnd;
+}
+
+/** Places continuing stays above a day and new check-ins below it, with known stay boundaries in chronological order. */
+export function partitionDayItems<Item extends TimedItemWithType>(
+	items: readonly Item[],
+	date: string,
+	timeZone: string
+): DayItemPartition<Item> {
+	const arrivingStays: Item[] = [];
+	const ongoingStays: Item[] = [];
+	const timelineEntries: DayTimelineEntry<Item>[] = [];
+	const bounds = dayBounds(date, timeZone);
 
 	for (const item of items) {
 		if (item.type === 'accommodation') {
-			stays.push(item);
+			const checkInAt = timingStartTimestamp(item.timing);
+			if (checkInAt < bounds.dayStart) {
+				ongoingStays.push(item);
+			} else if (checkInAt < bounds.dayEnd) {
+				arrivingStays.push(item);
+			}
+
+			if (item.timing.kind === 'exact' && item.timing.timePrecision !== 'date') {
+				if (isTimestampOnDay(item.timing.startAt, bounds)) {
+					timelineEntries.push({ boundary: 'check-in', item, kind: 'stay-boundary', timestamp: item.timing.startAt });
+				}
+				if (item.timing.endAt !== undefined && isTimestampOnDay(item.timing.endAt, bounds)) {
+					timelineEntries.push({ boundary: 'check-out', item, kind: 'stay-boundary', timestamp: item.timing.endAt });
+				}
+			}
 		} else {
-			timelineItems.push(item);
+			timelineEntries.push({
+				item,
+				kind: 'item',
+				timestamp: timingTimestampOnLocalDay(item.timing, date, timeZone)
+			});
 		}
 	}
 
-	return { stays, timelineItems };
+	timelineEntries.sort(timelineEntryOrder);
+	return { arrivingStays, ongoingStays, timelineEntries };
 }
 
 function timestampForViewer(timestamp: number, timeZone: string | undefined) {

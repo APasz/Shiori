@@ -114,7 +114,7 @@
 		onSaved: () => Promise<void>;
 	} = $props();
 
-	let dialogElement: HTMLDialogElement;
+	let dialogElement = $state<HTMLDialogElement | undefined>(undefined);
 	let editorElement: HTMLFormElement;
 	let editorState = $state<EditorState>('acquiring');
 	let errorMessage = $state('');
@@ -740,6 +740,13 @@
 		return !hasUnsavedChanges || window.confirm('Discard your unsaved changes?');
 	}
 
+	function requireDialogElement(): HTMLDialogElement {
+		if (!dialogElement) {
+			throw new Error('The item editor dialog is unavailable.');
+		}
+		return dialogElement;
+	}
+
 	function handleDialogCancel(event: Event): void {
 		if (!confirmDiscard()) {
 			event.preventDefault();
@@ -763,7 +770,7 @@
 		timeZoneOptions = browserTimeZoneOptions();
 		populateDraft(item, tripTimeZone);
 		initialDraftFingerprint = JSON.stringify(itemCandidate());
-		dialogElement.showModal();
+		requireDialogElement().showModal();
 		void acquireLock();
 
 		return () => {
@@ -890,7 +897,7 @@
 			editorState = 'error';
 			return;
 		}
-		dialogElement.close();
+		requireDialogElement().close();
 	}
 
 	async function saveEditing(event: SubmitEvent): Promise<void> {
@@ -944,7 +951,7 @@
 <dialog
 	bind:this={dialogElement}
 	aria-labelledby="item-editor-heading"
-	use:draggableDialog={{ canDismiss: confirmDiscard, handleSelector: '[data-dialog-drag-handle]' }}
+	use:draggableDialog={{ handleSelector: '[data-dialog-drag-handle]' }}
 	oncancel={handleDialogCancel}
 	onclose={onDismiss}
 >
@@ -1067,6 +1074,7 @@
 										: 'Start date and time'}
 								onDateTimeChange={(value) => (startAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
+								portalTarget={dialogElement}
 								pickerMode={exactTimingDateOnly
 									? 'date'
 									: timingNeedsConfirmation && suggestedStartDate
@@ -1093,6 +1101,7 @@
 											: 'End date and time'}
 									onDateTimeChange={(value) => (endAt = value)}
 									onTimeZoneChange={changeItemTimeZone}
+									portalTarget={dialogElement}
 									pickerMode={exactTimingDateOnly
 										? 'date'
 										: timingNeedsConfirmation && suggestedEndDate
@@ -1110,6 +1119,7 @@
 								label="Approximate date and time"
 								onDateTimeChange={(value) => (nominalAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
+								portalTarget={dialogElement}
 								timeZoneHint="Saved with this timing."
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
@@ -1132,6 +1142,7 @@
 								label="Earliest date and time"
 								onDateTimeChange={(value) => (earliestAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
+								portalTarget={dialogElement}
 								timeZoneHint="Saved with this timing."
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
@@ -1142,6 +1153,7 @@
 								label="Latest date and time"
 								onDateTimeChange={(value) => (latestAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
+								portalTarget={dialogElement}
 								timeZoneHint="Saved with this timing."
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
@@ -1289,6 +1301,7 @@
 														label="Scheduled date and time"
 														onDateTimeChange={(value) => (stop.scheduledAt = value)}
 														onTimeZoneChange={(timeZone) => changeStopTimeZone(stop, timeZone)}
+														portalTarget={dialogElement}
 														timeZoneHint="Saved with this stop."
 														timeZone={stop.timeZone}
 														{timeZoneOptions}
@@ -1374,6 +1387,7 @@
 									id="cost-scheduled-payment-date"
 									label="Scheduled payment date"
 									onDateTimeChange={(value) => (costScheduledPaymentDate = value.slice(0, 10))}
+									portalTarget={dialogElement}
 									pickerMode="date"
 									showTimeZonePicker={false}
 								/>
@@ -1481,6 +1495,7 @@
 		color: var(--color-text-primary);
 		max-height: calc(100dvh - 2rem);
 		max-width: min(48rem, calc(100% - 2rem));
+		overflow: visible;
 		padding: 0;
 		width: 100%;
 	}
@@ -1493,6 +1508,7 @@
 		background: var(--color-surface-raised);
 		border: 1px solid var(--item-accent);
 		max-height: calc(100dvh - 2rem);
+		overflow-x: clip;
 		overflow-y: auto;
 		padding: 0;
 	}

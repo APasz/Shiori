@@ -896,10 +896,12 @@ async function persistedItemForCost(
 		if (!sameCostAmount(cost, existingItem.cost)) {
 			throw new StoreError(400, 'Set this cost to unpaid and save before changing its charged amount or currency.');
 		}
-		const { scheduledPaymentDate: _existingScheduledPaymentDate, ...existingPaidCost } = existingItem.cost;
 		const updatedCost: Cost = {
-			...existingPaidCost,
-			...(cost.scheduledPaymentDate ? { scheduledPaymentDate: cost.scheduledPaymentDate } : {})
+			amountMinor: existingItem.cost.amountMinor,
+			currency: existingItem.cost.currency,
+			payment: existingItem.cost.payment,
+			...(cost.scheduledPaymentDate ? { scheduledPaymentDate: cost.scheduledPaymentDate } : {}),
+			status: 'paid'
 		};
 		return itineraryItemSchema.parse({ ...item, cost: updatedCost });
 	}

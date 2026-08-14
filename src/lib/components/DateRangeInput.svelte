@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { DateRangePicker } from 'bits-ui';
+	import { DateRangePicker, Portal } from 'bits-ui';
 	import { parseDate, today, type CalendarDate, type DateValue } from '@internationalized/date';
 	import './date-picker.css';
 
@@ -20,13 +20,15 @@
 		checkInDate,
 		checkOutDate,
 		label = 'Stay dates',
-		onDateRangeChange
+		onDateRangeChange,
+		portalTarget
 	}: {
 		id: string;
 		checkInDate: string;
 		checkOutDate: string;
 		label?: string;
 		onDateRangeChange: (range: DateRangeChange) => void;
+		portalTarget?: HTMLElement;
 	} = $props();
 	let locale = $state('en-AU');
 	let numberOfMonths = $state(1);
@@ -112,49 +114,58 @@
 			>
 		</div>
 	</div>
-	<DateRangePicker.Content align="start" class="calendar-content" sideOffset={6}>
-		<DateRangePicker.Calendar
-			class={`calendar-panel stay-calendar-panel${numberOfMonths === 1 ? ' single-month' : ''}`}
+	<Portal disabled={portalTarget === undefined} to={portalTarget}>
+		<DateRangePicker.Content
+			align="start"
+			class="calendar-content"
+			collisionPadding={16}
+			sideOffset={6}
+			strategy="fixed"
 		>
-			{#snippet children({ months, weekdays })}
-				<DateRangePicker.Header class="calendar-header">
-					<DateRangePicker.PrevButton aria-label="Previous months" class="calendar-navigation"
-						>‹</DateRangePicker.PrevButton
-					>
-					<div class="calendar-selects">
-						<DateRangePicker.MonthSelect class="calendar-select" monthFormat="long" />
-						<DateRangePicker.YearSelect class="calendar-select" />
-					</div>
-					<DateRangePicker.NextButton aria-label="Next months" class="calendar-navigation">›</DateRangePicker.NextButton
-					>
-				</DateRangePicker.Header>
-				<div class="calendar-months">
-					{#each months as month (month.value.toString())}
-						<DateRangePicker.Grid class="calendar-grid">
-							<DateRangePicker.GridHead>
-								<DateRangePicker.GridRow>
-									{#each weekdays as weekday (weekday)}
-										<DateRangePicker.HeadCell class="calendar-weekday">{weekday}</DateRangePicker.HeadCell>
-									{/each}
-								</DateRangePicker.GridRow>
-							</DateRangePicker.GridHead>
-							<DateRangePicker.GridBody>
-								{#each month.weeks as weekDates, weekIndex (`${month.value}-${weekIndex}`)}
+			<DateRangePicker.Calendar
+				class={`calendar-panel stay-calendar-panel${numberOfMonths === 1 ? ' single-month' : ''}`}
+			>
+				{#snippet children({ months, weekdays })}
+					<DateRangePicker.Header class="calendar-header">
+						<DateRangePicker.PrevButton aria-label="Previous months" class="calendar-navigation"
+							>‹</DateRangePicker.PrevButton
+						>
+						<div class="calendar-selects">
+							<DateRangePicker.MonthSelect class="calendar-select" monthFormat="long" />
+							<DateRangePicker.YearSelect class="calendar-select" />
+						</div>
+						<DateRangePicker.NextButton aria-label="Next months" class="calendar-navigation"
+							>›</DateRangePicker.NextButton
+						>
+					</DateRangePicker.Header>
+					<div class="calendar-months">
+						{#each months as month (month.value.toString())}
+							<DateRangePicker.Grid class="calendar-grid">
+								<DateRangePicker.GridHead>
 									<DateRangePicker.GridRow>
-										{#each weekDates as date (date.toString())}
-											<DateRangePicker.Cell class="calendar-cell" {date} month={month.value}>
-												<DateRangePicker.Day class="calendar-day stay-calendar-day">{date.day}</DateRangePicker.Day>
-											</DateRangePicker.Cell>
+										{#each weekdays as weekday (weekday)}
+											<DateRangePicker.HeadCell class="calendar-weekday">{weekday}</DateRangePicker.HeadCell>
 										{/each}
 									</DateRangePicker.GridRow>
-								{/each}
-							</DateRangePicker.GridBody>
-						</DateRangePicker.Grid>
-					{/each}
-				</div>
-			{/snippet}
-		</DateRangePicker.Calendar>
-	</DateRangePicker.Content>
+								</DateRangePicker.GridHead>
+								<DateRangePicker.GridBody>
+									{#each month.weeks as weekDates, weekIndex (`${month.value}-${weekIndex}`)}
+										<DateRangePicker.GridRow>
+											{#each weekDates as date (date.toString())}
+												<DateRangePicker.Cell class="calendar-cell" {date} month={month.value}>
+													<DateRangePicker.Day class="calendar-day stay-calendar-day">{date.day}</DateRangePicker.Day>
+												</DateRangePicker.Cell>
+											{/each}
+										</DateRangePicker.GridRow>
+									{/each}
+								</DateRangePicker.GridBody>
+							</DateRangePicker.Grid>
+						{/each}
+					</div>
+				{/snippet}
+			</DateRangePicker.Calendar>
+		</DateRangePicker.Content>
+	</Portal>
 </DateRangePicker.Root>
 
 <style>

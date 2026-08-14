@@ -7,6 +7,7 @@
 	import ItineraryItemEditor from '$lib/components/ItineraryItemEditor.svelte';
 	import ItineraryItemIllustration from '$lib/components/ItineraryItemIllustration.svelte';
 	import ItineraryNowNext from '$lib/components/ItineraryNowNext.svelte';
+	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import TripEditor from '$lib/components/TripEditor.svelte';
 	import TripSwitcher from '$lib/components/TripSwitcher.svelte';
@@ -20,7 +21,8 @@
 		formatLocalDay,
 		getItineraryDateRange,
 		getLocalItineraryDays,
-		partitionDayItems
+		partitionDayItems,
+		type DayTimelineEntry
 	} from '$lib/itinerary/presentation';
 	import type { ItineraryItem, ItineraryItemType } from '$lib/itinerary/schema';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
@@ -432,6 +434,60 @@
 	</li>
 {/snippet}
 
+{#snippet stayBoundaryItem(entry: Extract<DayTimelineEntry<DayItem>, { kind: 'stay-boundary' }>)}
+	{@const boundaryLabel = entry.boundary === 'check-in' ? 'Check in' : 'Check out'}
+	<li class="stay-boundary-row">
+		{#if detailedTrip}
+			<button
+				aria-haspopup="dialog"
+				aria-label={`${boundaryLabel}: ${entry.item.title}`}
+				aria-pressed={selectedItemId === entry.item.id}
+				class:selected={selectedItemId === entry.item.id}
+				class="stay-boundary-button"
+				onclick={() => (selectedItemId = entry.item.id)}
+				style={itemTypeAccentStyle(entry.item.type)}
+				type="button"
+			>
+				<ItineraryTime
+					startAt={entry.timestamp}
+					timeZone={resolveTimingTimeZone(entry.item.timing, itinerary.timeZone)}
+				/>
+				<span class="stay-boundary-label">{boundaryLabel}</span>
+			</button>
+		{:else}
+			<div class="stay-boundary-summary" style={itemTypeAccentStyle(entry.item.type)}>
+				<ItineraryTime
+					startAt={entry.timestamp}
+					timeZone={resolveTimingTimeZone(entry.item.timing, itinerary.timeZone)}
+				/>
+				<span class="stay-boundary-label">{boundaryLabel}</span>
+			</div>
+		{/if}
+	</li>
+{/snippet}
+
+{#snippet timelineEntry(entry: DayTimelineEntry<DayItem>, dayDate: string)}
+	{#if entry.kind === 'item'}
+		{@render dayItem(entry.item, dayDate, 'timeline')}
+	{:else}
+		{@render stayBoundaryItem(entry)}
+	{/if}
+{/snippet}
+
+{#snippet stayBlock(stays: DayItem[], dayDate: string, position: 'arriving' | 'ongoing')}
+	<section
+		aria-label={`${position === 'ongoing' ? 'Continuing stays' : 'Check-ins'} on ${formatLocalDay(dayDate)}`}
+		class="stay-block"
+	>
+		<h4>{position === 'ongoing' ? 'Continuing stays' : 'Check-ins'}</h4>
+		<ul class="stay-list">
+			{#each stays as item (item.id)}
+				{@render dayItem(item, dayDate, 'stay')}
+			{/each}
+		</ul>
+	</section>
+{/snippet}
+
 <svelte:head>
 	<title>Shiori · Travel itineraries</title>
 	<meta name="description" content="A server-authoritative travel itinerary, validated by Shiori." />
@@ -507,29 +563,25 @@
 			{:else}
 				<div class="days">
 					{#each localDays as day, index (day.date)}
-						{@const dayItems = partitionDayItems(day.items)}
-						{@const { stays, timelineItems } = dayItems}
+						{@const dayItems = partitionDayItems(day.items, day.date, viewerContext.timeZone)}
+						{@const { arrivingStays, ongoingStays, timelineEntries } = dayItems}
 						<details class="day" open={isDayOpen(day.date)} ontoggle={(event) => changeDayDisclosure(day.date, event)}>
 							<summary><h3>Day {index + 1}: {formatLocalDay(day.date)}</h3></summary>
 							<div class="day-content">
-								{#if stays.length > 0}
-									<section aria-label={`Stays on ${formatLocalDay(day.date)}`} class="stay-block">
-										<h4>Stays</h4>
-										<ul class="stay-list">
-											{#each stays as item (item.id)}
-												{@render dayItem(item, day.date, 'stay')}
-											{/each}
-										</ul>
-									</section>
+								{#if ongoingStays.length > 0}
+									{@render stayBlock(ongoingStays, day.date, 'ongoing')}
 								{/if}
-								{#if timelineItems.length === 0 && stays.length === 0}
+								{#if timelineEntries.length === 0 && ongoingStays.length === 0 && arrivingStays.length === 0}
 									<p class="empty-day">No items planned for this day.</p>
-								{:else if timelineItems.length > 0}
+								{:else if timelineEntries.length > 0}
 									<ul>
-										{#each timelineItems as item (item.id)}
-											{@render dayItem(item, day.date, 'timeline')}
+										{#each timelineEntries as entry (`${entry.item.id}:${entry.kind}:${entry.timestamp}`)}
+											{@render timelineEntry(entry, day.date)}
 										{/each}
 									</ul>
+								{/if}
+								{#if arrivingStays.length > 0}
+									{@render stayBlock(arrivingStays, day.date, 'arriving')}
 								{/if}
 								{#if canModifyItinerary}
 									<div class="add-item-actions" aria-label={`Add an item on ${formatLocalDay(day.date)}`}>
@@ -917,11 +969,48 @@
 
 	.stay-title {
 		align-self: center;
-		color: var(--item-accent);
+		color: var(--color-text-primary);
 		font-weight: 600;
 		grid-column: 1;
 		grid-row: 1;
 		min-width: 0;
+	}
+
+	.stay-boundary-row {
+		padding: 0;
+	}
+
+	.stay-boundary-button,
+	.stay-boundary-summary {
+		align-items: center;
+		background: transparent;
+		border: 1px solid transparent;
+		color: inherit;
+		display: grid;
+		font: inherit;
+		gap: 0.75rem;
+		grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr);
+		padding: 0.375rem 0.5rem;
+		text-align: left;
+		width: 100%;
+	}
+
+	.stay-boundary-button:hover {
+		border-color: var(--item-accent);
+	}
+
+	.stay-boundary-button.selected {
+		box-shadow: inset 3px 0 var(--color-state-selection);
+	}
+
+	.stay-boundary-button:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 0.25rem;
+	}
+
+	.stay-boundary-label {
+		color: var(--item-accent);
+		font-size: 0.8125rem;
 	}
 
 	.item-button,

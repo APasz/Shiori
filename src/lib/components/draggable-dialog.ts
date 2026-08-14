@@ -10,7 +10,6 @@ type DragState = {
 };
 
 export type DraggableDialogOptions = Readonly<{
-	canDismiss?: () => boolean;
 	handleSelector: string;
 }>;
 
@@ -25,7 +24,6 @@ function clamp(value: number, minimum: number, maximum: number): number {
 export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> = (dialog, initialOptions) => {
 	let options = initialOptions;
 	let dragState: DragState | null = null;
-	let suppressDismissalClick = false;
 
 	function handlePointerDown(event: PointerEvent): void {
 		if (dragState || event.button !== 0 || !(event.target instanceof Element)) {
@@ -60,7 +58,6 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 		dialog.classList.add('is-dragging');
 		dialog.setPointerCapture(event.pointerId);
 		state.isDragging = true;
-		suppressDismissalClick = true;
 	}
 
 	function handlePointerMove(event: PointerEvent): void {
@@ -95,28 +92,7 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 			dialog.releasePointerCapture(event.pointerId);
 		}
 		dragState = null;
-		if (!state.isDragging || event.type === 'pointercancel') {
-			suppressDismissalClick = false;
-		} else {
-			window.setTimeout(() => {
-				suppressDismissalClick = false;
-			}, 0);
-		}
 		dialog.classList.remove('is-dragging');
-	}
-
-	function dismissWhenBackdropClicked(event: MouseEvent): void {
-		if (event.target !== dialog) {
-			return;
-		}
-		if (suppressDismissalClick) {
-			suppressDismissalClick = false;
-			event.preventDefault();
-			return;
-		}
-		if (options.canDismiss?.() ?? true) {
-			dialog.close();
-		}
 	}
 
 	dialog.classList.add('is-draggable');
@@ -124,7 +100,6 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 	dialog.addEventListener('pointermove', handlePointerMove);
 	dialog.addEventListener('pointerup', finishDrag);
 	dialog.addEventListener('pointercancel', finishDrag);
-	dialog.addEventListener('click', dismissWhenBackdropClicked);
 
 	return {
 		update(nextOptions: DraggableDialogOptions): void {
@@ -135,7 +110,6 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 			dialog.removeEventListener('pointermove', handlePointerMove);
 			dialog.removeEventListener('pointerup', finishDrag);
 			dialog.removeEventListener('pointercancel', finishDrag);
-			dialog.removeEventListener('click', dismissWhenBackdropClicked);
 			dialog.classList.remove('is-dragging', 'is-draggable');
 		}
 	};
