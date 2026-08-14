@@ -11,11 +11,14 @@ export type PublicItinerary = Pick<Itinerary, 'title' | 'timeZone'> & {
 	items: PublicItineraryItem[];
 };
 
-type RestrictedItineraryDetail = 'cost' | 'documents' | 'reservation' | 'transportPlatform' | 'transportSeat';
+type RestrictedItineraryDetail =
+	'cost' | 'expenses' | 'linkedExpenses' | 'documents' | 'reservation' | 'transportPlatform' | 'transportSeat';
 
 /** This is the single policy for data that is not visible to a standard shared user. */
 export const itineraryDetailVisibility = {
 	cost: 'admin',
+	expenses: 'admin',
+	linkedExpenses: 'admin',
 	documents: 'admin',
 	reservation: 'admin',
 	transportPlatform: 'admin',
@@ -48,17 +51,19 @@ export function projectPublicItinerary(itinerary: Itinerary): PublicItinerary {
 
 function projectDetailedItem(item: ItineraryItem, access: DetailedTripAccessRole): ItineraryItem {
 	const cost = canViewItineraryDetail(access, 'cost') ? item.cost : undefined;
+	const linkedExpenseIds = canViewItineraryDetail(access, 'linkedExpenses') ? item.linkedExpenseIds : [];
 	const documents = canViewItineraryDetail(access, 'documents') ? item.documents : [];
 	const reservation = canViewItineraryDetail(access, 'reservation') ? item.reservation : undefined;
 
 	if (item.type !== 'transport') {
-		return { ...item, cost, documents, reservation };
+		return { ...item, cost, documents, linkedExpenseIds, reservation };
 	}
 
 	return {
 		...item,
 		cost,
 		documents,
+		linkedExpenseIds,
 		reservation,
 		transport: {
 			...item.transport,
@@ -78,6 +83,7 @@ export function projectDetailedItinerary(itinerary: Itinerary, access: DetailedT
 
 	return {
 		...itinerary,
+		expenses: canViewItineraryDetail(access, 'expenses') ? itinerary.expenses : [],
 		items: itinerary.items.map((item) => projectDetailedItem(item, access))
 	};
 }

@@ -186,6 +186,8 @@ export const currencyCodeSchema = z.enum([
 	'ZAR'
 ]);
 export const costStatusSchema = z.enum(['unpaid', 'paid']);
+export const expenseCategorySchema = z.enum(['transport', 'accommodation', 'activity', 'food', 'misc', 'other']);
+export const expenseStatusSchema = z.enum(['unpaid', 'paid']);
 
 export const locationCoordinatesSchema = z.strictObject({
 	latitude: z.number().gte(-90).lte(90),
@@ -231,6 +233,23 @@ const costAmountSchema = z.strictObject({
 	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
 	currency: currencyCodeSchema
 });
+
+const expenseBaseShape = {
+	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
+	availableForItemCosts: z.boolean().default(false),
+	category: expenseCategorySchema,
+	currency: currencyCodeSchema,
+	id: itineraryIdentifierSchema,
+	note: z.string().trim().min(1, 'The note cannot be empty.').max(10_000).optional(),
+	title: nonEmptyTextSchema,
+	useDate: calendarDateSchema.optional()
+};
+
+/** A flexible, independently tracked cost that can later be allocated to itinerary items. */
+export const expenseSchema = z.discriminatedUnion('status', [
+	z.strictObject({ ...expenseBaseShape, status: z.literal('unpaid') }),
+	z.strictObject({ ...expenseBaseShape, paidDate: calendarDateSchema, status: z.literal('paid') })
+]);
 
 const costBaseSchema = costAmountSchema.extend({
 	scheduledPaymentDate: calendarDateSchema.optional()
@@ -333,6 +352,7 @@ const itineraryItemBaseShape = {
 	locations: z.array(locationSchema).default([]),
 	notes: z.array(nonEmptyTextSchema).default([]),
 	links: z.array(itineraryLinkSchema).default([]),
+	linkedExpenseIds: z.array(itineraryIdentifierSchema).default([]),
 	documents: z.array(documentReferenceSchema).default([]),
 	reservation: reservationSchema.optional(),
 	cost: costSchema.optional()
@@ -383,9 +403,22 @@ export const tripDetailsSchema = z.strictObject({
 
 export const itinerarySchema = tripDetailsSchema
 	.extend({
+		expenses: z.array(expenseSchema).default([]),
 		items: z.array(itineraryItemSchema)
 	})
 	.superRefine((itinerary, context) => {
+		const expenseIds = new Set<string>();
+		for (const [expenseIndex, expense] of itinerary.expenses.entries()) {
+			if (expenseIds.has(expense.id)) {
+				context.addIssue({
+					code: 'custom',
+					path: ['expenses', expenseIndex, 'id'],
+					message: 'Each expense ID must be unique within a trip.'
+				});
+			}
+			expenseIds.add(expense.id);
+		}
+
 		const itemIds = new Set<string>();
 
 		for (const [itemIndex, item] of itinerary.items.entries()) {
@@ -430,6 +463,25 @@ export const itinerarySchema = tripDetailsSchema
 					}
 				}
 			}
+
+			const linkedExpenseIds = new Set<string>();
+			for (const [linkedExpenseIndex, linkedExpenseId] of item.linkedExpenseIds.entries()) {
+				if (linkedExpenseIds.has(linkedExpenseId)) {
+					context.addIssue({
+						code: 'custom',
+						path: ['items', itemIndex, 'linkedExpenseIds', linkedExpenseIndex],
+						message: 'Each linked expense can be used only once per item.'
+					});
+				}
+				if (!expenseIds.has(linkedExpenseId)) {
+					context.addIssue({
+						code: 'custom',
+						path: ['items', itemIndex, 'linkedExpenseIds', linkedExpenseIndex],
+						message: 'Each linked expense must exist within the trip.'
+					});
+				}
+				linkedExpenseIds.add(linkedExpenseId);
+			}
 		}
 	});
 
@@ -450,3 +502,5 @@ export type CurrencyCode = z.infer<typeof currencyCodeSchema>;
 export type CostAmount = z.infer<typeof costAmountSchema>;
 export type Cost = z.infer<typeof costSchema>;
 export type CostDraft = z.infer<typeof costDraftSchema>;
+export type Expense = z.infer<typeof expenseSchema>;
+export type ExpenseCategory = z.infer<typeof expenseCategorySchema>;

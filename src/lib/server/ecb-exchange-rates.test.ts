@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lookupEcbConversionRate } from './ecb-exchange-rates';
+import { lookupCurrentEcbConversionRates, lookupEcbConversionRate } from './ecb-exchange-rates';
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -48,5 +48,36 @@ describe('ECB exchange rates', () => {
 			})
 		).resolves.toEqual({ effectiveDate: '2026-01-03', localCurrencyPerChargedCurrency: 1 });
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('uses one shared current rate date when converting multiple source currencies', async () => {
+		const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+			async () =>
+				new Response(
+					[
+						'KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE',
+						'EXR.D.AUD.EUR.SP00.A,D,AUD,EUR,SP00,A,2026-01-02,1.7508',
+						'EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2026-01-02,1.1721',
+						'EXR.D.JPY.EUR.SP00.A,D,JPY,EUR,SP00,A,2026-01-01,183.21'
+					].join('\n')
+				)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const conversion = await lookupCurrentEcbConversionRates({
+			asOf: Date.UTC(2026, 0, 3, 12),
+			sourceCurrencies: ['AUD', 'USD'],
+			targetCurrency: 'EUR'
+		});
+
+		expect(conversion?.effectiveDate).toBe('2026-01-02');
+		expect(conversion?.targetCurrencyPerSourceCurrency).toEqual(
+			new Map([
+				['AUD', 1 / 1.7508],
+				['USD', 1 / 1.1721]
+			])
+		);
+		const requestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+		expect(requestUrl.pathname).toBe('/service/data/EXR/D.AUD+USD.EUR.SP00.A');
 	});
 });

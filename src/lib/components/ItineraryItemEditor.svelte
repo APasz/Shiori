@@ -19,21 +19,22 @@
 		transportModeSchema,
 		type DocumentReference,
 		type CurrencyCode,
+		type Expense,
 		type ItineraryItem,
 		type ItineraryItemDraft,
 		type ItineraryItemType,
 		type ItineraryLocation,
 		type ReservationStatus,
 		type ItineraryTiming,
-		type CostAmount,
 		type TransportDetails
 	} from '$lib/itinerary/schema';
-	import { amountMinorFromInput, currencyFractionDigits } from '$lib/money';
+	import { amountInputValue, amountMinorFromInput, currencyFractionDigits, formatMonetaryAmount } from '$lib/money';
 	import {
 		formatTimestampForTimeZoneInput,
 		isValidIanaTimeZone,
 		zonedDateTimeToUnixMilliseconds
 	} from '$lib/itinerary/zoned-time';
+	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
@@ -94,6 +95,7 @@
 		tripId,
 		localCurrency,
 		tripTimeZone,
+		expenses,
 		revision,
 		suggestedEndDate,
 		suggestedStartDate,
@@ -106,6 +108,7 @@
 		tripId: string;
 		localCurrency: CurrencyCode;
 		tripTimeZone: string;
+		expenses: readonly Expense[];
 		revision: number;
 		suggestedEndDate?: string;
 		suggestedStartDate?: string;
@@ -147,6 +150,8 @@
 	let costCurrency = $state<CurrencyCode>('AUD');
 	let costPaid = $state(false);
 	let costScheduledPaymentDate = $state('');
+	let linkedExpenseIds = $state<string[]>([]);
+	let selectedExpenseId = $state('');
 	let transportMode = $state<TransportDetails['mode']>('other');
 	let transportOperator = $state('');
 	let transportServiceNumber = $state('');
@@ -165,6 +170,12 @@
 	const documentKindOptions = documentKindSchema.options;
 	const timingKindOptions = timingKindSchema.options;
 	const currencyOptions = currencyCodeSchema.options;
+	const selectableExpenses = $derived(
+		[...expenses]
+			.filter((expense) => expense.availableForItemCosts && !linkedExpenseIds.includes(expense.id))
+			.sort(compareSelectableExpenses)
+	);
+	const linkedExpenses = $derived(resolveLinkedExpenses(expenses, linkedExpenseIds));
 	const timingKindLabels: Record<ItineraryTiming['kind'], string> = {
 		exact: 'Exact time',
 		approximate: 'Around a time',
@@ -239,10 +250,12 @@
 		reservationReference = source.reservation?.reference ?? '';
 		reservationStatus = source.reservation?.status ?? 'pending';
 		costEnabled = source.cost !== undefined;
-		costAmount = source.cost ? amountInputValue(source.cost) : '';
+		costAmount = source.cost ? amountInputValue(source.cost.amountMinor, source.cost.currency) : '';
 		costCurrency = source.cost?.currency ?? localCurrency;
 		costPaid = source.cost?.status === 'paid';
 		costScheduledPaymentDate = source.cost?.scheduledPaymentDate ?? '';
+		linkedExpenseIds = [...source.linkedExpenseIds];
+		selectedExpenseId = '';
 		transportMode = source.type === 'transport' ? source.transport.mode : 'other';
 		transportOperator = source.type === 'transport' ? (source.transport.operator ?? '') : '';
 		transportServiceNumber = source.type === 'transport' ? (source.transport.serviceNumber ?? '') : '';
@@ -399,17 +412,6 @@
 		return trimmed === '' ? undefined : trimmed;
 	}
 
-	function amountInputValue(amount: CostAmount): string {
-		const fractionDigits = currencyFractionDigits(amount.currency);
-		if (fractionDigits === 0) {
-			return String(amount.amountMinor);
-		}
-		const scale = 10 ** fractionDigits;
-		const whole = Math.floor(amount.amountMinor / scale);
-		const fraction = String(amount.amountMinor % scale).padStart(fractionDigits, '0');
-		return `${whole}.${fraction}`;
-	}
-
 	function costCandidate(): unknown | undefined {
 		if (!costEnabled) {
 			return undefined;
@@ -421,6 +423,29 @@
 			...(scheduledPaymentDate ? { scheduledPaymentDate } : {}),
 			status: costPaid ? 'paid' : 'unpaid'
 		};
+	}
+
+	function compareSelectableExpenses(left: Expense, right: Expense): number {
+		const leftPriority = left.category === itemType ? 0 : left.category === 'other' ? 1 : 2;
+		const rightPriority = right.category === itemType ? 0 : right.category === 'other' ? 1 : 2;
+		return leftPriority - rightPriority || left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+	}
+
+	function expenseOptionLabel(expense: Expense): string {
+		const paidStatus = expense.status === 'paid' ? 'paid' : 'unpaid';
+		return `${expense.title} · ${expense.category} · ${formatMonetaryAmount(expense.amountMinor, expense.currency)} · ${paidStatus}`;
+	}
+
+	function addLinkedExpense(): void {
+		if (!selectableExpenses.some((expense) => expense.id === selectedExpenseId)) {
+			return;
+		}
+		linkedExpenseIds = [...linkedExpenseIds, selectedExpenseId];
+		selectedExpenseId = '';
+	}
+
+	function removeLinkedExpense(expenseId: string): void {
+		linkedExpenseIds = linkedExpenseIds.filter((candidate) => candidate !== expenseId);
 	}
 
 	function fillMissingTransportOperator(): void {
@@ -633,6 +658,7 @@
 				title: document.title.trim(),
 				url: document.url.trim()
 			})),
+			linkedExpenseIds: [...linkedExpenseIds],
 			...(cost ? { cost } : {}),
 			...(reservation ? { reservation } : {})
 		};
@@ -1403,6 +1429,48 @@
 								</p>
 							{/if}
 						{/if}
+						<div class="linked-expenses">
+							<h3>Linked expenses</h3>
+							<p>
+								Link a pass or package expense to this item. Linked expenses are recorded once in the cost summary; the
+								direct cost above remains separate.
+							</p>
+							{#if linkedExpenses.length > 0}
+								<ul class="linked-expense-list">
+									{#each linkedExpenses as expense (expense.id)}
+										<li>
+											<span>{expenseOptionLabel(expense)}</span>
+											<button class="text-button" onclick={() => removeLinkedExpense(expense.id)} type="button"
+												>Remove</button
+											>
+										</li>
+									{/each}
+								</ul>
+							{:else}
+								<p class="field-hint">No expenses are linked to this item.</p>
+							{/if}
+							{#if selectableExpenses.length > 0}
+								<div class="linked-expense-picker">
+									<label class="shiori-form-label">
+										Add an available expense
+										<select bind:value={selectedExpenseId} class="shiori-form-control">
+											<option value="">Select an expense</option>
+											{#each selectableExpenses as expense (expense.id)}
+												<option value={expense.id}>{expenseOptionLabel(expense)}</option>
+											{/each}
+										</select>
+									</label>
+									<button
+										class="shiori-form-button"
+										disabled={selectedExpenseId === ''}
+										onclick={addLinkedExpense}
+										type="button">Link expense</button
+									>
+								</div>
+							{:else}
+								<p class="field-hint">No other expenses are currently available to link.</p>
+							{/if}
+						</div>
 					</fieldset>
 
 					<fieldset class="sensitive-section" id="editor-private">
@@ -1735,6 +1803,47 @@
 		margin-bottom: 0;
 	}
 
+	.linked-expenses {
+		border-top: 1px solid var(--color-border-subtle);
+		display: grid;
+		gap: 0.75rem;
+		padding-top: 0.875rem;
+	}
+
+	.linked-expenses h3,
+	.linked-expenses p {
+		margin: 0;
+	}
+
+	.linked-expenses h3 {
+		font-size: 0.875rem;
+	}
+
+	.linked-expense-list {
+		display: grid;
+		gap: 0.5rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.linked-expense-list li {
+		align-items: center;
+		border: 1px solid var(--color-border-subtle);
+		display: flex;
+		font-size: 0.8125rem;
+		gap: 0.75rem;
+		justify-content: space-between;
+		padding: 0.5rem 0.625rem;
+	}
+
+	.linked-expense-picker {
+		align-items: end;
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
 	.toggle-label {
 		align-items: center;
 		display: flex;
@@ -1844,6 +1953,10 @@
 		}
 
 		.location-map-import {
+			grid-template-columns: 1fr;
+		}
+
+		.linked-expense-picker {
 			grid-template-columns: 1fr;
 		}
 	}

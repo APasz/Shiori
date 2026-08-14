@@ -9,6 +9,7 @@ export function createEmptyItineraryItem(type: ItineraryItemType, id: string, st
 		locations: [],
 		notes: [],
 		links: [],
+		linkedExpenseIds: [],
 		documents: []
 	};
 
@@ -42,6 +43,7 @@ export function createItineraryItemFromImport(
 		locations,
 		notes: [],
 		links: itemImport.links,
+		linkedExpenseIds: [],
 		documents: []
 	};
 

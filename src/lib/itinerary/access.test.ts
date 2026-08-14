@@ -6,6 +6,19 @@ const testItinerary = {
 	localCurrency: 'AUD' as const,
 	title: 'Test itinerary',
 	timeZone: 'UTC',
+	expenses: [
+		{
+			amountMinor: 1_250,
+			availableForItemCosts: true,
+			category: 'food' as const,
+			currency: 'AUD' as const,
+			id: 'test-food',
+			paidDate: '2026-04-03',
+			status: 'paid' as const,
+			title: 'Food',
+			useDate: '2026-04-03'
+		}
+	],
 	items: [
 		{
 			id: 'test-transport',
@@ -17,6 +30,7 @@ const testItinerary = {
 			],
 			notes: [],
 			links: [],
+			linkedExpenseIds: ['test-food'],
 			cost: {
 				amountMinor: 12_500,
 				currency: 'USD',
@@ -87,6 +101,8 @@ describe('itinerary visibility projection', () => {
 		expect(transport.documents).toEqual([]);
 		expect(transport.reservation).toBeUndefined();
 		expect(transport.cost).toBeUndefined();
+		expect(transport.linkedExpenseIds).toEqual([]);
+		expect(projectDetailedItinerary(testItinerary, 'user').expenses).toEqual([]);
 		expect(transport.transport.seat).toBeUndefined();
 		expect(transport.transport.stops.every((stop) => stop.platform === undefined)).toBe(true);
 	});
@@ -99,5 +115,7 @@ describe('itinerary visibility projection', () => {
 		expect(transport.cost?.status).toBe('paid');
 		expect(transport.transport.seat).toBe('Car 8, Seat 12A');
 		expect(transport.transport.stops[0]?.platform).toBe('20');
+		expect(transport.linkedExpenseIds).toEqual(['test-food']);
+		expect(projectDetailedItinerary(testItinerary, 'admin').expenses).toEqual(testItinerary.expenses);
 	});
 });

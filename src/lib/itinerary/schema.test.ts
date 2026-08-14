@@ -113,6 +113,108 @@ describe('cost schemas', () => {
 	});
 });
 
+describe('expense schemas', () => {
+	it('defaults expense availability and requires unique IDs and paid dates', () => {
+		const itinerary = {
+			items: [],
+			timeZone: 'UTC',
+			title: 'Expense test'
+		};
+		expect(itinerarySchema.parse(itinerary).expenses).toEqual([]);
+		expect(
+			itinerarySchema.parse({
+				...itinerary,
+				expenses: [
+					{
+						amountMinor: 1_250,
+						category: 'food',
+						currency: 'AUD',
+						id: 'food-one',
+						status: 'unpaid',
+						title: 'Food'
+					}
+				]
+			}).expenses[0]?.availableForItemCosts
+		).toBe(false);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				expenses: [
+					{
+						amountMinor: 1_250,
+						category: 'food',
+						currency: 'AUD',
+						id: 'food-one',
+						status: 'paid',
+						title: 'Food'
+					}
+				]
+			}).success
+		).toBe(false);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				expenses: [
+					{
+						amountMinor: 1_250,
+						category: 'food',
+						currency: 'AUD',
+						id: 'food-one',
+						status: 'unpaid',
+						title: 'Food'
+					},
+					{
+						amountMinor: 500,
+						category: 'misc',
+						currency: 'AUD',
+						id: 'food-one',
+						status: 'unpaid',
+						title: 'Miscellaneous'
+					}
+				]
+			}).success
+		).toBe(false);
+	});
+
+	it('requires linked expenses to exist and occur only once per item', () => {
+		const itinerary = {
+			expenses: [
+				{
+					amountMinor: 45_000,
+					availableForItemCosts: true,
+					category: 'transport',
+					currency: 'AUD',
+					id: 'rail-pass',
+					status: 'unpaid',
+					title: 'Rail pass'
+				}
+			],
+			items: [
+				{
+					...itemBase,
+					linkedExpenseIds: ['rail-pass'],
+					timing: { kind: 'exact', startAt: 1_775_952_000_000 }
+				}
+			],
+			timeZone: 'UTC',
+			title: 'Linked expenses'
+		};
+		expect(itinerarySchema.safeParse(itinerary).success).toBe(true);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				items: [{ ...itinerary.items[0], linkedExpenseIds: ['rail-pass', 'rail-pass'] }]
+			}).success
+		).toBe(false);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				items: [{ ...itinerary.items[0], linkedExpenseIds: ['missing-expense'] }]
+			}).success
+		).toBe(false);
+	});
+});
+
 describe('OpenRailwayMap URLs', () => {
 	it('accepts secure map permalinks for itinerary locations', () => {
 		const item = itineraryItemSchema.parse({

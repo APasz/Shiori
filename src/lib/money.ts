@@ -25,6 +25,34 @@ export function amountMinorFromInput(value: string, currency: CurrencyCode): num
 	return minorValue <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(minorValue) : null;
 }
 
+/** Formats a minor-unit amount as the exact decimal form accepted by amount inputs. */
+export function amountInputValue(amountMinor: number, currency: CurrencyCode): string {
+	const fractionDigits = currencyFractionDigits(currency);
+	if (fractionDigits === 0) {
+		return String(amountMinor);
+	}
+
+	const scale = 10 ** fractionDigits;
+	const whole = Math.floor(amountMinor / scale);
+	const fraction = String(amountMinor % scale).padStart(fractionDigits, '0');
+	return `${whole}.${fraction}`;
+}
+
+/** Converts an exact minor-unit amount at a whole-currency exchange rate, rounded to the target minor unit. */
+export function convertAmountMinor(
+	amountMinor: number,
+	sourceCurrency: CurrencyCode,
+	targetCurrency: CurrencyCode,
+	targetCurrencyPerSourceCurrency: number
+): number | null {
+	const sourceFractionDigits = currencyFractionDigits(sourceCurrency);
+	const targetFractionDigits = currencyFractionDigits(targetCurrency);
+	const converted = Math.round(
+		(amountMinor * targetCurrencyPerSourceCurrency * 10 ** targetFractionDigits) / 10 ** sourceFractionDigits
+	);
+	return Number.isSafeInteger(converted) && converted >= 0 ? converted : null;
+}
+
 /** Formats an exact minor-unit monetary amount for display in the viewer's locale. */
 export function formatMonetaryAmount(amountMinor: number, currency: CurrencyCode, locales?: string | string[]): string {
 	const fractionDigits = currencyFractionDigits(currency);

@@ -13,6 +13,7 @@ import {
 import {
 	calendarDateSchema,
 	currencyCodeSchema,
+	expenseSchema,
 	itineraryIdentifierSchema,
 	itineraryItemDraftSchema,
 	itineraryItemSchema,
@@ -22,13 +23,14 @@ import {
 	unixTimestampSchema,
 	type Cost,
 	type CurrencyCode,
+	type Expense,
 	type Itinerary,
 	type ItineraryItem,
 	type ItineraryItemDraft,
 	type CostAmount,
 	type TripDetails
 } from '$lib/itinerary/schema';
-import { currencyFractionDigits } from '$lib/money';
+import { convertAmountMinor } from '$lib/money';
 import { timingStartTimestamp } from '$lib/itinerary/timing';
 import { lookupEcbConversionRate } from './ecb-exchange-rates';
 
@@ -36,7 +38,10 @@ const sessionLifetimeMilliseconds = 7 * 24 * 60 * 60 * 1000;
 const editLockLifetimeMilliseconds = 10 * 60 * 1000;
 const legacyStoredDataVersion = 6;
 const previousStoredDataVersion = 7;
-const storedDataVersion = 8;
+const priorStoredDataVersion = 8;
+const dailyExpenseStoredDataVersion = 9;
+const freeformExpenseStoredDataVersion = 10;
+const storedDataVersion = 11;
 const tripStructureLockTargetId = 'trip-structure';
 const jsonIndentation = 4;
 
@@ -54,6 +59,9 @@ const shareRoleSchema = z.enum(['user', 'admin']);
 const supportedStoredDataVersionSchema = z.union([
 	z.literal(legacyStoredDataVersion),
 	z.literal(previousStoredDataVersion),
+	z.literal(priorStoredDataVersion),
+	z.literal(dailyExpenseStoredDataVersion),
+	z.literal(freeformExpenseStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 
@@ -93,9 +101,20 @@ const previousCostSchema = z.discriminatedUnion('status', [
 		status: z.literal('paid')
 	})
 ]);
+const legacyDailyExpenseSchema = z.strictObject({
+	date: calendarDateSchema,
+	foodAmountMinor: minorUnitAmountSchema,
+	miscAmountMinor: minorUnitAmountSchema
+});
 const migratableStoredTripFileEnvelopeSchema = z
 	.object({
-		version: z.union([z.literal(legacyStoredDataVersion), z.literal(previousStoredDataVersion)]),
+		version: z.union([
+			z.literal(legacyStoredDataVersion),
+			z.literal(previousStoredDataVersion),
+			z.literal(priorStoredDataVersion),
+			z.literal(dailyExpenseStoredDataVersion),
+			z.literal(freeformExpenseStoredDataVersion)
+		]),
 		trip: z
 			.object({
 				itinerary: z
@@ -548,13 +567,67 @@ function migratePreviousCost(cost: unknown): unknown {
 	};
 }
 
+type MigratableItinerary = Record<string, unknown> & { items: unknown[] };
+
+function migrateLegacyDailyExpenses(itinerary: MigratableItinerary): MigratableItinerary {
+	const parsedCurrency = tripDetailsSchema.shape.localCurrency.safeParse(itinerary.localCurrency);
+	const parsedDailyExpenses = z.array(legacyDailyExpenseSchema).safeParse(itinerary.dailyExpenses);
+	if (!parsedCurrency.success || !parsedDailyExpenses.success) {
+		return itinerary;
+	}
+
+	const itineraryWithoutDailyExpenses = { ...itinerary };
+	delete itineraryWithoutDailyExpenses.dailyExpenses;
+	const expenses: Expense[] = parsedDailyExpenses.data.flatMap((dailyExpense) => {
+		const expensesForDay: Expense[] = [];
+		if (dailyExpense.foodAmountMinor > 0) {
+			expensesForDay.push({
+				amountMinor: dailyExpense.foodAmountMinor,
+				availableForItemCosts: false,
+				category: 'food',
+				currency: parsedCurrency.data,
+				id: `food-${dailyExpense.date}`,
+				paidDate: dailyExpense.date,
+				status: 'paid',
+				title: 'Food',
+				useDate: dailyExpense.date
+			});
+		}
+		if (dailyExpense.miscAmountMinor > 0) {
+			expensesForDay.push({
+				amountMinor: dailyExpense.miscAmountMinor,
+				availableForItemCosts: false,
+				category: 'misc',
+				currency: parsedCurrency.data,
+				id: `misc-${dailyExpense.date}`,
+				paidDate: dailyExpense.date,
+				status: 'paid',
+				title: 'Miscellaneous',
+				useDate: dailyExpense.date
+			});
+		}
+		return expensesForDay;
+	});
+	return { ...itineraryWithoutDailyExpenses, expenses };
+}
+
 function migrateStoredTripFile(file: unknown): { file: unknown; migrationRequired: boolean } {
 	const parsedFile = migratableStoredTripFileEnvelopeSchema.safeParse(file);
 	if (!parsedFile.success) {
 		return { file, migrationRequired: false };
 	}
 
-	const migrateCost = parsedFile.data.version === legacyStoredDataVersion ? migrateLegacyCost : migratePreviousCost;
+	const migrateCost =
+		parsedFile.data.version === legacyStoredDataVersion
+			? migrateLegacyCost
+			: parsedFile.data.version === previousStoredDataVersion
+				? migratePreviousCost
+				: (cost: unknown) => cost;
+	const sourceItinerary = parsedFile.data.trip.itinerary as MigratableItinerary;
+	const itinerary =
+		parsedFile.data.version === dailyExpenseStoredDataVersion
+			? migrateLegacyDailyExpenses(sourceItinerary)
+			: sourceItinerary;
 	return {
 		file: {
 			...parsedFile.data,
@@ -562,8 +635,8 @@ function migrateStoredTripFile(file: unknown): { file: unknown; migrationRequire
 			trip: {
 				...parsedFile.data.trip,
 				itinerary: {
-					...parsedFile.data.trip.itinerary,
-					items: parsedFile.data.trip.itinerary.items.map((item) => {
+					...itinerary,
+					items: itinerary.items.map((item) => {
 						if (!isRecord(item) || !Object.hasOwn(item, 'cost')) {
 							return item;
 						}
@@ -870,18 +943,6 @@ function sameCostAmount(left: CostAmount, right: CostAmount): boolean {
 	return left.amountMinor === right.amountMinor && left.currency === right.currency;
 }
 
-function convertedAmountMinor(amount: CostAmount, localCurrency: CurrencyCode, exchangeRate: number): number {
-	const chargedFractionDigits = currencyFractionDigits(amount.currency);
-	const localFractionDigits = currencyFractionDigits(localCurrency);
-	const converted = Math.round(
-		(amount.amountMinor * exchangeRate * 10 ** localFractionDigits) / 10 ** chargedFractionDigits
-	);
-	if (!Number.isSafeInteger(converted) || converted < 0 || converted > 1_000_000_000_000) {
-		throw new StoreError(400, 'The converted cost is outside Shiori’s supported range.');
-	}
-	return converted;
-}
-
 async function persistedItemForCost(
 	item: ItineraryItemDraft,
 	localCurrency: CurrencyCode,
@@ -926,13 +987,21 @@ async function persistedItemForCost(
 		payment: {
 			exchangeRate: exchangeRate.localCurrencyPerChargedCurrency,
 			rateDate: exchangeRate.effectiveDate,
-			localAmountMinor: convertedAmountMinor(cost, localCurrency, exchangeRate.localCurrencyPerChargedCurrency),
+			localAmountMinor: convertedCostAmountMinor(cost, localCurrency, exchangeRate.localCurrencyPerChargedCurrency),
 			localCurrency,
 			paidAt
 		},
 		status: 'paid'
 	};
 	return itineraryItemSchema.parse({ ...item, cost: paidCost });
+}
+
+function convertedCostAmountMinor(amount: CostAmount, localCurrency: CurrencyCode, exchangeRate: number): number {
+	const converted = convertAmountMinor(amount.amountMinor, amount.currency, localCurrency, exchangeRate);
+	if (converted === null || converted > 1_000_000_000_000) {
+		throw new StoreError(400, 'The converted cost is outside Shiori’s supported range.');
+	}
+	return converted;
 }
 
 function assertTripOwner(trip: StoredTrip, userId: string): void {
@@ -1080,7 +1149,7 @@ export async function createTrip(input: { details: unknown; ownerId: string }): 
 			ownerId: input.ownerId,
 			isPublic: false,
 			revision: 0,
-			itinerary: { ...details, items: [] },
+			itinerary: { ...details, expenses: [], items: [] },
 			createdAt,
 			updatedAt: createdAt
 		};
@@ -1185,6 +1254,28 @@ function getTripForMutation(data: StoredData, tripId: string, userId: string): S
 	return trip;
 }
 
+function assertNewLinkedExpensesAreSelectable(
+	itinerary: Itinerary,
+	item: ItineraryItemDraft,
+	existingItem?: ItineraryItem
+): void {
+	const existingLinkedExpenseIds = new Set(existingItem?.linkedExpenseIds ?? []);
+	const linkedExpenseIds = new Set<string>();
+	for (const expenseId of item.linkedExpenseIds) {
+		if (linkedExpenseIds.has(expenseId)) {
+			throw new StoreError(400, 'An itinerary item cannot link the same expense more than once.');
+		}
+		linkedExpenseIds.add(expenseId);
+		const expense = itinerary.expenses.find((candidate) => candidate.id === expenseId);
+		if (!expense) {
+			throw new StoreError(400, 'A linked expense no longer exists. Reload and try again.');
+		}
+		if (!expense.availableForItemCosts && !existingLinkedExpenseIds.has(expenseId)) {
+			throw new StoreError(400, 'This expense is not available to link to itinerary items.');
+		}
+	}
+}
+
 export async function saveTripDetails(input: {
 	details: unknown;
 	revision: number;
@@ -1198,6 +1289,74 @@ export async function saveTripDetails(input: {
 		assertExpectedRevision(trip, input.revision);
 		assertNoActiveEditLock(data, trip);
 		return commitItineraryChange(trip, { ...trip.itinerary, ...details });
+	});
+}
+
+export async function createExpense(input: {
+	expense: unknown;
+	revision: number;
+	tripId: string;
+	userId: string;
+}): Promise<{ revision: number }> {
+	const expense = expenseSchema.parse(input.expense);
+
+	return transaction((data) => {
+		const trip = getTripForMutation(data, input.tripId, input.userId);
+		assertExpectedRevision(trip, input.revision);
+		assertNoActiveEditLock(data, trip);
+		if (trip.itinerary.expenses.some((existingExpense) => existingExpense.id === expense.id)) {
+			throw new StoreError(409, 'An expense already uses this ID.');
+		}
+		return commitItineraryChange(trip, { ...trip.itinerary, expenses: [...trip.itinerary.expenses, expense] });
+	});
+}
+
+export async function saveExpense(input: {
+	expense: unknown;
+	revision: number;
+	tripId: string;
+	userId: string;
+}): Promise<{ revision: number }> {
+	const expense = expenseSchema.parse(input.expense);
+
+	return transaction((data) => {
+		const trip = getTripForMutation(data, input.tripId, input.userId);
+		assertExpectedRevision(trip, input.revision);
+		assertNoActiveEditLock(data, trip);
+		const expenseIndex = trip.itinerary.expenses.findIndex((existingExpense) => existingExpense.id === expense.id);
+		if (expenseIndex < 0) {
+			throw new StoreError(404, 'Expense not found.');
+		}
+		const expenses = trip.itinerary.expenses.map((existingExpense, index) =>
+			index === expenseIndex ? expense : existingExpense
+		);
+		return commitItineraryChange(trip, { ...trip.itinerary, expenses });
+	});
+}
+
+export async function deleteExpense(input: {
+	expenseId: string;
+	revision: number;
+	tripId: string;
+	userId: string;
+}): Promise<{ revision: number }> {
+	const expenseId = itineraryIdentifierSchema.parse(input.expenseId);
+
+	return transaction((data) => {
+		const trip = getTripForMutation(data, input.tripId, input.userId);
+		assertExpectedRevision(trip, input.revision);
+		assertNoActiveEditLock(data, trip);
+		if (!trip.itinerary.expenses.some((expense) => expense.id === expenseId)) {
+			throw new StoreError(404, 'Expense not found.');
+		}
+		const linkedItem = trip.itinerary.items.find((item) => item.linkedExpenseIds.includes(expenseId));
+		if (linkedItem) {
+			throw new StoreError(409, `Remove this expense from “${linkedItem.title}” before deleting it.`);
+		}
+		return commitItineraryChange(trip, {
+			...trip.itinerary,
+			expenses: trip.itinerary.expenses.filter((expense) => expense.id !== expenseId)
+		});
 	});
 }
 
@@ -1370,6 +1529,7 @@ export async function saveItem(input: {
 	if (!existingItem) {
 		throw new StoreError(404, 'Itinerary item not found.');
 	}
+	assertNewLinkedExpensesAreSelectable(preflightTrip.itinerary, item, existingItem);
 	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, existingItem);
 
 	return transaction((data) => {
@@ -1404,6 +1564,7 @@ export async function createItem(input: {
 	if (findItemIndex(preflightTrip.itinerary, item.id) >= 0) {
 		throw new StoreError(409, 'An itinerary item already uses this ID.');
 	}
+	assertNewLinkedExpensesAreSelectable(preflightTrip.itinerary, item);
 	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, undefined);
 
 	return transaction((data) => {

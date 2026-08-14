@@ -113,11 +113,11 @@ describe('JSON store', () => {
 		]);
 
 		for (const source of [users, shares, sessions, editLocks, trip]) {
-			expect(source).toContain('\n    "version": 8');
+			expect(source).toContain('\n    "version": 11');
 			expect(source).toMatch(/\n$/);
 		}
-		expect(JSON.parse(users)).toMatchObject({ version: 8, users: [{ username: 'owner' }] });
-		expect(JSON.parse(trip)).toMatchObject({ version: 8, trip: { id: expect.any(String) } });
+		expect(JSON.parse(users)).toMatchObject({ version: 11, users: [{ username: 'owner' }] });
+		expect(JSON.parse(trip)).toMatchObject({ version: 11, trip: { id: expect.any(String) } });
 		expect(JSON.parse(trip)).not.toHaveProperty('trip.slug');
 	});
 
@@ -135,7 +135,7 @@ describe('JSON store', () => {
 	});
 
 	it.each(costMigrationFixtures)(
-		'migrates version $sourceVersion cost records to explicit version 8 minor-unit fields on startup',
+		'migrates version $sourceVersion cost records to explicit minor-unit fields on startup',
 		async ({ sourceCost, sourceVersion }) => {
 			const store = await import('./store');
 			const owner = await store.createInitialSudo('owner', 'a strong test password');
@@ -191,9 +191,140 @@ describe('JSON store', () => {
 					managedTripPath(trip.slug)
 				].map(async (filePath) => JSON.parse(await readFile(filePath, 'utf8')) as { version: number })
 			);
-			expect(migratedFiles.map((file) => file.version)).toEqual([8, 8, 8, 8, 8]);
+			expect(migratedFiles.map((file) => file.version)).toEqual([11, 11, 11, 11, 11]);
 		}
 	);
+
+	it('migrates version 8 trips by adding an empty expense inventory', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const persistedTrip: { version: number; trip: { itinerary: Record<string, unknown> } } = JSON.parse(
+			await readFile(managedTripPath(trip.slug), 'utf8')
+		);
+		delete persistedTrip.trip.itinerary.expenses;
+		persistedTrip.version = 8;
+		await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		for (const filePath of [
+			managedDataPath('users.json'),
+			managedDataPath('shares.json'),
+			managedDataPath('sessions.json'),
+			managedDataPath('edit-locks.json')
+		]) {
+			const globalData: { version: number } = JSON.parse(await readFile(filePath, 'utf8'));
+			globalData.version = 8;
+			await writeFile(filePath, JSON.stringify(globalData, null, 4), 'utf8');
+		}
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		const migratedTrip = await restartedStore.getTripView(trip.slug, owner);
+		if (!migratedTrip || migratedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the migrated trip.');
+		}
+		expect(migratedTrip.itinerary.expenses).toEqual([]);
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 11 });
+	});
+
+	it('migrates version 9 daily spending into paid expenses', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const persistedTrip: { version: number; trip: { itinerary: Record<string, unknown> } } = JSON.parse(
+			await readFile(managedTripPath(trip.slug), 'utf8')
+		);
+		delete persistedTrip.trip.itinerary.expenses;
+		delete persistedTrip.trip.itinerary.localCurrency;
+		persistedTrip.trip.itinerary.dailyExpenses = [{ date: '2026-01-01', foodAmountMinor: 2_500, miscAmountMinor: 350 }];
+		persistedTrip.version = 9;
+		await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		for (const filePath of [
+			managedDataPath('users.json'),
+			managedDataPath('shares.json'),
+			managedDataPath('sessions.json'),
+			managedDataPath('edit-locks.json')
+		]) {
+			const globalData: { version: number } = JSON.parse(await readFile(filePath, 'utf8'));
+			globalData.version = 9;
+			await writeFile(filePath, JSON.stringify(globalData, null, 4), 'utf8');
+		}
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		const migratedTrip = await restartedStore.getTripView(trip.slug, owner);
+		if (!migratedTrip || migratedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the migrated trip.');
+		}
+		expect(migratedTrip.itinerary.expenses).toEqual([
+			{
+				amountMinor: 2_500,
+				availableForItemCosts: false,
+				category: 'food',
+				currency: 'AUD',
+				id: 'food-2026-01-01',
+				paidDate: '2026-01-01',
+				status: 'paid',
+				title: 'Food',
+				useDate: '2026-01-01'
+			},
+			{
+				amountMinor: 350,
+				availableForItemCosts: false,
+				category: 'misc',
+				currency: 'AUD',
+				id: 'misc-2026-01-01',
+				paidDate: '2026-01-01',
+				status: 'paid',
+				title: 'Miscellaneous',
+				useDate: '2026-01-01'
+			}
+		]);
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 11 });
+	});
+
+	it('migrates version 10 expenses and items with default expense links', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id, ['legacy-item']);
+		const persistedTrip: { version: number; trip: { itinerary: Record<string, unknown> } } = JSON.parse(
+			await readFile(managedTripPath(trip.slug), 'utf8')
+		);
+		persistedTrip.trip.itinerary.expenses = [
+			{
+				amountMinor: 45_000,
+				category: 'transport',
+				currency: 'AUD',
+				id: 'rail-pass',
+				status: 'unpaid',
+				title: 'Rail pass'
+			}
+		];
+		persistedTrip.version = 10;
+		await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		for (const filePath of [
+			managedDataPath('users.json'),
+			managedDataPath('shares.json'),
+			managedDataPath('sessions.json'),
+			managedDataPath('edit-locks.json')
+		]) {
+			const globalData: { version: number } = JSON.parse(await readFile(filePath, 'utf8'));
+			globalData.version = 10;
+			await writeFile(filePath, JSON.stringify(globalData, null, 4), 'utf8');
+		}
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		const migratedTrip = await restartedStore.getTripView(trip.slug, owner);
+		if (!migratedTrip || migratedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the migrated trip.');
+		}
+		expect(migratedTrip.itinerary.expenses[0]?.availableForItemCosts).toBe(false);
+		expect(migratedTrip.itinerary.items.find((item) => item.id === 'legacy-item')?.linkedExpenseIds).toEqual([]);
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 11 });
+	});
 
 	it('rejects incomplete or invalid split data before serving it', async () => {
 		await writeFile(managedDataPath('users.json'), JSON.stringify({ version: 6, users: [] }, null, 4), 'utf8');
@@ -292,6 +423,154 @@ describe('JSON store', () => {
 
 		const updated = await store.getTripView(created.slug, owner);
 		expect(updated?.itinerary.title).toBe('Autumn in Montréal');
+	});
+
+	it('creates, updates, and deletes free-form expenses', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const expense = {
+			amountMinor: 45_000,
+			availableForItemCosts: true,
+			category: 'transport' as const,
+			currency: 'AUD' as const,
+			id: 'rail-pass',
+			note: 'Regional rail pass',
+			status: 'unpaid' as const,
+			title: 'Rail pass',
+			useDate: '2026-01-02'
+		};
+
+		await expect(
+			store.createExpense({
+				expense,
+				revision: trip.revision,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: trip.revision + 1 });
+
+		const savedTrip = await store.getTripView(trip.slug, owner);
+		if (!savedTrip || savedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read saved expenses.');
+		}
+		expect(savedTrip.itinerary.expenses).toEqual([expense]);
+		const paidExpense = { ...expense, paidDate: '2026-01-01', status: 'paid' as const };
+
+		await expect(
+			store.saveExpense({
+				expense: paidExpense,
+				revision: savedTrip.revision,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: savedTrip.revision + 1 });
+		const updatedTrip = await store.getTripView(trip.slug, owner);
+		if (!updatedTrip || updatedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read updated expenses.');
+		}
+		expect(updatedTrip.itinerary.expenses).toEqual([paidExpense]);
+
+		await expect(
+			store.deleteExpense({
+				expenseId: expense.id,
+				revision: updatedTrip.revision,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: updatedTrip.revision + 1 });
+		const deletedTrip = await store.getTripView(trip.slug, owner);
+		if (!deletedTrip || deletedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read deleted expenses.');
+		}
+		expect(deletedTrip.itinerary.expenses).toEqual([]);
+	});
+
+	it('links selectable expenses alongside an item’s direct cost', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const railPass = {
+			amountMinor: 45_000,
+			availableForItemCosts: true,
+			category: 'transport' as const,
+			currency: 'AUD' as const,
+			id: 'jr-pass',
+			status: 'paid' as const,
+			paidDate: '2026-01-01',
+			title: 'JR Rail Pass'
+		};
+		await store.createExpense({ expense: railPass, revision: trip.revision, tripId: trip.id, userId: owner.id });
+
+		const itemLock = await store.acquireTripStructureLock({ tripId: trip.id, userId: owner.id });
+		const nozomi = {
+			...createEmptyItineraryItem('transport', 'nozomi', Date.UTC(2026, 0, 2)),
+			cost: { amountMinor: 8_000, currency: 'JPY' as const, status: 'unpaid' as const },
+			linkedExpenseIds: [railPass.id],
+			locations: [
+				{ id: 'tokyo', name: 'Tokyo', role: 'departure' as const },
+				{ id: 'kyoto', name: 'Kyoto', role: 'arrival' as const }
+			],
+			title: 'Nozomi supplementary ticket',
+			transport: {
+				mode: 'rail' as const,
+				stops: [{ locationId: 'tokyo' }, { locationId: 'kyoto' }]
+			}
+		};
+		await expect(
+			store.createItem({
+				item: { ...nozomi, linkedExpenseIds: [railPass.id, railPass.id] },
+				lockToken: itemLock.token,
+				revision: trip.revision + 1,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).rejects.toMatchObject({ status: 400 });
+		await expect(
+			store.createItem({
+				item: nozomi,
+				lockToken: itemLock.token,
+				revision: trip.revision + 1,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: trip.revision + 2 });
+
+		const linkedTrip = await store.getTripView(trip.slug, owner);
+		if (!linkedTrip || linkedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the linked expense.');
+		}
+		const linkedNozomi = linkedTrip.itinerary.items.find((item) => item.id === nozomi.id);
+		expect(linkedNozomi?.linkedExpenseIds).toEqual([railPass.id]);
+		expect(linkedNozomi?.cost).toEqual(nozomi.cost);
+
+		await expect(
+			store.deleteExpense({
+				expenseId: railPass.id,
+				revision: linkedTrip.revision,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).rejects.toMatchObject({ status: 409 });
+
+		const unavailableRailPass = { ...railPass, availableForItemCosts: false };
+		await store.saveExpense({
+			expense: unavailableRailPass,
+			revision: linkedTrip.revision,
+			tripId: trip.id,
+			userId: owner.id
+		});
+		const updateLock = await store.acquireItemLock({ itemId: nozomi.id, tripId: trip.id, userId: owner.id });
+		await expect(
+			store.saveItem({
+				item: nozomi,
+				itemId: nozomi.id,
+				lockToken: updateLock.token,
+				revision: linkedTrip.revision + 1,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: linkedTrip.revision + 2 });
 	});
 
 	it('snapshots an ECB conversion when a sudo owner marks an item cost paid', async () => {

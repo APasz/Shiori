@@ -3,6 +3,7 @@ import { ExpiringCache, ProviderRateLimitError, ProviderRequestCoordinator, thro
 
 const ecbDataEndpoint = 'https://data-api.ecb.europa.eu/service/data/EXR';
 const cacheLifetimeMilliseconds = 24 * 60 * 60 * 1_000;
+const currentRateCacheLifetimeMilliseconds = 60 * 60 * 1_000;
 const cacheMaximumEntries = 2_000;
 const lookupDaysBeforePayment = 10;
 const requestTimeoutMilliseconds = 10_000;
@@ -10,6 +11,11 @@ const requestTimeoutMilliseconds = 10_000;
 export type EcbConversionRate = Readonly<{
 	effectiveDate: string;
 	localCurrencyPerChargedCurrency: number;
+}>;
+
+export type EcbCurrentConversionRates = Readonly<{
+	effectiveDate: string;
+	targetCurrencyPerSourceCurrency: ReadonlyMap<CurrencyCode, number>;
 }>;
 
 type EcbRateObservation = Readonly<{
@@ -21,6 +27,10 @@ type EcbRateObservation = Readonly<{
 const rateCache = new ExpiringCache<readonly EcbRateObservation[]>({
 	maxEntries: cacheMaximumEntries,
 	timeToLiveMilliseconds: cacheLifetimeMilliseconds
+});
+const currentRateCache = new ExpiringCache<readonly EcbRateObservation[]>({
+	maxEntries: cacheMaximumEntries,
+	timeToLiveMilliseconds: currentRateCacheLifetimeMilliseconds
 });
 const providerRequests = new ProviderRequestCoordinator<readonly EcbRateObservation[]>({
 	fallbackRetryDelayMilliseconds: 1_000,
@@ -44,6 +54,14 @@ function calendarDateDaysEarlier(date: string, days: number): string {
 
 function cacheKey(chargedCurrency: CurrencyCode, localCurrency: CurrencyCode, paidDate: string): string {
 	return [chargedCurrency, localCurrency, paidDate].join(':');
+}
+
+function currentRatesCacheKey(
+	sourceCurrencies: readonly CurrencyCode[],
+	targetCurrency: CurrencyCode,
+	asOfDate: string
+): string {
+	return ['current', targetCurrency, asOfDate, ...sourceCurrencies].join(':');
 }
 
 function csvRecords(source: string): readonly Record<string, string>[] | null {
@@ -151,6 +169,24 @@ async function historicalRates(
 	return observations;
 }
 
+async function currentRates(
+	sourceCurrencies: readonly CurrencyCode[],
+	targetCurrency: CurrencyCode,
+	asOfDate: string
+): Promise<readonly EcbRateObservation[]> {
+	const key = currentRatesCacheKey(sourceCurrencies, targetCurrency, asOfDate);
+	const cached = currentRateCache.get(key);
+	if (cached) {
+		return cached;
+	}
+
+	const currencies = [...new Set([...sourceCurrencies, targetCurrency].filter((currency) => currency !== 'EUR'))];
+	const startDate = calendarDateDaysEarlier(asOfDate, lookupDaysBeforePayment);
+	const observations = await providerRequests.run(key, () => fetchEcbRates(currencies, startDate, asOfDate));
+	currentRateCache.set(key, observations);
+	return observations;
+}
+
 function rateForCurrencyOnDate(
 	observations: readonly EcbRateObservation[],
 	currency: CurrencyCode,
@@ -203,6 +239,60 @@ export async function lookupEcbConversionRate(input: {
 		console.warn('ECB exchange-rate lookup could not be completed.', {
 			failure: error instanceof Error ? error.name : 'UnknownError',
 			paidDate
+		});
+		return null;
+	}
+}
+
+/**
+ * Returns current ECB reference rates for several source currencies against one target currency.
+ * All returned rates use the same latest shared business date.
+ */
+export async function lookupCurrentEcbConversionRates(input: {
+	asOf: number;
+	sourceCurrencies: readonly CurrencyCode[];
+	targetCurrency: CurrencyCode;
+}): Promise<EcbCurrentConversionRates | null> {
+	const asOfDate = calendarDateForTimestamp(input.asOf);
+	if (!asOfDate) {
+		return null;
+	}
+	const sourceCurrencies = [...new Set(input.sourceCurrencies)].sort();
+	if (sourceCurrencies.length === 0) {
+		return null;
+	}
+
+	try {
+		const observations = await currentRates(sourceCurrencies, input.targetCurrency, asOfDate);
+		for (let offset = 0; offset <= lookupDaysBeforePayment; offset += 1) {
+			const effectiveDate = calendarDateDaysEarlier(asOfDate, offset);
+			const targetRatePerEuro = rateForCurrencyOnDate(observations, input.targetCurrency, effectiveDate);
+			if (targetRatePerEuro === undefined) {
+				continue;
+			}
+
+			const targetCurrencyPerSourceCurrency = new Map<CurrencyCode, number>();
+			for (const sourceCurrency of sourceCurrencies) {
+				const sourceRatePerEuro = rateForCurrencyOnDate(observations, sourceCurrency, effectiveDate);
+				if (sourceRatePerEuro === undefined) {
+					targetCurrencyPerSourceCurrency.clear();
+					break;
+				}
+				targetCurrencyPerSourceCurrency.set(sourceCurrency, targetRatePerEuro / sourceRatePerEuro);
+			}
+			if (targetCurrencyPerSourceCurrency.size === sourceCurrencies.length) {
+				return { effectiveDate, targetCurrencyPerSourceCurrency };
+			}
+		}
+		return null;
+	} catch (error: unknown) {
+		if (error instanceof ProviderRateLimitError) {
+			console.warn('Current ECB exchange-rate lookup remained rate limited after retry.', { asOfDate });
+			return null;
+		}
+		console.warn('Current ECB exchange-rate lookup could not be completed.', {
+			failure: error instanceof Error ? error.name : 'UnknownError',
+			asOfDate
 		});
 		return null;
 	}

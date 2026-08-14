@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountMinorFromInput, formatMonetaryAmount } from './money';
+import { amountMinorFromInput, convertAmountMinor, formatMonetaryAmount } from './money';
 
 describe('money values', () => {
 	it('stores user-entered decimal amounts as exact minor units', () => {
@@ -11,5 +11,10 @@ describe('money values', () => {
 
 	it('formats saved minor units with their currency code', () => {
 		expect(formatMonetaryAmount(12_345, 'AUD', 'en-AU')).toContain('AUD');
+	});
+
+	it('converts between source and target minor units at a whole-currency rate', () => {
+		expect(convertAmountMinor(12_345, 'AUD', 'USD', 0.65)).toBe(8_024);
+		expect(convertAmountMinor(500, 'JPY', 'AUD', 0.01)).toBe(500);
 	});
 });

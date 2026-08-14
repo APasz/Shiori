@@ -501,6 +501,9 @@
 			</p>
 		{/if}
 		<nav aria-label="Account">
+			{#if data.trip.access === 'admin' || data.trip.access === 'sudo'}
+				<a href={resolve('/trips/[slug]/costs', { slug: data.trip.slug })}>Costs</a>
+			{/if}
 			{#if data.currentUser}
 				<span>Signed as {data.currentUser.username}</span>
 				{#if data.trip.access === 'sudo' && canModifyItinerary}
@@ -598,6 +601,7 @@
 				{@const selectedItem = detailedTrip.itinerary.items.find((item) => item.id === selectedItemId)}
 				{#if selectedItem}
 					<ItineraryItemDetails
+						expenses={detailedTrip.itinerary.expenses}
 						item={selectedItem}
 						localCurrency={detailedTrip.itinerary.localCurrency}
 						tripTimeZone={itinerary.timeZone}
@@ -621,6 +625,7 @@
 
 	{#if detailedTrip && canModifyItinerary && editingItem}
 		<ItineraryItemEditor
+			expenses={detailedTrip.itinerary.expenses}
 			item={editingItem.item}
 			localCurrency={detailedTrip.itinerary.localCurrency}
 			mode={editingItem.mode}

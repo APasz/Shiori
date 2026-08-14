@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
 	calendarDateSchema,
+	currencyCodeSchema,
+	expenseSchema,
 	externalUrlSchema,
 	googleHotelPropertyUrlSchema,
 	googleMapsUrlSchema,
@@ -46,6 +48,37 @@ export const tripCreateResponseSchema = z.strictObject({
 export const tripDetailsSaveRequestSchema = z.strictObject({
 	details: tripDetailsSchema,
 	revision: z.number().int().nonnegative()
+});
+
+export const expenseSaveRequestSchema = z.strictObject({
+	expense: expenseSchema,
+	revision: z.number().int().nonnegative()
+});
+
+export const expenseDeleteRequestSchema = z.strictObject({
+	expenseId: itineraryIdentifierSchema,
+	revision: z.number().int().nonnegative()
+});
+
+export const currencyConversionRatesRequestSchema = z
+	.strictObject({
+		sourceCurrencies: z.array(currencyCodeSchema).min(1).max(currencyCodeSchema.options.length),
+		targetCurrency: currencyCodeSchema
+	})
+	.refine(
+		(input) => new Set(input.sourceCurrencies).size === input.sourceCurrencies.length,
+		'Source currencies must be unique.'
+	);
+
+const currencyConversionRateSchema = z.strictObject({
+	sourceCurrency: currencyCodeSchema,
+	targetCurrencyPerSourceCurrency: z.number().finite().positive()
+});
+
+export const currencyConversionRatesResponseSchema = z.strictObject({
+	effectiveDate: calendarDateSchema,
+	rates: z.array(currencyConversionRateSchema).min(1),
+	targetCurrency: currencyCodeSchema
 });
 
 export const itemCreateRequestSchema = z.strictObject({

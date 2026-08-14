@@ -4,13 +4,15 @@
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
-	import type { CurrencyCode, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
+	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
+	import type { CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
 	import { formatMonetaryAmount } from '$lib/money';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { itemTypeAccentStyle, reservationStatusStyle } from '$lib/theme/palette';
 
 	let {
 		item,
+		expenses,
 		localCurrency,
 		tripTimeZone,
 		canEdit,
@@ -21,6 +23,7 @@
 		onEdit
 	}: {
 		item: ItineraryItem;
+		expenses: readonly Expense[];
 		localCurrency: CurrencyCode;
 		tripTimeZone: string;
 		canEdit: boolean;
@@ -32,6 +35,7 @@
 	} = $props();
 	let dialogElement: HTMLDialogElement;
 	const timingTimeZone = $derived(resolveTimingTimeZone(item.timing, tripTimeZone));
+	const linkedExpenses = $derived(resolveLinkedExpenses(expenses, item.linkedExpenseIds));
 
 	onMount(() => {
 		dialogElement.showModal();
@@ -209,6 +213,22 @@
 						<dd>{paidAtLabel(item.cost.payment.paidAt)}</dd>
 					{/if}
 				</dl>
+			</section>
+		{/if}
+
+		{#if linkedExpenses.length > 0}
+			<section aria-labelledby="linked-expenses-heading">
+				<h3 id="linked-expenses-heading">Linked expenses</h3>
+				<ul>
+					{#each linkedExpenses as expense (expense.id)}
+						<li>
+							<strong>{expense.title}</strong>
+							<span>{expense.category}</span>
+							<span>{formatMonetaryAmount(expense.amountMinor, expense.currency)}</span>
+							<span>{expense.status === 'paid' ? 'Paid' : 'Unpaid'}</span>
+						</li>
+					{/each}
+				</ul>
 			</section>
 		{/if}
 
