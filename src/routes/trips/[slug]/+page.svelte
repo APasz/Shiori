@@ -1,5 +1,5 @@
 <script lang="ts">
-	import TripPage from '../../+page.svelte';
+	import TripPage from '$lib/trip-page/TripPage.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
