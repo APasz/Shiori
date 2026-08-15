@@ -6,6 +6,7 @@
 	import ItineraryItemDetails from '$lib/components/ItineraryItemDetails.svelte';
 	import ItineraryItemEditor from '$lib/components/ItineraryItemEditor.svelte';
 	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
+	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import TripEditor from '$lib/components/TripEditor.svelte';
 	import TripSwitcher from '$lib/components/TripSwitcher.svelte';
 	import type { ItineraryItem, ItineraryNoteTarget } from '$lib/itinerary/schema';
@@ -86,17 +87,21 @@
 	<meta name="description" content="A server-authoritative travel itinerary, validated by Shiori." />
 </svelte:head>
 
+<TripTopbar
+	activePage="itinerary"
+	canManageTrip={detailedTrip?.canEdit === true}
+	{canModifyItinerary}
+	currentUser={data.currentUser}
+	isOffline={connectivity.status === 'unreachable'}
+	onCreateTrip={() => beginEditingTrip('create')}
+	onEditTrip={() => beginEditingTrip('edit')}
+	onExport={() => (exportingItinerary = true)}
+	onSwitchTrips={() => (switchingTrips = true)}
+	trip={data.trip}
+/>
+
 <main>
-	<TripPageHeader
-		{data}
-		connectivityStatus={connectivity.status}
-		{canModifyItinerary}
-		canManageTrip={detailedTrip?.canEdit === true}
-		onExport={() => (exportingItinerary = true)}
-		onSwitchTrips={() => (switchingTrips = true)}
-		onCreateTrip={() => beginEditingTrip('create')}
-		onEditTrip={() => beginEditingTrip('edit')}
-	/>
+	<TripPageHeader {data} connectivityStatus={connectivity.status} />
 
 	<ItinerarySchedule
 		tripId={data.trip.id}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { dev } from '$app/environment';
 	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onMount, type Component } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
@@ -13,6 +14,8 @@
 
 	let { children } = $props();
 	let DevelopmentViewerControls = $state<Component | null>(null);
+	const tripTopbarRoutes = new Set(['/', '/trips/[slug]', '/trips/[slug]/notes', '/trips/[slug]/costs']);
+	const hasTripTopbar = $derived(tripTopbarRoutes.has(page.route.id ?? ''));
 
 	if (!dev) {
 		afterNavigate(() => {
@@ -41,7 +44,9 @@
 	{@html themeStyleTag}
 </svelte:head>
 
-<ThemeToggle />
+{#if !hasTripTopbar}
+	<ThemeToggle />
+{/if}
 
 {@render children()}
 

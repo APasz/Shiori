@@ -3,9 +3,10 @@
 	import { resolve } from '$app/paths';
 	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
 	import ItineraryNoteView from '$lib/components/ItineraryNoteView.svelte';
+	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { ItineraryNote, ItineraryNoteTarget } from '$lib/itinerary/schema';
-	import { clearOfflineTripPages, refreshOfflineTripPage } from '$lib/offline';
+	import { refreshOfflineTripPage } from '$lib/offline';
 	import type { PageData } from './$types';
 
 	type EditingNote = {
@@ -16,8 +17,6 @@
 	let { data }: { data: PageData } = $props();
 	let editingNote = $state<EditingNote | null>(null);
 
-	const itineraryHref = $derived(resolve('/trips/[slug]', { slug: data.trip.slug }));
-	const costsHref = $derived(resolve('/trips/[slug]/costs', { slug: data.trip.slug }));
 	const notesEndpoint = $derived(resolve('/api/trips/[tripId]/notes', { tripId: data.trip.id }));
 	const tripNote = $derived(data.trip.itinerary.notes.find((note) => note.kind === 'trip'));
 	const dayNotes = $derived(
@@ -45,19 +44,10 @@
 	<meta name="description" content={`Planning notes for ${data.trip.itinerary.title}.`} />
 </svelte:head>
 
+<TripTopbar activePage="notes" currentUser={data.currentUser} trip={data.trip} />
+
 <main>
 	<header>
-		<nav aria-label="Trip">
-			<a href={itineraryHref}>Itinerary</a>
-			{#if data.trip.access === 'admin' || data.trip.access === 'sudo'}<a href={costsHref}>Costs</a>{/if}
-			<span aria-current="page">Notes</span>
-			{#if data.currentUser}
-				<span>Signed as {data.currentUser.username}</span>
-				<form action="/logout" method="POST" onsubmit={clearOfflineTripPages}>
-					<button type="submit">Sign out</button>
-				</form>
-			{/if}
-		</nav>
 		<p class="eyebrow">{data.trip.itinerary.title}</p>
 		<h1>Notes</h1>
 		<p class="introduction">
@@ -135,51 +125,14 @@
 
 	header {
 		border-bottom: 1px solid var(--color-border-default);
-		padding: clamp(3rem, 7vw, 5rem) 1rem 2rem;
+		padding: clamp(2rem, 7vw, 5rem) 1rem 2rem;
 		text-align: center;
 	}
 
-	nav {
-		align-items: center;
-		background: var(--color-surface-page);
-		display: flex;
-		flex-wrap: wrap;
-		font-size: 0.8125rem;
-		gap: 0.375rem;
-		justify-content: end;
-		max-width: calc(100vw - 6.5rem);
-		position: fixed;
-		right: 5.75rem;
-		top: 1rem;
-		z-index: 1;
-	}
-
-	nav a,
-	nav button,
-	nav span[aria-current] {
-		background: transparent;
-		border: 1px solid var(--color-border-default);
-		color: inherit;
-		font: inherit;
-		padding: 0.25rem 0.5rem;
-		text-decoration: none;
-	}
-
-	nav span[aria-current] {
-		border-color: var(--color-border-strong);
-	}
-
-	nav button,
 	.section-heading > button {
 		cursor: pointer;
 	}
 
-	nav form {
-		margin: 0;
-	}
-
-	nav a:focus-visible,
-	nav button:focus-visible,
 	button:focus-visible {
 		outline: 3px solid var(--color-state-focus);
 		outline-offset: 0.25rem;
@@ -253,13 +206,5 @@
 	.day-notes {
 		display: grid;
 		gap: 1rem;
-	}
-
-	@media (max-width: 34rem) {
-		nav {
-			max-width: calc(100vw - 1.5rem);
-			right: 0.75rem;
-			top: 0.75rem;
-		}
 	}
 </style>

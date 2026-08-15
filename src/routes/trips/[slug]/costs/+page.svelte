@@ -22,8 +22,9 @@
 		type Expense,
 		type ExpenseCategory
 	} from '$lib/itinerary/schema';
+	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { amountInputValue, amountMinorFromInput, convertAmountMinor, formatMonetaryAmount } from '$lib/money';
-	import { clearOfflineTripPages, refreshOfflineTripPage } from '$lib/offline';
+	import { refreshOfflineTripPage } from '$lib/offline';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageData } from './$types';
 
@@ -58,8 +59,6 @@
 	const expenses = $derived([...data.trip.itinerary.expenses].sort(compareExpenses));
 	const conversionEndpoint = $derived(resolve('/api/exchange-rates'));
 	const expensesEndpoint = $derived(resolve('/api/trips/[tripId]/expenses', { tripId: data.trip.id }));
-	const itineraryHref = $derived(resolve('/trips/[slug]', { slug: data.trip.slug }));
-	const notesHref = $derived(resolve('/trips/[slug]/notes', { slug: data.trip.slug }));
 	const sourceCurrencies = $derived(sourceCurrenciesFor(overview));
 	const canStartExpenseAction = $derived(
 		data.trip.canEdit && !expenseSaving && deletingExpenseId === null && expenseEditorMode === null
@@ -411,19 +410,10 @@
 	<meta name="description" content={`Costs for ${data.trip.itinerary.title}.`} />
 </svelte:head>
 
+<TripTopbar activePage="costs" currentUser={data.currentUser} trip={data.trip} />
+
 <main>
 	<header>
-		<nav aria-label="Trip">
-			<a href={itineraryHref}>Itinerary</a>
-			<span aria-current="page">Costs</span>
-			<a href={notesHref}>Notes</a>
-			{#if data.currentUser}
-				<span>Signed as {data.currentUser.username}</span>
-				<form action="/logout" method="POST" onsubmit={clearOfflineTripPages}>
-					<button type="submit">Sign out</button>
-				</form>
-			{/if}
-		</nav>
 		<p class="eyebrow">{data.trip.itinerary.title}</p>
 		<h1>Costs</h1>
 		<p class="introduction">Track booked costs alongside flexible expenses for purchases, passes, and package deals.</p>
@@ -567,47 +557,16 @@
 	}
 	header {
 		border-bottom: 1px solid var(--color-border-default);
-		padding: clamp(3rem, 7vw, 5rem) 1rem 2rem;
+		padding: clamp(2rem, 7vw, 5rem) 1rem 2rem;
 		text-align: center;
 	}
-	nav {
-		align-items: center;
-		background: var(--color-surface-page);
-		display: flex;
-		flex-wrap: wrap;
-		font-size: 0.8125rem;
-		gap: 0.375rem;
-		justify-content: end;
-		max-width: calc(100vw - 6.5rem);
-		position: fixed;
-		right: 5.75rem;
-		top: 1rem;
-		z-index: 1;
-	}
-	nav a,
-	nav button,
-	nav span[aria-current] {
-		background: transparent;
-		border: 1px solid var(--color-border-default);
-		color: inherit;
-		font: inherit;
-		padding: 0.25rem 0.5rem;
-		text-decoration: none;
-	}
-	nav span[aria-current] {
-		border-color: var(--color-border-strong);
-	}
-	nav button,
+
 	.expense-actions button,
 	.expense-editor button,
 	.primary-button {
 		cursor: pointer;
 	}
-	nav form {
-		margin: 0;
-	}
-	nav a:focus-visible,
-	nav button:focus-visible,
+
 	input:focus-visible,
 	select:focus-visible,
 	textarea:focus-visible,
@@ -847,13 +806,6 @@
 		width: 1px;
 	}
 	@media (max-width: 32rem) {
-		nav {
-			right: 4.75rem;
-			top: 0.5rem;
-		}
-		header {
-			padding-top: 4.5rem;
-		}
 		.section-heading {
 			align-items: start;
 			flex-direction: column;
