@@ -1,0 +1,4 @@
+.page-heading {
+	border-bottom: 1px solid var(--color-border-default);
+	padding: 1rem;
+}

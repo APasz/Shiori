@@ -4,6 +4,7 @@ import {
 	passwordSchema,
 	storedUserSchema,
 	usernameSchema,
+	type AccountManagementEntry,
 	type AuthenticatedUser,
 	type StoredData,
 	type StoredUser
@@ -119,6 +120,15 @@ export async function listAccounts(actorId: string): Promise<AuthenticatedUser[]
 		.sort((left, right) => left.username.localeCompare(right.username));
 }
 
+export async function listAccountsForManagement(actorId: string): Promise<AccountManagementEntry[]> {
+	const data = await readData();
+	assertAccountManager(data, actorId);
+	const ownerIds = new Set(data.trips.map((trip) => trip.ownerId));
+	return data.users
+		.map(({ id, username }) => ({ id, ownsTrip: ownerIds.has(id), username }))
+		.sort((left, right) => left.username.localeCompare(right.username));
+}
+
 export async function resetAccountPassword(input: {
 	actorId: string;
 	password: string;
@@ -134,6 +144,24 @@ export async function resetAccountPassword(input: {
 		}
 		user.passwordHash = passwordHash;
 		data.sessions = data.sessions.filter((session) => session.userId !== user.id);
+	});
+}
+
+export async function deleteAccount(input: { actorId: string; userId: string }): Promise<void> {
+	return transaction((data) => {
+		assertAccountManager(data, input.actorId);
+		const user = data.users.find((candidate) => candidate.id === input.userId);
+		if (!user) {
+			throw new StoreError(404, 'Account not found.');
+		}
+		if (data.trips.some((trip) => trip.ownerId === user.id)) {
+			throw new StoreError(409, 'Trip owners cannot be deleted.');
+		}
+
+		data.users = data.users.filter((candidate) => candidate.id !== user.id);
+		data.shares = data.shares.filter((share) => share.userId !== user.id);
+		data.sessions = data.sessions.filter((session) => session.userId !== user.id);
+		data.editLocks = data.editLocks.filter((lock) => lock.ownerId !== user.id);
 	});
 }
 

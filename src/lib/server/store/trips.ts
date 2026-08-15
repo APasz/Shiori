@@ -6,7 +6,7 @@ import { StoreError } from './error';
 import type { AuthenticatedUser, StoredData, StoredTrip } from './model';
 import { readData, transaction } from './persistence';
 import { timestamp } from './time';
-import type { TripReference, TripSwitchOption, TripView } from './views';
+import type { OwnedTripOption, TripReference, TripSwitchOption, TripView } from './views';
 
 export function findTripBySlug(data: StoredData, slug: string): StoredTrip | undefined {
 	return data.trips.find((trip) => trip.slug === slug);
@@ -208,6 +208,14 @@ export async function listTripSwitchOptions(userId: string): Promise<TripSwitchO
 export async function ownsAnyTrip(userId: string): Promise<boolean> {
 	const data = await readData();
 	return data.trips.some((trip) => trip.ownerId === userId);
+}
+
+export async function listOwnedTripOptions(userId: string): Promise<OwnedTripOption[]> {
+	const data = await readData();
+	return data.trips
+		.filter((trip) => trip.ownerId === userId)
+		.map((trip) => ({ id: trip.id, slug: trip.slug, title: trip.itinerary.title }))
+		.sort((left, right) => left.title.localeCompare(right.title));
 }
 
 export async function assertTripOwnerAccess(input: { tripId: string; userId: string }): Promise<void> {

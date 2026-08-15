@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -10,9 +11,8 @@
 </svelte:head>
 
 <main>
-	<header>
-		<p class="eyebrow">First run</p>
-		<h1>Set up Shiori</h1>
+	<header class="page-heading">
+		<PageTitle eyebrow="First run" title="Set up Shiori" />
 	</header>
 
 	<form class="shiori-form" method="POST">
@@ -71,38 +71,17 @@
 <style>
 	main {
 		margin: 0 auto;
-		padding: clamp(2.5rem, 9vw, 7rem) 1rem;
+		padding: clamp(2rem, 6vw, 4rem) 1rem;
 		width: min(100%, 34rem);
 	}
 
-	header {
-		border-left: 2px solid var(--color-state-selection);
-		margin-bottom: 2.5rem;
-		padding-left: 1rem;
-	}
-
-	h1,
 	p {
 		margin: 0;
 	}
 
-	h1 {
-		font-size: clamp(2rem, 6vw, 3rem);
-		letter-spacing: -0.045em;
-		line-height: 1;
-	}
-
-	.eyebrow {
-		color: var(--color-text-muted);
-		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		margin-bottom: 0.625rem;
-		text-transform: uppercase;
-	}
-
 	.shiori-form {
 		gap: 1.5rem;
+		margin-top: 1.5rem;
 	}
 
 	.shiori-form-label {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -10,7 +11,9 @@
 </svelte:head>
 
 <main>
-	<h1>Sign in</h1>
+	<header class="page-heading">
+		<PageTitle title="Sign in" />
+	</header>
 	{#if data.setupRequired}
 		<p>No sudo account exists yet. <a href={resolve('/setup')}>Set up Shiori first.</a></p>
 	{:else}
@@ -41,6 +44,11 @@
 		margin: 0 auto;
 		padding: clamp(2rem, 6vw, 5rem) 1rem;
 		width: min(100%, 28rem);
+	}
+
+	.page-heading + p,
+	.page-heading + .shiori-form {
+		margin-top: 1.5rem;
 	}
 
 	.error {

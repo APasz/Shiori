@@ -7,12 +7,13 @@
 	import Icon from '$lib/visuals/Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
-	type TripPage = 'itinerary' | 'notes' | 'costs';
+	type TopbarPage = 'access' | 'accounts' | 'costs' | 'itinerary' | 'notes' | 'trips';
 	type TopbarTrip = Pick<TripView, 'access' | 'itinerary' | 'slug'>;
 	type TopbarUser = Pick<AuthenticatedUser, 'username'>;
 
 	let {
 		activePage,
+		canManageAccounts = false,
 		canManageTrip = false,
 		canModifyItinerary = false,
 		currentUser,
@@ -21,9 +22,10 @@
 		onEditTrip,
 		onExport,
 		onSwitchTrips,
-		trip
+		trip = undefined
 	}: {
-		activePage: TripPage;
+		activePage: TopbarPage;
+		canManageAccounts?: boolean;
 		canManageTrip?: boolean;
 		canModifyItinerary?: boolean;
 		currentUser: TopbarUser | null;
@@ -32,19 +34,21 @@
 		onEditTrip?: () => void;
 		onExport?: () => void;
 		onSwitchTrips?: () => void;
-		trip: TopbarTrip;
+		trip?: TopbarTrip;
 	} = $props();
 
 	let tripMenuOpen = $state(false);
 	let accountMenuOpen = $state(false);
 	let tripMenuElement = $state<HTMLDetailsElement | null>(null);
 	let accountMenuElement = $state<HTMLDetailsElement | null>(null);
-	const itineraryHref = $derived(resolve('/trips/[slug]', { slug: trip.slug }));
-	const notesHref = $derived(resolve('/trips/[slug]/notes', { slug: trip.slug }));
-	const costsHref = $derived(resolve('/trips/[slug]/costs', { slug: trip.slug }));
-	const canViewCosts = $derived(trip.access === 'admin' || trip.access === 'sudo');
-	const canViewNotes = $derived(trip.access !== 'visitor');
-	const canManageActions = $derived(canManageTrip && onSwitchTrips !== undefined);
+	const homeHref = $derived(resolve('/'));
+	const itineraryHref = $derived(trip ? resolve('/trips/[slug]', { slug: trip.slug }) : null);
+	const notesHref = $derived(trip ? resolve('/trips/[slug]/notes', { slug: trip.slug }) : null);
+	const costsHref = $derived(trip ? resolve('/trips/[slug]/costs', { slug: trip.slug }) : null);
+	const accessHref = $derived(trip ? resolve(`/settings/access?trip=${encodeURIComponent(trip.slug)}`) : null);
+	const canViewCosts = $derived(trip?.access === 'admin' || trip?.access === 'sudo');
+	const canViewNotes = $derived(trip !== undefined && trip.access !== 'visitor');
+	const canManageActions = $derived(trip !== undefined && canManageTrip && onSwitchTrips !== undefined);
 
 	function runTripAction(action: (() => void) | undefined): void {
 		tripMenuOpen = false;
@@ -94,17 +98,40 @@
 
 <header class="trip-topbar">
 	<div class="topbar-content">
-		<a aria-current={activePage === 'itinerary' ? 'page' : undefined} class="trip-identity" href={itineraryHref}>
+		<a aria-current={activePage === 'trips' ? 'page' : undefined} class="trip-identity" href={homeHref}>
 			<span class="product-name">Shiori</span>
 		</a>
 
-		<nav aria-label="Trip sections" class="section-nav">
-			<a aria-current={activePage === 'itinerary' ? 'page' : undefined} href={itineraryHref}>Itinerary</a>
-			{#if canViewNotes}
-				<a aria-current={activePage === 'notes' ? 'page' : undefined} href={notesHref}>Notes</a>
+		<nav aria-label="Primary navigation" class="section-nav">
+			{#if trip && itineraryHref}
+				<a aria-current={activePage === 'itinerary' ? 'page' : undefined} href={itineraryHref}>
+					<span>Itinerary</span>
+					<span aria-hidden="true" class="label-width">Itinerary</span>
+				</a>
 			{/if}
-			{#if canViewCosts}
-				<a aria-current={activePage === 'costs' ? 'page' : undefined} href={costsHref}>Costs</a>
+			{#if trip && canViewNotes && notesHref}
+				<a aria-current={activePage === 'notes' ? 'page' : undefined} href={notesHref}>
+					<span>Notes</span>
+					<span aria-hidden="true" class="label-width">Notes</span>
+				</a>
+			{/if}
+			{#if trip && canViewCosts && costsHref}
+				<a aria-current={activePage === 'costs' ? 'page' : undefined} href={costsHref}>
+					<span>Costs</span>
+					<span aria-hidden="true" class="label-width">Costs</span>
+				</a>
+			{/if}
+			{#if trip?.access === 'sudo' && accessHref}
+				<a aria-current={activePage === 'access' ? 'page' : undefined} href={accessHref}>
+					<span>Access</span>
+					<span aria-hidden="true" class="label-width">Access</span>
+				</a>
+			{/if}
+			{#if canManageAccounts}
+				<a aria-current={activePage === 'accounts' ? 'page' : undefined} href={resolve('/accounts')}>
+					<span>Accounts</span>
+					<span aria-hidden="true" class="label-width">Accounts</span>
+				</a>
 			{/if}
 		</nav>
 
@@ -115,7 +142,7 @@
 			{#if onExport}
 				<button class="export-button" onclick={onExport} type="button">Export</button>
 			{/if}
-			{#if canManageActions}
+			{#if trip && canManageActions}
 				<details bind:this={tripMenuElement} bind:open={tripMenuOpen} class="trip-menu" ontoggle={synchronizeTripMenu}>
 					<summary aria-label="Trip options" title="Trip options"><Icon name="more" /></summary>
 					<div class="topbar-menu">
@@ -123,10 +150,6 @@
 						{#if canModifyItinerary}
 							<button onclick={() => runTripAction(onCreateTrip)} type="button">New trip</button>
 							<button onclick={() => runTripAction(onEditTrip)} type="button">Edit trip</button>
-						{/if}
-						{#if trip.access === 'sudo' && canModifyItinerary}
-							<a href={resolve('/accounts')}>Accounts</a>
-							<a href={resolve(`/settings/access?trip=${encodeURIComponent(trip.slug)}`)}>Access</a>
 						{/if}
 					</div>
 				</details>
@@ -218,6 +241,16 @@
 	.section-nav a {
 		border-radius: 0.25rem;
 		color: var(--color-text-secondary);
+		display: grid;
+	}
+
+	.section-nav a > span {
+		grid-area: 1 / 1;
+	}
+
+	.label-width {
+		font-weight: 700;
+		visibility: hidden;
 	}
 
 	.section-nav a[aria-current='page'] {
@@ -317,8 +350,7 @@
 		z-index: 1;
 	}
 
-	.topbar-menu button,
-	.topbar-menu a {
+	.topbar-menu button {
 		background: transparent;
 		border: 0;
 		color: inherit;
@@ -331,7 +363,6 @@
 	}
 
 	.topbar-menu button:hover,
-	.topbar-menu a:hover,
 	.section-nav a:hover,
 	.export-button:hover,
 	.sign-in-link:hover,
@@ -346,8 +377,7 @@
 	.sign-in-link:focus-visible,
 	.trip-menu summary:focus-visible,
 	.account-menu summary:focus-visible,
-	.topbar-menu button:focus-visible,
-	.topbar-menu a:focus-visible {
+	.topbar-menu button:focus-visible {
 		outline: 3px solid var(--color-state-focus);
 		outline-offset: 2px;
 	}

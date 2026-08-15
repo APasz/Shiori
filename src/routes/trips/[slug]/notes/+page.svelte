@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
 	import ItineraryNoteView from '$lib/components/ItineraryNoteView.svelte';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { ItineraryNote, ItineraryNoteTarget } from '$lib/itinerary/schema';
@@ -44,15 +45,16 @@
 	<meta name="description" content={`Planning notes for ${data.trip.itinerary.title}.`} />
 </svelte:head>
 
-<TripTopbar activePage="notes" currentUser={data.currentUser} trip={data.trip} />
+<TripTopbar
+	activePage="notes"
+	canManageAccounts={data.canManageAccounts}
+	currentUser={data.currentUser}
+	trip={data.trip}
+/>
 
 <main>
-	<header>
-		<p class="eyebrow">{data.trip.itinerary.title}</p>
-		<h1>Notes</h1>
-		<p class="introduction">
-			Keep ideas, alternatives, and estimates separate from your confirmed itinerary and expenses.
-		</p>
+	<header class="page-heading">
+		<PageTitle eyebrow={data.trip.itinerary.title} title="Notes" />
 	</header>
 
 	<div class="content">
@@ -123,12 +125,6 @@
 		padding-bottom: clamp(2rem, 5vw, 4rem);
 	}
 
-	header {
-		border-bottom: 1px solid var(--color-border-default);
-		padding: clamp(2rem, 7vw, 5rem) 1rem 2rem;
-		text-align: center;
-	}
-
 	.section-heading > button {
 		cursor: pointer;
 	}
@@ -138,17 +134,9 @@
 		outline-offset: 0.25rem;
 	}
 
-	h1,
 	h2,
 	p {
 		margin-top: 0;
-	}
-
-	h1 {
-		font-size: clamp(2.75rem, 9vw, 5rem);
-		letter-spacing: -0.05em;
-		line-height: 1;
-		margin-bottom: 0.75rem;
 	}
 
 	h2 {
@@ -163,12 +151,6 @@
 		letter-spacing: 0.1em;
 		margin-bottom: 0.375rem;
 		text-transform: uppercase;
-	}
-
-	.introduction {
-		color: var(--color-text-secondary);
-		margin: 0 auto;
-		max-width: 42rem;
 	}
 
 	.content {

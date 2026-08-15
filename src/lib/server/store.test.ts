@@ -863,6 +863,34 @@ describe('JSON store', () => {
 		});
 	});
 
+	it('updates an account’s selected-trip access and deletes non-owner accounts', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const person = await store.createAccount({
+			actorId: owner.id,
+			password: 'initial strong password',
+			username: 'shared-person'
+		});
+
+		await expect(store.listOwnedTripOptions(owner.id)).resolves.toEqual([
+			{ id: trip.id, slug: trip.slug, title: 'Test trip' }
+		]);
+		await store.setTripMemberAccess({ actorId: owner.id, role: 'admin', tripId: trip.id, userId: person.id });
+		await expect(store.getTripView(trip.slug, person)).resolves.toMatchObject({ access: 'admin' });
+		await store.setTripMemberAccess({ actorId: owner.id, role: null, tripId: trip.id, userId: person.id });
+		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
+
+		await store.setTripMemberAccess({ actorId: owner.id, role: 'user', tripId: trip.id, userId: person.id });
+		const sessionId = await store.createSession(person.id);
+		await store.deleteAccount({ actorId: owner.id, userId: person.id });
+
+		await expect(store.listAccounts(owner.id)).resolves.toEqual([owner]);
+		await expect(store.getSessionUser(sessionId)).resolves.toBeNull();
+		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
+		await expect(store.deleteAccount({ actorId: owner.id, userId: owner.id })).rejects.toMatchObject({ status: 409 });
+	});
+
 	it('allows only one active edit per trip and preserves the preceding file as a backup', async () => {
 		const store = await import('./store');
 		const user = await store.createInitialSudo('owner', 'a strong test password');

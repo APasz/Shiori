@@ -36,6 +36,12 @@ export type TripSwitchOption = {
 	updatedAt: number;
 };
 
+export type OwnedTripOption = {
+	id: string;
+	slug: string;
+	title: string;
+};
+
 export type TripMember = {
 	id: string;
 	role: 'admin' | 'sudo' | 'user';

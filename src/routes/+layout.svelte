@@ -8,14 +8,22 @@
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import '$lib/styles/dialogs.css';
 	import '$lib/styles/forms.css';
+	import '$lib/styles/page-titles.css';
 	import { themeStyleTag } from '$lib/theme/palette';
 	import { themeInitializationScript } from '$lib/theme/theme';
 	import { refreshOfflineTripPage, registerOfflineSupport } from '$lib/offline';
 
 	let { children } = $props();
 	let DevelopmentViewerControls = $state<Component | null>(null);
-	const tripTopbarRoutes = new Set(['/', '/trips/[slug]', '/trips/[slug]/notes', '/trips/[slug]/costs']);
-	const hasTripTopbar = $derived(tripTopbarRoutes.has(page.route.id ?? ''));
+	const inlineThemeToggleRoutes = new Set([
+		'/',
+		'/accounts',
+		'/settings/access',
+		'/trips/[slug]',
+		'/trips/[slug]/notes',
+		'/trips/[slug]/costs'
+	]);
+	const hasInlineThemeToggle = $derived(inlineThemeToggleRoutes.has(page.route.id ?? ''));
 
 	if (!dev) {
 		afterNavigate(() => {
@@ -44,7 +52,7 @@
 	{@html themeStyleTag}
 </svelte:head>
 
-{#if !hasTripTopbar}
+{#if !hasInlineThemeToggle}
 	<ThemeToggle />
 {/if}
 

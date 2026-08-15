@@ -44,10 +44,10 @@ corner to stage and apply the viewer's current local date, time, and IANA time z
 only client-side presentation and defaults for newly created items; stored Unix timestamps are
 never changed.
 
-Signed-in owners can create an empty private trip from the itinerary page’s top-right overflow
-menu. New trips receive a readable URL at `/trips/<trip-name>` and can use the same menu to edit
-their name and default time zone. The menu’s trip switcher shows empty trips first, then planned
-trips ordered by their latest item start.
+The homepage lists every trip available to the signed-in account. Signed-in owners can create an
+empty private trip from an itinerary page’s top-right overflow menu. New trips receive a readable
+URL at `/trips/<trip-name>` and can use the same menu to edit their name and default time zone. The
+menu’s trip switcher shows empty trips first, then planned trips ordered by their latest item start.
 
 Previously opened trip pages are available read-only while offline. Shiori saves the app shell and
 the latest successful version of each opened trip on that browser profile; it refreshes that copy

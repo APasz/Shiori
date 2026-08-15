@@ -89,6 +89,7 @@
 
 <TripTopbar
 	activePage="itinerary"
+	canManageAccounts={data.canManageAccounts}
 	canManageTrip={detailedTrip?.canEdit === true}
 	{canModifyItinerary}
 	currentUser={data.currentUser}

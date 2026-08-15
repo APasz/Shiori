@@ -54,11 +54,6 @@
 							<strong>{trip.title}</strong>
 							<small>{latestItemLabel(trip.latestItemStartAt)}</small>
 						</span>
-					{:else if trip.slug === 'example'}
-						<a class="trip" href={resolve('/')}>
-							<strong>{trip.title}</strong>
-							<small>{latestItemLabel(trip.latestItemStartAt)}</small>
-						</a>
 					{:else}
 						<a class="trip" href={resolve('/trips/[slug]', { slug: trip.slug })}>
 							<strong>{trip.title}</strong>

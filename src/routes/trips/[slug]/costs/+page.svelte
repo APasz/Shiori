@@ -22,6 +22,7 @@
 		type Expense,
 		type ExpenseCategory
 	} from '$lib/itinerary/schema';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { amountInputValue, amountMinorFromInput, convertAmountMinor, formatMonetaryAmount } from '$lib/money';
 	import { refreshOfflineTripPage } from '$lib/offline';
@@ -410,13 +411,16 @@
 	<meta name="description" content={`Costs for ${data.trip.itinerary.title}.`} />
 </svelte:head>
 
-<TripTopbar activePage="costs" currentUser={data.currentUser} trip={data.trip} />
+<TripTopbar
+	activePage="costs"
+	canManageAccounts={data.canManageAccounts}
+	currentUser={data.currentUser}
+	trip={data.trip}
+/>
 
 <main>
-	<header>
-		<p class="eyebrow">{data.trip.itinerary.title}</p>
-		<h1>Costs</h1>
-		<p class="introduction">Track booked costs alongside flexible expenses for purchases, passes, and package deals.</p>
+	<header class="page-heading">
+		<PageTitle eyebrow={data.trip.itinerary.title} title="Costs" />
 	</header>
 
 	<div class="content">
@@ -555,12 +559,6 @@
 	main {
 		padding-bottom: clamp(2rem, 5vw, 4rem);
 	}
-	header {
-		border-bottom: 1px solid var(--color-border-default);
-		padding: clamp(2rem, 7vw, 5rem) 1rem 2rem;
-		text-align: center;
-	}
-
 	.expense-actions button,
 	.expense-editor button,
 	.primary-button {
@@ -574,17 +572,10 @@
 		outline: 3px solid var(--color-state-focus);
 		outline-offset: 0.25rem;
 	}
-	h1,
 	h2,
 	h3,
 	p {
 		margin-top: 0;
-	}
-	h1 {
-		font-size: clamp(2.75rem, 9vw, 5rem);
-		letter-spacing: -0.05em;
-		line-height: 1;
-		margin-bottom: 0.75rem;
 	}
 	h2 {
 		font-size: 1.25rem;
@@ -601,11 +592,6 @@
 		letter-spacing: 0.1em;
 		margin-bottom: 0.375rem;
 		text-transform: uppercase;
-	}
-	.introduction {
-		color: var(--color-text-secondary);
-		margin: 0 auto;
-		max-width: 38rem;
 	}
 	.content {
 		margin: 0 auto;

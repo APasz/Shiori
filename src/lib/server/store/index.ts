@@ -2,7 +2,9 @@ export {
 	authenticate,
 	createAccount,
 	createInitialSudo,
+	deleteAccount,
 	listAccounts,
+	listAccountsForManagement,
 	needsInitialSetup,
 	resetAccountPassword
 } from './auth';
@@ -32,11 +34,12 @@ export {
 	listTripMembers,
 	removeTripAccess,
 	setSharedUserRole,
+	setTripMemberAccess,
 	setTripPublic
 } from './members';
 export { createSession, destroySession, getSessionUser } from './sessions';
-export { assertTripOwnerAccess, createTrip, getTripView, listTripSwitchOptions } from './trips';
-export type { AuthenticatedUser, ShareRole } from './model';
+export { assertTripOwnerAccess, createTrip, getTripView, listOwnedTripOptions, listTripSwitchOptions } from './trips';
+export type { AccountManagementEntry, AuthenticatedUser, ShareRole } from './model';
 export type {
 	DetailedTripAccessRole,
 	PublicItinerary,
@@ -46,6 +49,7 @@ export type {
 export type {
 	DetailedTripView,
 	EditLock,
+	OwnedTripOption,
 	TripMember,
 	TripReference,
 	TripSwitchOption,

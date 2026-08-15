@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import PageTitle from '$lib/components/PageTitle.svelte';
+	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import Icon from '$lib/visuals/Icon.svelte';
 	import type { ActionData, PageData } from './$types';
 
@@ -41,15 +42,12 @@
 	<title>Access · Shiori</title>
 </svelte:head>
 
+<TripTopbar activePage="access" canManageAccounts currentUser={data.currentUser} trip={data.trip} />
+
 <main>
-	<p class="back-link">
-		{#if data.trip.slug === 'example'}
-			<a href={resolve('/')}><Icon name="back" /> {data.trip.itinerary.title}</a>
-		{:else}
-			<a href={resolve('/trips/[slug]', { slug: data.trip.slug })}><Icon name="back" /> {data.trip.itinerary.title}</a>
-		{/if}
-	</p>
-	<h1>Access</h1>
+	<header class="page-heading">
+		<PageTitle title="Access" />
+	</header>
 
 	{#if form?.visibilityUpdated}
 		<p class="success page-status" role="status">Schedule visibility updated.</p>
@@ -92,7 +90,6 @@
 		<div class="section-heading">
 			<h2 id="people-heading">People <span>{data.members.length}</span></h2>
 			<div class="people-actions">
-				<a class="accounts-link" href={resolve('/accounts')}>Accounts</a>
 				<details
 					class="add-person"
 					open={Boolean(form?.grantUserError) || addPersonOpen}
@@ -217,24 +214,8 @@
 <style>
 	main {
 		margin: 0 auto;
-		padding: clamp(2rem, 6vw, 5rem) 1rem;
+		padding: 0 1rem clamp(2rem, 6vw, 5rem);
 		width: min(100%, 42rem);
-	}
-
-	h1 {
-		margin: 0;
-	}
-
-	.back-link {
-		margin: 0 0 0.75rem;
-	}
-
-	.back-link a {
-		align-items: center;
-		color: inherit;
-		display: inline-flex;
-		gap: 0.35rem;
-		text-underline-offset: 0.15em;
 	}
 
 	.page-status {
@@ -354,12 +335,6 @@
 		align-items: center;
 		display: flex;
 		gap: 0.75rem;
-	}
-
-	.accounts-link {
-		color: inherit;
-		font-size: 0.875rem;
-		text-underline-offset: 0.15em;
 	}
 
 	.add-person {

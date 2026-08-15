@@ -40,7 +40,11 @@ async function requireSudo(
 }
 
 function tripSlug(url: URL): string {
-	return url.searchParams.get('trip') ?? 'example';
+	const slug = url.searchParams.get('trip');
+	if (!slug) {
+		redirect(303, '/');
+	}
+	return slug;
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -50,7 +54,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		listTripMembers(access.trip.id, access.user.id),
 		hasActiveTripEditSession({ tripId: access.trip.id, userId: access.user.id })
 	]);
-	return { availableAccounts, hasActiveEditSession, members, trip: access.trip };
+	return { availableAccounts, currentUser: access.user, hasActiveEditSession, members, trip: access.trip };
 };
 
 export const actions: Actions = {

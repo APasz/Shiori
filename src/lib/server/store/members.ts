@@ -105,6 +105,41 @@ export async function setSharedUserRole(input: {
 	});
 }
 
+export async function setTripMemberAccess(input: {
+	actorId: string;
+	role: ShareRole | null;
+	tripId: string;
+	userId: string;
+}): Promise<void> {
+	return transaction((data) => {
+		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+		const user = data.users.find((candidate) => candidate.id === input.userId);
+		if (!user) {
+			throw new StoreError(404, 'Account not found.');
+		}
+		if (user.id === trip.ownerId) {
+			throw new StoreError(403, 'The trip owner’s access cannot be changed.');
+		}
+
+		const shareIndex = data.shares.findIndex((share) => share.tripId === trip.id && share.userId === input.userId);
+		if (input.role === null) {
+			if (shareIndex === -1) {
+				return;
+			}
+			data.shares.splice(shareIndex, 1);
+			return;
+		}
+
+		const role = shareRoleSchema.parse(input.role);
+		const share = data.shares[shareIndex];
+		if (share) {
+			share.role = role;
+			return;
+		}
+		data.shares.push({ role, tripId: trip.id, userId: user.id });
+	});
+}
+
 export async function removeTripAccess(input: { actorId: string; tripId: string; userId: string }): Promise<void> {
 	return transaction((data) => {
 		const trip = requireOwnerTrip(data, input.tripId, input.actorId);

@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { needsInitialSetup } from '$lib/server/store/auth';
-import { getTripView, listTripSwitchOptions } from '$lib/server/store/trips';
+import { getTripView, listTripSwitchOptions, ownsAnyTrip } from '$lib/server/store/trips';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const setupRequired = await needsInitialSetup();
@@ -16,8 +16,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		error(404, 'The requested trip is unavailable.');
 	}
 
-	const trips = locals.user ? await listTripSwitchOptions(locals.user.id) : [];
+	const [trips, canManageAccounts] = locals.user
+		? await Promise.all([listTripSwitchOptions(locals.user.id), ownsAnyTrip(locals.user.id)])
+		: [[], false];
 	return {
+		canManageAccounts,
 		currentUser: locals.user,
 		setupRequired,
 		trip,

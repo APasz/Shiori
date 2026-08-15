@@ -271,4 +271,5 @@ export type PersistedTrip = z.infer<typeof persistedTripSchema>;
 export type StoredUser = z.infer<typeof storedUserSchema>;
 export type StoredEditLock = z.infer<typeof storedEditLockSchema>;
 export type AuthenticatedUser = Pick<StoredUser, 'id' | 'username'>;
+export type AccountManagementEntry = AuthenticatedUser & { ownsTrip: boolean };
 export type ShareRole = z.infer<typeof shareRoleSchema>;

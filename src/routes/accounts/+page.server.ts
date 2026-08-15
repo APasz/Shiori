@@ -1,11 +1,13 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { ZodError } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
-import { createAccount, listAccounts, resetAccountPassword } from '$lib/server/store/auth';
+import { createAccount, deleteAccount, listAccountsForManagement, resetAccountPassword } from '$lib/server/store/auth';
 import { StoreError } from '$lib/server/store/error';
+import { listTripMembers, setTripMemberAccess } from '$lib/server/store/members';
 import type { AuthenticatedUser } from '$lib/server/store/model';
-import { ownsAnyTrip } from '$lib/server/store/trips';
+import { listOwnedTripOptions, ownsAnyTrip } from '$lib/server/store/trips';
+import type { ShareRole } from '$lib/server/store/model';
 
 function validationMessage(error: ZodError): string {
 	return error.issues[0]?.message ?? 'Enter valid account details.';
@@ -21,9 +23,47 @@ async function requireAccountManager(user: AuthenticatedUser | null): Promise<Au
 	return user;
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
-	const user = await requireAccountManager(locals.user);
-	return { accounts: await listAccounts(user.id), currentUserId: user.id };
+async function accountContext(user: AuthenticatedUser | null, url: URL) {
+	const manager = await requireAccountManager(user);
+	const trips = await listOwnedTripOptions(manager.id);
+	const fallbackTrip = trips[0];
+	if (!fallbackTrip) {
+		throw new Error('An account manager must own at least one trip.');
+	}
+
+	const selectedSlug = url.searchParams.get('trip') ?? fallbackTrip.slug;
+	const selectedTrip = trips.find((trip) => trip.slug === selectedSlug);
+	if (!selectedTrip) {
+		error(404, 'The selected trip is not available for account management.');
+	}
+
+	return { manager, selectedTrip, trips };
+}
+
+function selectedMemberRole(value: string): ShareRole | null | undefined {
+	if (value === 'none') {
+		return null;
+	}
+	if (value === 'user' || value === 'admin') {
+		return value;
+	}
+	return undefined;
+}
+
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const context = await accountContext(locals.user, url);
+	const [accounts, members] = await Promise.all([
+		listAccountsForManagement(context.manager.id),
+		listTripMembers(context.selectedTrip.id, context.manager.id)
+	]);
+	const rolesByUserId = new Map(members.map((member) => [member.id, member.role]));
+
+	return {
+		accounts: accounts.map((account) => ({ ...account, role: rolesByUserId.get(account.id) ?? 'none' })),
+		currentUser: context.manager,
+		selectedTrip: context.selectedTrip,
+		trips: context.trips
+	};
 };
 
 export const actions: Actions = {
@@ -65,6 +105,46 @@ export const actions: Actions = {
 			}
 			if (error instanceof ZodError) {
 				return fail(400, { passwordResetError: validationMessage(error) });
+			}
+			throw error;
+		}
+	},
+	setTripAccess: async ({ locals, request, url }) => {
+		const context = await accountContext(locals.user, url);
+		const formData = await request.formData();
+		const role = selectedMemberRole(formDataText(formData, 'role'));
+		if (role === undefined) {
+			return fail(400, { memberAccessError: 'Choose a valid access level.' });
+		}
+
+		try {
+			await setTripMemberAccess({
+				actorId: context.manager.id,
+				role,
+				tripId: context.selectedTrip.id,
+				userId: formDataText(formData, 'userId')
+			});
+			return { memberAccessUpdated: true };
+		} catch (error: unknown) {
+			if (error instanceof StoreError) {
+				return fail(error.status, { memberAccessError: error.message });
+			}
+			throw error;
+		}
+	},
+	deleteAccount: async ({ locals, request }) => {
+		const manager = await requireAccountManager(locals.user);
+		const userId = formDataText(await request.formData(), 'userId');
+		if (userId === manager.id) {
+			return fail(400, { accountDeletionError: 'You cannot delete your own account.' });
+		}
+
+		try {
+			await deleteAccount({ actorId: manager.id, userId });
+			return { accountDeleted: true };
+		} catch (error: unknown) {
+			if (error instanceof StoreError) {
+				return fail(error.status, { accountDeletionError: error.message });
 			}
 			throw error;
 		}

@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from '$lib/server/store/model';
 import type { TripSwitchOption, TripView } from '$lib/server/store/views';
 
 export type TripPageData = Readonly<{
+	canManageAccounts: boolean;
 	currentUser: AuthenticatedUser | null;
 	setupRequired: boolean;
 	trip: TripView;
