@@ -34,10 +34,10 @@ npm run preview
 Interface icons and decorative artwork are selected by intent, rather than by a provider-specific
 component. Use `$lib/visuals/Icon.svelte` for controls and `$lib/visuals/Artwork.svelte` for larger,
 non-essential imagery; their names and provider mappings live in `src/lib/visuals/registry.ts`.
-Tabler is the default provider. To add or replace a source, adapt the source component to
-`VisualRenderer` in `src/lib/visuals/types.ts`, then change only the relevant registry entry. Entries
-can use different providers, so Tabler icons can sit alongside unDraw or custom artwork without
-leaking provider imports into application components.
+The current entries use Tabler, but each can use any provider. To add or replace a source, adapt the
+source component to `VisualRenderer` in `src/lib/visuals/types.ts`, then create its entry with
+`visualAsset`. Icons and artwork may use different providers without leaking provider imports into
+application components.
 
 When running `npm run dev`, use the collapsed **Development viewer** control in the lower-left
 corner to stage and apply the viewer's current local date, time, and IANA time zone. It affects

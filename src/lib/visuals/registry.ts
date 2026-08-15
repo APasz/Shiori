@@ -19,7 +19,7 @@ import {
 	IconTrain,
 	IconWalk
 } from '@tabler/icons-svelte';
-import type { VisualAsset, VisualRenderer } from './types';
+import { visualAsset, type VisualAsset, type VisualRenderer } from './types';
 
 /** Intent-based icon names used by interface controls. */
 export const iconNames = [
@@ -54,8 +54,9 @@ export type ArtworkName = (typeof artworkNames)[number];
 
 type TablerRenderer = typeof IconActivity;
 
-function tablerAsset(renderer: TablerRenderer): VisualAsset {
-	return { provider: 'tabler', renderer: renderer as unknown as VisualRenderer };
+/** Adapts Tabler's component declaration to the provider-neutral renderer contract. */
+function tablerAsset(renderer: TablerRenderer): VisualAsset<'tabler'> {
+	return visualAsset('tabler', renderer as unknown as VisualRenderer);
 }
 
 /**

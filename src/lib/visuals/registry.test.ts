@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { artworkAssets, artworkNames, iconAssets, iconNames } from './registry';
+import { visualAsset } from './types';
 
 describe('visual registry', () => {
 	it('registers every public icon name', () => {
@@ -10,9 +11,12 @@ describe('visual registry', () => {
 		expect(Object.keys(artworkAssets).sort()).toEqual([...artworkNames].sort());
 	});
 
-	it('uses Tabler as the default visual provider', () => {
-		for (const asset of [...Object.values(iconAssets), ...Object.values(artworkAssets)]) {
-			expect(asset.provider).toBe('tabler');
-		}
+	it('allows assets from different providers in the same registry', () => {
+		const assets = [
+			visualAsset('tabler', iconAssets.back.renderer),
+			visualAsset('local-artwork', artworkAssets.activity.renderer)
+		];
+
+		expect(assets.map((asset) => asset.provider)).toEqual(['tabler', 'local-artwork']);
 	});
 });
