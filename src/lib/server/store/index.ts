@@ -1,4 +1,11 @@
-export { authenticate, createInitialSudo, needsInitialSetup } from './auth';
+export {
+	authenticate,
+	createAccount,
+	createInitialSudo,
+	listAccounts,
+	needsInitialSetup,
+	resetAccountPassword
+} from './auth';
 export { StoreError } from './error';
 export {
 	acquireItemLock,
@@ -19,7 +26,14 @@ export {
 	saveTripDetails
 } from './itinerary-mutations';
 export { createItem, deleteItem, saveItem } from './items';
-export { createSharedUser, listTripMembers, setTripPublic } from './members';
+export {
+	grantTripAccess,
+	listAvailableTripAccounts,
+	listTripMembers,
+	removeTripAccess,
+	setSharedUserRole,
+	setTripPublic
+} from './members';
 export { createSession, destroySession, getSessionUser } from './sessions';
 export { assertTripOwnerAccess, createTrip, getTripView, listTripSwitchOptions } from './trips';
 export type { AuthenticatedUser, ShareRole } from './model';

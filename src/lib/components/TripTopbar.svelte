@@ -125,6 +125,7 @@
 							<button onclick={() => runTripAction(onEditTrip)} type="button">Edit trip</button>
 						{/if}
 						{#if trip.access === 'sudo' && canModifyItinerary}
+							<a href={resolve('/accounts')}>Accounts</a>
 							<a href={resolve(`/settings/access?trip=${encodeURIComponent(trip.slug)}`)}>Access</a>
 						{/if}
 					</div>

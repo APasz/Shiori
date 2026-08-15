@@ -1,11 +1,28 @@
-import { randomUUID } from 'node:crypto';
-import { prepareNewAccount } from './auth';
 import { StoreError } from './error';
-import { shareRoleSchema, storedUserSchema, type ShareRole } from './model';
+import {
+	shareRoleSchema,
+	usernameSchema,
+	type AuthenticatedUser,
+	type ShareRole,
+	type StoredData,
+	type StoredTrip
+} from './model';
 import { readData, transaction } from './persistence';
 import { timestamp } from './time';
 import { assertTripOwner, requireTripById } from './trips';
 import type { TripMember } from './views';
+
+function requireOwnerTrip(data: StoredData, tripId: string, actorId: string): StoredTrip {
+	const trip = requireTripById(data, tripId);
+	assertTripOwner(trip, actorId);
+	return trip;
+}
+
+function requireSharedMember(data: StoredData, trip: StoredTrip, userId: string): void {
+	if (!data.shares.some((share) => share.tripId === trip.id && share.userId === userId)) {
+		throw new StoreError(404, 'That person does not have access to this trip.');
+	}
+}
 
 export async function listTripMembers(tripId: string, actorId: string): Promise<TripMember[]> {
 	const data = await readData();
@@ -27,39 +44,78 @@ export async function listTripMembers(tripId: string, actorId: string): Promise<
 	return members;
 }
 
-export async function createSharedUser(input: {
+export async function listAvailableTripAccounts(tripId: string, actorId: string): Promise<AuthenticatedUser[]> {
+	const data = await readData();
+	const trip = requireTripById(data, tripId);
+	assertTripOwner(trip, actorId);
+	const memberIds = new Set(data.shares.filter((share) => share.tripId === trip.id).map((share) => share.userId));
+	if (trip.ownerId) {
+		memberIds.add(trip.ownerId);
+	}
+
+	return data.users
+		.filter((user) => !memberIds.has(user.id))
+		.map(({ id, username }) => ({ id, username }))
+		.sort((left, right) => left.username.localeCompare(right.username));
+}
+
+export async function grantTripAccess(input: {
 	actorId: string;
-	password: string;
 	role: ShareRole;
 	tripId: string;
 	username: string;
 }): Promise<TripMember> {
-	const account = await prepareNewAccount(input);
+	const username = usernameSchema.parse(input.username);
 	const role = shareRoleSchema.parse(input.role);
 
 	return transaction((data) => {
-		const trip = requireTripById(data, input.tripId);
-		assertTripOwner(trip, input.actorId);
-		if (data.users.some((user) => user.username.toLowerCase() === account.username.toLowerCase())) {
-			throw new StoreError(409, 'That username is already in use.');
+		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+		const user = data.users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
+		if (!user) {
+			throw new StoreError(404, 'No account was found for that username.');
+		}
+		if (user.id === trip.ownerId) {
+			throw new StoreError(409, 'The trip owner already has access.');
+		}
+		if (data.shares.some((share) => share.tripId === trip.id && share.userId === user.id)) {
+			throw new StoreError(409, 'That person already has access to this trip.');
 		}
 
-		const user = storedUserSchema.parse({
-			id: randomUUID(),
-			username: account.username,
-			passwordHash: account.passwordHash,
-			createdAt: timestamp()
-		});
-		data.users.push(user);
 		data.shares.push({ tripId: trip.id, userId: user.id, role });
 		return { id: user.id, username: user.username, role };
 	});
 }
 
+export async function setSharedUserRole(input: {
+	actorId: string;
+	role: ShareRole;
+	tripId: string;
+	userId: string;
+}): Promise<void> {
+	const role = shareRoleSchema.parse(input.role);
+
+	return transaction((data) => {
+		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+		requireSharedMember(data, trip, input.userId);
+		const share = data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === input.userId);
+		if (!share) {
+			throw new Error('A shared member disappeared before their role could be updated.');
+		}
+		share.role = role;
+	});
+}
+
+export async function removeTripAccess(input: { actorId: string; tripId: string; userId: string }): Promise<void> {
+	return transaction((data) => {
+		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+		requireSharedMember(data, trip, input.userId);
+		data.shares = data.shares.filter((share) => share.tripId !== trip.id || share.userId !== input.userId);
+	});
+}
+
 export async function setTripPublic(input: { actorId: string; isPublic: boolean; tripId: string }): Promise<void> {
 	await transaction((data) => {
-		const trip = requireTripById(data, input.tripId);
-		assertTripOwner(trip, input.actorId);
+		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
 		trip.isPublic = input.isPublic;
 		trip.updatedAt = timestamp();
 	});

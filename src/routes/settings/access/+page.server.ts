@@ -1,7 +1,15 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { ZodError } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
-import { createSharedUser, listTripMembers, setTripPublic } from '$lib/server/store/members';
+import {
+	grantTripAccess,
+	listAvailableTripAccounts,
+	listTripMembers,
+	removeTripAccess,
+	setSharedUserRole,
+	setTripPublic
+} from '$lib/server/store/members';
 import { forceReleaseTripEditLocks, hasActiveTripEditSession } from '$lib/server/store/edit-locks';
 import { StoreError } from '$lib/server/store/error';
 import type { AuthenticatedUser, ShareRole } from '$lib/server/store/model';
@@ -10,6 +18,10 @@ import type { DetailedTripView } from '$lib/server/store/views';
 
 function sharedRole(value: string): ShareRole | null {
 	return value === 'user' || value === 'admin' ? value : null;
+}
+
+function validationMessage(error: ZodError): string {
+	return error.issues[0]?.message ?? 'Enter valid access details.';
 }
 
 async function requireSudo(
@@ -33,34 +45,78 @@ function tripSlug(url: URL): string {
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const access = await requireSudo(locals.user, tripSlug(url));
-	const [members, hasActiveEditSession] = await Promise.all([
+	const [availableAccounts, members, hasActiveEditSession] = await Promise.all([
+		listAvailableTripAccounts(access.trip.id, access.user.id),
 		listTripMembers(access.trip.id, access.user.id),
 		hasActiveTripEditSession({ tripId: access.trip.id, userId: access.user.id })
 	]);
-	return { hasActiveEditSession, members, trip: access.trip };
+	return { availableAccounts, hasActiveEditSession, members, trip: access.trip };
 };
 
 export const actions: Actions = {
-	createUser: async ({ locals, request, url }) => {
+	grantUser: async ({ locals, request, url }) => {
 		const access = await requireSudo(locals.user, tripSlug(url));
 		const formData = await request.formData();
 		const role = sharedRole(formDataText(formData, 'role'));
 		if (!role) {
-			return fail(400, { error: 'Choose either user or admin access.' });
+			return fail(400, { grantUserError: 'Choose either standard or admin access.' });
 		}
 
 		try {
-			await createSharedUser({
+			await grantTripAccess({
 				actorId: access.user.id,
-				password: formDataText(formData, 'password'),
 				role,
 				tripId: access.trip.id,
 				username: formDataText(formData, 'username')
 			});
-			return { created: true };
+			return { userGranted: true };
 		} catch (error: unknown) {
 			if (error instanceof StoreError) {
-				return fail(error.status, { error: error.message });
+				return fail(error.status, { grantUserError: error.message });
+			}
+			if (error instanceof ZodError) {
+				return fail(400, { grantUserError: validationMessage(error) });
+			}
+			throw error;
+		}
+	},
+	setMemberRole: async ({ locals, request, url }) => {
+		const access = await requireSudo(locals.user, tripSlug(url));
+		const formData = await request.formData();
+		const role = sharedRole(formDataText(formData, 'role'));
+		if (!role) {
+			return fail(400, { memberRoleError: 'Choose either standard or admin access.' });
+		}
+
+		try {
+			await setSharedUserRole({
+				actorId: access.user.id,
+				role,
+				tripId: access.trip.id,
+				userId: formDataText(formData, 'memberId')
+			});
+			return { memberRoleUpdated: true };
+		} catch (error: unknown) {
+			if (error instanceof StoreError) {
+				return fail(error.status, { memberRoleError: error.message });
+			}
+			throw error;
+		}
+	},
+	removeMember: async ({ locals, request, url }) => {
+		const access = await requireSudo(locals.user, tripSlug(url));
+		const formData = await request.formData();
+
+		try {
+			await removeTripAccess({
+				actorId: access.user.id,
+				tripId: access.trip.id,
+				userId: formDataText(formData, 'memberId')
+			});
+			return { memberRemoved: true };
+		} catch (error: unknown) {
+			if (error instanceof StoreError) {
+				return fail(error.status, { memberRemovalError: error.message });
 			}
 			throw error;
 		}

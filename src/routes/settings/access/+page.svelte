@@ -1,13 +1,37 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { minimumPasswordLength } from '$lib/auth/password-policy';
 	import Icon from '$lib/visuals/Icon.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+	let addPersonOpen = $state(false);
+
+	function synchronizeAddPerson(event: Event): void {
+		const details = event.currentTarget;
+		if (!(details instanceof HTMLDetailsElement)) {
+			throw new Error('The add-person panel must be a details element.');
+		}
+		addPersonOpen = details.open;
+	}
+
+	function autoSubmit(event: Event): void {
+		const control = event.currentTarget;
+		if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement)) {
+			throw new Error('Access controls must submit from an input or select element.');
+		}
+		control.form?.requestSubmit();
+	}
 
 	function confirmForceClose(event: SubmitEvent): void {
 		if (!window.confirm('Force close the active edit session? Unsaved changes will be lost.')) {
+			event.preventDefault();
+		}
+	}
+
+	function confirmAccessRemoval(event: SubmitEvent, username: string): void {
+		if (
+			!window.confirm(`Remove ${username}'s access to this trip? Their account will remain available for other trips.`)
+		) {
 			event.preventDefault();
 		}
 	}
@@ -18,7 +42,7 @@
 </svelte:head>
 
 <main>
-	<p>
+	<p class="back-link">
 		{#if data.trip.slug === 'example'}
 			<a href={resolve('/')}><Icon name="back" /> {data.trip.itinerary.title}</a>
 		{:else}
@@ -26,83 +50,168 @@
 		{/if}
 	</p>
 	<h1>Access</h1>
-	<p>Only the sudo owner can manage access. User and admin roles are always read-only.</p>
 
-	<section>
-		<h2>Visitor access</h2>
-		<form class="shiori-form" action={`?trip=${encodeURIComponent(data.trip.slug)}&/visitorAccess`} method="POST">
-			<label class="shiori-form-label">
-				<input checked={data.trip.isPublic} name="isPublic" type="checkbox" />
-				Allow public visitors to see the trip schedule
+	{#if form?.visibilityUpdated}
+		<p class="success page-status" role="status">Schedule visibility updated.</p>
+	{:else if form?.userGranted}
+		<p class="success page-status" role="status">Person added to this trip.</p>
+	{:else if form?.memberRoleUpdated}
+		<p class="success page-status" role="status">Access level updated.</p>
+	{:else if form?.memberRemoved}
+		<p class="success page-status" role="status">Access removed.</p>
+	{:else if form?.editSessionReleased}
+		<p class="success page-status" role="status">The active edit session was force closed.</p>
+	{:else if form?.editSessionReleased === false}
+		<p class="error page-status" role="status">No active edit session was found.</p>
+	{/if}
+
+	<section aria-labelledby="visibility-heading" class="access-section">
+		<h2 id="visibility-heading">Schedule visibility</h2>
+		<form class="visibility-form" action={`?trip=${encodeURIComponent(data.trip.slug)}&/visitorAccess`} method="POST">
+			<label class="visibility-control">
+				<span>
+					<strong>Public schedule</strong>
+					<small>Anyone with the link can see the schedule.</small>
+				</span>
+				<span class="visibility-toggle">
+					<input
+						aria-label="Allow public visitors to see the trip schedule"
+						checked={data.trip.isPublic}
+						name="isPublic"
+						onchange={autoSubmit}
+						type="checkbox"
+					/>
+				</span>
+				<span class="visibility-state">{data.trip.isPublic ? 'Public' : 'Private'}</span>
 			</label>
-			<button class="shiori-form-button" type="submit">Save visitor access</button>
+			<noscript><button class="shiori-form-button" type="submit">Save visibility</button></noscript>
 		</form>
 	</section>
 
-	<section>
-		<h2>Edit session</h2>
-		<p class:active-edit-session={data.hasActiveEditSession} class="edit-session-status">
-			{data.hasActiveEditSession ? 'An edit session is currently active.' : 'No edit session is active.'}
-		</p>
-		<form
-			class="shiori-form"
-			action={`?trip=${encodeURIComponent(data.trip.slug)}&/forceCloseEditSession`}
-			method="POST"
-			onsubmit={confirmForceClose}
-		>
-			<button
-				aria-describedby="force-close-description"
-				class="force-close-button shiori-form-button"
-				disabled={!data.hasActiveEditSession}
-				type="submit"
-			>
-				Force close active edit session
-			</button>
-			<p id="force-close-description">This closes any editor immediately. Unsaved changes in that session are lost.</p>
-			{#if form?.editSessionReleased}
-				<p class="success" role="status">The active edit session was force closed.</p>
-			{:else if form?.editSessionReleased === false}
-				<p class="error" role="status">No active edit session was found.</p>
-			{/if}
-		</form>
-	</section>
+	<section aria-labelledby="people-heading" class="access-section people-section">
+		<div class="section-heading">
+			<h2 id="people-heading">People <span>{data.members.length}</span></h2>
+			<div class="people-actions">
+				<a class="accounts-link" href={resolve('/accounts')}>Accounts</a>
+				<details
+					class="add-person"
+					open={Boolean(form?.grantUserError) || addPersonOpen}
+					ontoggle={synchronizeAddPerson}
+				>
+					<summary>+ Add person</summary>
+					<div class="add-person-panel">
+						<form
+							class="shiori-form add-person-form"
+							action={`?trip=${encodeURIComponent(data.trip.slug)}&/grantUser`}
+							method="POST"
+						>
+							<h3>Add an account</h3>
+							{#if data.availableAccounts.length === 0}
+								<p class="empty-accounts">No other accounts are available for this trip.</p>
+							{:else}
+								<label class="shiori-form-label">
+									Account
+									<select class="shiori-form-control" name="username" required>
+										<option value="">Choose an account</option>
+										{#each data.availableAccounts as account (account.id)}
+											<option value={account.username}>{account.username}</option>
+										{/each}
+									</select>
+								</label>
+								<label class="shiori-form-label">
+									Access level
+									<select class="shiori-form-control" name="role">
+										<option value="user">Standard</option>
+										<option value="admin">Admin</option>
+									</select>
+								</label>
+								{#if form?.grantUserError}<p class="error" role="alert">{form.grantUserError}</p>{/if}
+								<button class="shiori-form-button" type="submit">Add to trip</button>
+							{/if}
+						</form>
+					</div>
+				</details>
+			</div>
+		</div>
 
-	<section>
-		<h2>Shared users</h2>
-		<ul>
+		<ul class="member-list">
 			{#each data.members as member (member.id)}
-				<li><strong>{member.username}</strong><span>{member.role}</span></li>
+				<li class="member-row">
+					<div class="member-identity">
+						<strong>{member.username}</strong>
+						{#if member.role === 'sudo'}<span>You</span>{/if}
+					</div>
+					{#if member.role === 'sudo'}
+						<span class="role-badge owner-badge">Owner</span>
+					{:else}
+						<form action={`?trip=${encodeURIComponent(data.trip.slug)}&/setMemberRole`} method="POST">
+							<input name="memberId" type="hidden" value={member.id} />
+							<label class="role-control">
+								<span class="visually-hidden">Access level for {member.username}</span>
+								<select name="role" onchange={autoSubmit} value={member.role}>
+									<option value="user">Standard</option>
+									<option value="admin">Admin</option>
+								</select>
+							</label>
+							<noscript><button class="shiori-form-button" type="submit">Save</button></noscript>
+						</form>
+						<details class="member-actions">
+							<summary aria-label={`Actions for ${member.username}`} title={`Actions for ${member.username}`}>
+								<Icon name="more" />
+							</summary>
+							<div class="member-actions-panel">
+								<form
+									action={`?trip=${encodeURIComponent(data.trip.slug)}&/removeMember`}
+									method="POST"
+									onsubmit={(event) => confirmAccessRemoval(event, member.username)}
+								>
+									<input name="memberId" type="hidden" value={member.id} />
+									<button class="remove-access-button" type="submit">Remove access</button>
+								</form>
+							</div>
+						</details>
+					{/if}
+				</li>
 			{/each}
 		</ul>
 
-		<h3>Add a shared user</h3>
-		<form class="shiori-form" action={`?trip=${encodeURIComponent(data.trip.slug)}&/createUser`} method="POST">
-			<label class="shiori-form-label">
-				Username <input class="shiori-form-control" autocomplete="username" name="username" required />
-			</label>
-			<label class="shiori-form-label">
-				Temporary password
-				<input
-					class="shiori-form-control"
-					autocomplete="new-password"
-					minlength={minimumPasswordLength}
-					name="password"
-					required
-					type="password"
-				/>
-			</label>
-			<label class="shiori-form-label">
-				Access level
-				<select class="shiori-form-control" name="role">
-					<option value="user">User — standard details</option>
-					<option value="admin">Admin — sensitive details</option>
-				</select>
-			</label>
-			{#if form?.error}<p class="error" role="alert">{form.error}</p>{/if}
-			{#if form?.created}<p class="success">Shared user created.</p>{/if}
-			<button class="shiori-form-button" type="submit">Create user</button>
-		</form>
+		{#if form?.memberRoleError}
+			<p class="error" role="alert">{form.memberRoleError}</p>
+		{:else if form?.memberRemovalError}
+			<p class="error" role="alert">{form.memberRemovalError}</p>
+		{/if}
+
+		<details class="role-access">
+			<summary>Role access</summary>
+			<dl>
+				<div>
+					<dt>Standard</dt>
+					<dd>Read-only itinerary and notes</dd>
+				</div>
+				<div>
+					<dt>Admin</dt>
+					<dd>Read-only plus sensitive itinerary details</dd>
+				</div>
+			</dl>
+		</details>
 	</section>
+
+	{#if data.hasActiveEditSession}
+		<details class="advanced-section">
+			<summary>Advanced</summary>
+			<div>
+				<p class="active-edit-session">An edit session is active.</p>
+				<form
+					class="shiori-form"
+					action={`?trip=${encodeURIComponent(data.trip.slug)}&/forceCloseEditSession`}
+					method="POST"
+					onsubmit={confirmForceClose}
+				>
+					<button class="force-close-button" type="submit">Force close edit session</button>
+				</form>
+			</div>
+		</details>
+	{/if}
 </main>
 
 <style>
@@ -112,65 +221,343 @@
 		width: min(100%, 42rem);
 	}
 
-	section {
+	h1 {
+		margin: 0;
+	}
+
+	.back-link {
+		margin: 0 0 0.75rem;
+	}
+
+	.back-link a {
+		align-items: center;
+		color: inherit;
+		display: inline-flex;
+		gap: 0.35rem;
+		text-underline-offset: 0.15em;
+	}
+
+	.page-status {
+		margin: 0.75rem 0 0;
+	}
+
+	.access-section,
+	.advanced-section {
 		border-top: 1px solid var(--color-border-default);
-		margin-top: 2rem;
-		padding-top: 1.5rem;
+		margin-top: 1.5rem;
+		padding-top: 1.25rem;
 	}
 
-	.shiori-form {
-		margin-top: 1rem;
+	h2,
+	h3 {
+		margin: 0;
 	}
 
-	input[type='checkbox'] {
-		accent-color: var(--color-state-selection);
-		width: auto;
+	h2 {
+		font-size: 1.125rem;
 	}
 
-	ul {
+	h2 span {
+		color: var(--color-text-muted);
+		font-size: 0.875rem;
+		font-weight: 500;
+	}
+
+	h3 {
+		font-size: 0.9375rem;
+	}
+
+	.visibility-form {
+		display: grid;
+		gap: 0.75rem;
+		margin-top: 0.75rem;
+	}
+
+	.visibility-control {
+		align-items: center;
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+	}
+
+	.visibility-control strong,
+	.visibility-control small {
+		display: block;
+	}
+
+	.visibility-control small,
+	.member-identity span {
+		color: var(--color-text-muted);
+		margin-top: 0.125rem;
+	}
+
+	.visibility-toggle {
+		display: inline-flex;
+		height: 1.5rem;
+		position: relative;
+		width: 2.625rem;
+	}
+
+	.visibility-toggle input {
+		appearance: none;
+		background: var(--color-surface-subtle);
+		border: 1px solid var(--color-border-strong);
+		border-radius: 99px;
+		cursor: pointer;
+		height: 100%;
+		margin: 0;
+		width: 100%;
+	}
+
+	.visibility-toggle input::after {
+		background: var(--color-text-muted);
+		border-radius: 50%;
+		content: '';
+		height: 1rem;
+		left: 0.1875rem;
+		position: absolute;
+		top: 0.1875rem;
+		transition: transform 120ms ease;
+		width: 1rem;
+	}
+
+	.visibility-toggle input:checked {
+		background: color-mix(in srgb, var(--color-state-selection) 23%, var(--color-surface-raised));
+		border-color: var(--color-state-selection);
+	}
+
+	.visibility-toggle input:checked::after {
+		background: var(--color-state-selection);
+		transform: translateX(1.125rem);
+	}
+
+	.visibility-toggle input:focus-visible {
+		outline: 2px solid var(--color-state-focus);
+		outline-offset: 2px;
+	}
+
+	.visibility-state,
+	.role-badge {
+		color: var(--color-text-secondary);
+		font-size: 0.8125rem;
+		font-weight: 700;
+	}
+
+	.section-heading {
+		align-items: center;
+		display: flex;
+		gap: 1rem;
+		justify-content: space-between;
+	}
+
+	.people-actions {
+		align-items: center;
+		display: flex;
+		gap: 0.75rem;
+	}
+
+	.accounts-link {
+		color: inherit;
+		font-size: 0.875rem;
+		text-underline-offset: 0.15em;
+	}
+
+	.add-person {
+		position: relative;
+	}
+
+	.add-person summary,
+	.member-actions summary,
+	.role-access summary,
+	.advanced-section > summary {
+		cursor: pointer;
+	}
+
+	.add-person summary {
+		align-items: center;
+		border: 1px solid var(--color-state-selection);
+		display: inline-flex;
+		font-size: 0.875rem;
+		gap: 0.25rem;
 		list-style: none;
+		padding: 0.45rem 0.65rem;
+	}
+
+	.add-person summary::-webkit-details-marker,
+	.member-actions summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.add-person-panel {
+		background: var(--color-surface-raised);
+		border: 1px solid var(--color-border-strong);
+		display: grid;
+		gap: 1rem;
+		margin-top: 0.5rem;
+		padding: 1rem;
+		position: absolute;
+		right: 0;
+		width: min(35rem, calc(100vw - 2rem));
+		z-index: 1;
+	}
+
+	.add-person-form {
+		border-top: 1px solid var(--color-border-default);
+		padding-top: 1rem;
+	}
+
+	.member-list {
+		border-bottom: 1px solid var(--color-border-default);
+		list-style: none;
+		margin: 0.75rem 0 0;
 		padding: 0;
 	}
 
-	li {
-		display: flex;
+	.member-row {
+		align-items: center;
+		border-top: 1px solid var(--color-border-default);
+		display: grid;
 		gap: 0.75rem;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		min-height: 3.25rem;
 		padding: 0.5rem 0;
 	}
 
-	li span {
-		color: var(--color-text-muted);
-		text-transform: capitalize;
+	.member-identity {
+		min-width: 0;
+	}
+
+	.member-identity strong {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.member-identity span {
+		display: block;
+		font-size: 0.8125rem;
+	}
+
+	.owner-badge {
+		color: var(--color-state-selection);
+		grid-column: -1;
+	}
+
+	.role-control select {
+		background: var(--color-surface-raised);
+		border: 1px solid var(--color-border-strong);
+		color: inherit;
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 700;
+		min-height: 2.25rem;
+		padding: 0.35rem 1.75rem 0.35rem 0.55rem;
+	}
+
+	.member-actions {
+		position: relative;
+	}
+
+	.member-actions summary {
+		align-items: center;
+		border: 1px solid var(--color-border-strong);
+		display: flex;
+		height: 2.25rem;
+		justify-content: center;
+		list-style: none;
+		width: 2.25rem;
+	}
+
+	.member-actions-panel {
+		background: var(--color-surface-raised);
+		border: 1px solid var(--color-border-strong);
+		padding: 0.875rem;
+		position: absolute;
+		right: 0;
+		top: calc(100% + 0.25rem);
+		width: min(20rem, calc(100vw - 2rem));
+		z-index: 2;
+	}
+
+	.remove-access-button,
+	.force-close-button {
+		background: transparent;
+		border: 1px solid var(--color-state-error);
+		color: var(--color-state-error);
+		cursor: pointer;
+		font: inherit;
+		justify-self: start;
+		min-height: 2.5rem;
+		padding: 0.5rem 0.75rem;
+	}
+
+	.remove-access-button:hover,
+	.force-close-button:hover {
+		background: color-mix(in srgb, var(--color-state-error) 11%, transparent);
+	}
+
+	.role-access,
+	.advanced-section {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+	}
+
+	.role-access {
+		margin-top: 1rem;
+	}
+
+	.role-access dl {
+		display: grid;
+		gap: 0.5rem;
+		margin: 0.75rem 0 0;
+	}
+
+	.role-access dl div {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.role-access dt {
+		color: var(--color-text-primary);
+		font-weight: 700;
+	}
+
+	.role-access dd {
+		margin: 0;
+	}
+
+	.advanced-section > div {
+		margin-top: 0.75rem;
+	}
+
+	.active-edit-session {
+		color: var(--color-state-warning);
+		font-weight: 700;
+		margin: 0;
+	}
+
+	.advanced-section .shiori-form {
+		margin-top: 0.75rem;
 	}
 
 	.error {
 		color: var(--color-state-error);
+		margin: 0;
 	}
 
 	.success {
 		color: var(--color-state-success);
 	}
 
-	.edit-session-status {
-		color: var(--color-text-secondary);
-	}
-
-	.active-edit-session {
-		color: var(--color-state-warning);
-		font-weight: 700;
-	}
-
-	.force-close-button {
-		border-color: var(--color-state-error);
-		color: var(--color-state-error);
-	}
-
-	.force-close-button:not(:disabled):hover {
-		background: color-mix(in srgb, var(--color-state-error) 11%, transparent);
-	}
-
-	a {
-		color: inherit;
-		text-underline-offset: 0.15em;
+	.visually-hidden {
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		height: 1px;
+		overflow: hidden;
+		position: absolute;
+		white-space: nowrap;
+		width: 1px;
 	}
 </style>

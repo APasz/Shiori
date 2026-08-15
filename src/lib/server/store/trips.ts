@@ -205,6 +205,11 @@ export async function listTripSwitchOptions(userId: string): Promise<TripSwitchO
 		.sort(compareTripSwitchOptions);
 }
 
+export async function ownsAnyTrip(userId: string): Promise<boolean> {
+	const data = await readData();
+	return data.trips.some((trip) => trip.ownerId === userId);
+}
+
 export async function assertTripOwnerAccess(input: { tripId: string; userId: string }): Promise<void> {
 	const data = await readData();
 	getTripForMutation(data, input.tripId, input.userId);

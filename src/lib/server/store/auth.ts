@@ -1,6 +1,13 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { StoreError } from './error';
-import { passwordSchema, storedUserSchema, usernameSchema, type AuthenticatedUser } from './model';
+import {
+	passwordSchema,
+	storedUserSchema,
+	usernameSchema,
+	type AuthenticatedUser,
+	type StoredData,
+	type StoredUser
+} from './model';
 import { readData, transaction } from './persistence';
 import { timestamp } from './time';
 
@@ -20,6 +27,26 @@ async function hashPassword(password: string): Promise<string> {
 	const salt = randomBytes(16);
 	const key = await derivePasswordKey(password, salt, 64);
 	return `${salt.toString('hex')}.${key.toString('hex')}`;
+}
+
+function newStoredUser(account: { passwordHash: string; username: string }): StoredUser {
+	return storedUserSchema.parse({
+		id: randomUUID(),
+		username: account.username,
+		passwordHash: account.passwordHash,
+		createdAt: timestamp()
+	});
+}
+
+function assertAccountManager(data: StoredData, actorId: string): void {
+	if (!data.trips.some((trip) => trip.ownerId === actorId)) {
+		throw new StoreError(403, 'Only a sudo owner can manage accounts.');
+	}
+}
+
+export async function preparePasswordHash(passwordInput: string): Promise<string> {
+	const password = passwordSchema.parse(passwordInput);
+	return hashPassword(password);
 }
 
 async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
@@ -53,21 +80,60 @@ export async function createInitialSudo(usernameInput: string, passwordInput: st
 			throw new StoreError(409, 'Initial setup has already been completed.');
 		}
 
-		const createdAt = timestamp();
-		const user = storedUserSchema.parse({
-			id: randomUUID(),
-			username,
-			passwordHash,
-			createdAt
-		});
+		const user = newStoredUser({ passwordHash, username });
 		data.users.push(user);
 		for (const trip of data.trips) {
 			if (trip.ownerId === null) {
 				trip.ownerId = user.id;
-				trip.updatedAt = createdAt;
+				trip.updatedAt = user.createdAt;
 			}
 		}
 		return { id: user.id, username: user.username };
+	});
+}
+
+export async function createAccount(input: {
+	actorId: string;
+	password: string;
+	username: string;
+}): Promise<AuthenticatedUser> {
+	const account = await prepareNewAccount(input);
+
+	return transaction((data) => {
+		assertAccountManager(data, input.actorId);
+		if (data.users.some((user) => user.username.toLowerCase() === account.username.toLowerCase())) {
+			throw new StoreError(409, 'That username is already in use.');
+		}
+
+		const user = newStoredUser(account);
+		data.users.push(user);
+		return { id: user.id, username: user.username };
+	});
+}
+
+export async function listAccounts(actorId: string): Promise<AuthenticatedUser[]> {
+	const data = await readData();
+	assertAccountManager(data, actorId);
+	return data.users
+		.map(({ id, username }) => ({ id, username }))
+		.sort((left, right) => left.username.localeCompare(right.username));
+}
+
+export async function resetAccountPassword(input: {
+	actorId: string;
+	password: string;
+	userId: string;
+}): Promise<void> {
+	const passwordHash = await preparePasswordHash(input.password);
+
+	return transaction((data) => {
+		assertAccountManager(data, input.actorId);
+		const user = data.users.find((candidate) => candidate.id === input.userId);
+		if (!user) {
+			throw new StoreError(404, 'Account not found.');
+		}
+		user.passwordHash = passwordHash;
+		data.sessions = data.sessions.filter((session) => session.userId !== user.id);
 	});
 }
 
@@ -91,6 +157,5 @@ export async function prepareNewAccount(input: {
 	username: string;
 }): Promise<{ passwordHash: string; username: string }> {
 	const username = usernameSchema.parse(input.username);
-	const password = passwordSchema.parse(input.password);
-	return { passwordHash: await hashPassword(password), username };
+	return { passwordHash: await preparePasswordHash(input.password), username };
 }

@@ -801,6 +801,68 @@ describe('JSON store', () => {
 		).toEqual(['Later planned trip', 'Earlier planned trip']);
 	});
 
+	it('manages a shared person’s trip access, role, and password', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const person = await store.createAccount({
+			actorId: owner.id,
+			password: 'initial strong password',
+			username: 'shared-person'
+		});
+
+		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
+		await expect(store.listAccounts(owner.id)).resolves.toEqual([owner, person]);
+		await expect(store.listAccounts(person.id)).rejects.toMatchObject({ status: 403 });
+		await expect(
+			store.createAccount({ actorId: owner.id, password: 'another strong password', username: 'shared-person' })
+		).rejects.toMatchObject({
+			status: 409
+		});
+		await expect(store.listAvailableTripAccounts(trip.id, owner.id)).resolves.toEqual([person]);
+
+		await store.grantTripAccess({
+			actorId: owner.id,
+			role: 'admin',
+			tripId: trip.id,
+			username: person.username
+		});
+		await expect(store.listTripMembers(trip.id, owner.id)).resolves.toEqual(
+			expect.arrayContaining([
+				{ id: owner.id, role: 'sudo', username: owner.username },
+				{ id: person.id, role: 'admin', username: person.username }
+			])
+		);
+		await expect(store.listAvailableTripAccounts(trip.id, owner.id)).resolves.toEqual([]);
+
+		await expect(
+			store.setSharedUserRole({ actorId: person.id, role: 'user', tripId: trip.id, userId: person.id })
+		).rejects.toMatchObject({ status: 403 });
+		await store.setSharedUserRole({ actorId: owner.id, role: 'user', tripId: trip.id, userId: person.id });
+		await expect(store.getTripView(trip.slug, person)).resolves.toMatchObject({ access: 'user' });
+
+		const sessionId = await store.createSession(person.id);
+		await store.resetAccountPassword({
+			actorId: owner.id,
+			password: 'replacement strong password',
+			userId: person.id
+		});
+		await expect(store.authenticate(person.username, 'initial strong password')).resolves.toBeNull();
+		await expect(store.authenticate(person.username, 'replacement strong password')).resolves.toEqual({
+			id: person.id,
+			username: person.username
+		});
+		await expect(store.getSessionUser(sessionId)).resolves.toBeNull();
+
+		await store.removeTripAccess({ actorId: owner.id, tripId: trip.id, userId: person.id });
+		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
+		await expect(
+			store.removeTripAccess({ actorId: owner.id, tripId: trip.id, userId: person.id })
+		).rejects.toMatchObject({
+			status: 404
+		});
+	});
+
 	it('allows only one active edit per trip and preserves the preceding file as a backup', async () => {
 		const store = await import('./store');
 		const user = await store.createInitialSudo('owner', 'a strong test password');
@@ -865,12 +927,16 @@ describe('JSON store', () => {
 		const store = await import('./store');
 		const user = await store.createInitialSudo('owner', 'a strong test password');
 		const trip = await createTestTrip(store, user.id, ['first-item', 'second-item']);
-		const admin = await store.createSharedUser({
+		const admin = await store.createAccount({
 			actorId: user.id,
 			password: 'another strong password',
+			username: 'trip-admin'
+		});
+		await store.grantTripAccess({
+			actorId: user.id,
 			role: 'admin',
 			tripId: trip.id,
-			username: 'trip-admin'
+			username: admin.username
 		});
 		await store.acquireItemLock({
 			itemId: 'first-item',
