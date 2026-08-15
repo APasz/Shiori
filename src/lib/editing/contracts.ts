@@ -10,6 +10,8 @@ import {
 	itineraryIdentifierSchema,
 	itineraryItemDraftSchema,
 	itineraryLinkSchema,
+	itineraryNoteSchema,
+	itineraryNoteTargetSchema,
 	locationRoleSchema,
 	locationCoordinatesSchema,
 	localTimeSchema,
@@ -57,6 +59,18 @@ export const expenseSaveRequestSchema = z.strictObject({
 
 export const expenseDeleteRequestSchema = z.strictObject({
 	expenseId: itineraryIdentifierSchema,
+	revision: z.number().int().nonnegative()
+});
+
+export const noteSaveRequestSchema = z.strictObject({
+	note: itineraryNoteSchema,
+	revision: z.number().int().nonnegative()
+});
+
+export const noteTargetSchema = itineraryNoteTargetSchema;
+
+export const noteDeleteRequestSchema = z.strictObject({
+	target: noteTargetSchema,
 	revision: z.number().int().nonnegative()
 });
 

@@ -7,6 +7,7 @@ import type {
 	ItineraryItem,
 	ItineraryLink,
 	ItineraryLocation,
+	ItineraryNote,
 	ItineraryTiming,
 	Reservation,
 	TransportDetails
@@ -57,6 +58,7 @@ export type ItineraryExportSource = Readonly<{
 	timeZone: string;
 	localCurrency?: CurrencyCode;
 	items: readonly (BasicItineraryItem | ItineraryItem)[];
+	notes?: readonly ItineraryNote[];
 }>;
 
 type ExportedTimestamp = Readonly<{
@@ -159,12 +161,43 @@ type ExportedItem = {
 	cost?: ExportedCost;
 };
 
+type ExportedEstimatedNoteCost = Readonly<{
+	amountMinor: number;
+	currency: CurrencyCode;
+	label?: string;
+}>;
+
+type ExportedNoteEntry = Readonly<{
+	estimatedCosts: ExportedEstimatedNoteCost[];
+	note?: string;
+	state: ItineraryNote['entries'][number]['state'];
+	endTime?: string;
+	startTime?: string;
+	title: string;
+}>;
+
+type ExportedItineraryNote =
+	| Readonly<{
+			entries: ExportedNoteEntry[];
+			kind: 'trip';
+			text: string;
+			timeZone: string;
+	  }>
+	| Readonly<{
+			date: string;
+			entries: ExportedNoteEntry[];
+			kind: 'day';
+			text: string;
+			timeZone: string;
+	  }>;
+
 export type ItineraryExport = Readonly<{
 	version: 1;
 	title: string;
 	timeZone: string;
 	localCurrency?: CurrencyCode;
 	items: ExportedItem[];
+	notes?: ExportedItineraryNote[];
 }>;
 
 export type ItineraryExportFile = Readonly<{
@@ -350,6 +383,23 @@ function exportItem(
 	return exported;
 }
 
+function exportItineraryNote(note: ItineraryNote): ExportedItineraryNote {
+	const entries = note.entries.map((entry) => ({
+		estimatedCosts: entry.estimatedCosts.map((estimatedCost) => ({
+			amountMinor: estimatedCost.amountMinor,
+			currency: estimatedCost.currency,
+			...(estimatedCost.label === undefined ? {} : { label: estimatedCost.label })
+		})),
+		...(entry.note === undefined ? {} : { note: entry.note }),
+		state: entry.state,
+		...(entry.endTime === undefined ? {} : { endTime: entry.endTime }),
+		...(entry.startTime === undefined ? {} : { startTime: entry.startTime }),
+		title: entry.title
+	}));
+	const base = { entries, text: note.text, timeZone: note.timeZone };
+	return note.kind === 'trip' ? { ...base, kind: 'trip' } : { ...base, date: note.date, kind: 'day' };
+}
+
 /** Creates the stable, portable itinerary data shared by every export format. */
 export function createItineraryExport(source: ItineraryExportSource, options: ItineraryExportOptions): ItineraryExport {
 	return {
@@ -357,7 +407,8 @@ export function createItineraryExport(source: ItineraryExportSource, options: It
 		title: source.title,
 		timeZone: source.timeZone,
 		...(source.localCurrency === undefined ? {} : { localCurrency: source.localCurrency }),
-		items: [...source.items].sort(compareItems).map((item) => exportItem(item, source.timeZone, options))
+		items: [...source.items].sort(compareItems).map((item) => exportItem(item, source.timeZone, options)),
+		...(options.includeNotes && source.notes !== undefined ? { notes: source.notes.map(exportItineraryNote) } : {})
 	};
 }
 
@@ -452,6 +503,33 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 	return lines;
 }
 
+function textLinesForItineraryNote(note: ExportedItineraryNote, index: number): string[] {
+	const title = note.kind === 'trip' ? 'Trip note' : `Day note · ${note.date}`;
+	const lines = [`${index + 1}. ${title} (${note.timeZone})`];
+	if (note.text !== '') {
+		lines.push(`   ${note.text.replaceAll('\n', '\n   ')}`);
+	}
+	for (const entry of note.entries) {
+		const time =
+			entry.startTime !== undefined && entry.endTime !== undefined
+				? `${entry.startTime}–${entry.endTime}`
+				: (entry.startTime ?? entry.endTime);
+		const state = entry.state === 'idea' ? '' : ` · ${entry.state}`;
+		lines.push(`   - ${entry.title}${state}`);
+		if (time !== undefined) {
+			lines.push(`     Time: ${time}`);
+		}
+		if (entry.note !== undefined) {
+			lines.push(`     Details: ${entry.note.replaceAll('\n', '\n       ')}`);
+		}
+		for (const estimatedCost of entry.estimatedCosts) {
+			const label = estimatedCost.label === undefined ? '' : `${estimatedCost.label}: `;
+			lines.push(`     Estimate: ${label}${estimatedCost.currency} ${estimatedCost.amountMinor} minor units`);
+		}
+	}
+	return lines;
+}
+
 function plainTextExport(itinerary: ItineraryExport): string {
 	const lines = [itinerary.title, `Time zone: ${itinerary.timeZone}`];
 	if (itinerary.localCurrency !== undefined) {
@@ -464,6 +542,12 @@ function plainTextExport(itinerary: ItineraryExport): string {
 	} else {
 		for (const [index, item] of itinerary.items.entries()) {
 			lines.push(...textLinesForItem(item, index), '');
+		}
+	}
+	if (itinerary.notes && itinerary.notes.length > 0) {
+		lines.push('Notes:');
+		for (const [index, note] of itinerary.notes.entries()) {
+			lines.push(...textLinesForItineraryNote(note, index), '');
 		}
 	}
 

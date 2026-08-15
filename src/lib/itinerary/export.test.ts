@@ -53,6 +53,30 @@ const itinerary = itinerarySchema.parse({
 		}
 	],
 	localCurrency: 'AUD',
+	notes: [
+		{
+			entries: [
+				{
+					estimatedCosts: [{ amountMinor: 3_500, currency: 'JPY', id: 'museum-entry-cost', label: 'Entry' }],
+					id: 'museum-entry',
+					note: 'Book tickets before arrival.',
+					state: 'shortlisted',
+					startTime: '10:00',
+					title: 'Museum option'
+				}
+			],
+			kind: 'trip',
+			text: 'Keep the second afternoon flexible.',
+			timeZone: 'Asia/Tokyo'
+		},
+		{
+			date: '2026-04-13',
+			entries: [],
+			kind: 'day',
+			text: 'Check the weather before choosing an outdoor plan.',
+			timeZone: 'Asia/Tokyo'
+		}
+	],
 	timeZone: 'Asia/Tokyo',
 	title: 'Japan 2026'
 });
@@ -91,6 +115,31 @@ describe('itinerary exports', () => {
 		expect(firstItem).not.toHaveProperty('id');
 		expect(firstItem.locations[0]).not.toHaveProperty('id');
 		expect(firstItem.transport.stops[0]).not.toHaveProperty('locationId');
+		expect(exported.notes).toMatchObject([
+			{
+				entries: [
+					{
+						estimatedCosts: [{ amountMinor: 3_500, currency: 'JPY', label: 'Entry' }],
+						note: 'Book tickets before arrival.',
+						state: 'shortlisted',
+						startTime: '10:00',
+						title: 'Museum option'
+					}
+				],
+				kind: 'trip',
+				text: 'Keep the second afternoon flexible.',
+				timeZone: 'Asia/Tokyo'
+			},
+			{
+				date: '2026-04-13',
+				entries: [],
+				kind: 'day',
+				text: 'Check the weather before choosing an outdoor plan.',
+				timeZone: 'Asia/Tokyo'
+			}
+		]);
+		expect(exported.notes[0].entries[0]).not.toHaveProperty('id');
+		expect(exported.notes[0].entries[0].estimatedCosts[0]).not.toHaveProperty('id');
 	});
 
 	it('uses the same data for YAML and omits unchecked details in every format', () => {
@@ -109,6 +158,7 @@ describe('itinerary exports', () => {
 		expect(json.items[0]).not.toHaveProperty('documents');
 		expect(json.items[0]).not.toHaveProperty('links');
 		expect(json.items[0]).not.toHaveProperty('notes');
+		expect(json).not.toHaveProperty('notes');
 		expect(json.items[0]).not.toHaveProperty('reservation');
 	});
 
@@ -159,6 +209,10 @@ describe('itinerary exports', () => {
 		expect(text).toContain('When: 2026-04-12T00:00:00.000Z (Asia/Tokyo)');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
+		expect(text).toContain('Notes:');
+		expect(text).toContain('Trip note (Asia/Tokyo)');
+		expect(text).toContain('Estimate: Entry: JPY 3500 minor units');
+		expect(text).toContain('Day note · 2026-04-13 (Asia/Tokyo)');
 		expect(file).toMatchObject({ filename: 'japan-2026-itinerary.yaml', mediaType: 'application/yaml' });
 	});
 });

@@ -6,6 +6,7 @@
 	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
 	import ItineraryItemEditor from '$lib/components/ItineraryItemEditor.svelte';
 	import ItineraryItemIllustration from '$lib/components/ItineraryItemIllustration.svelte';
+	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
 	import ItineraryNowNext from '$lib/components/ItineraryNowNext.svelte';
 	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
@@ -24,7 +25,7 @@
 		partitionDayItems,
 		type DayTimelineEntry
 	} from '$lib/itinerary/presentation';
-	import type { ItineraryItem, ItineraryItemType } from '$lib/itinerary/schema';
+	import type { ItineraryItem, ItineraryItemType, ItineraryNote, ItineraryNoteTarget } from '$lib/itinerary/schema';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -40,6 +41,10 @@
 		trips: TripSwitchOption[];
 	};
 	type ConnectivityStatus = 'checking' | 'reachable' | 'unreachable';
+	type EditingNote = {
+		note: ItineraryNote | undefined;
+		target: ItineraryNoteTarget;
+	};
 
 	const connectionProbeIntervalMilliseconds = 30_000;
 	const connectionProbeTimeoutMilliseconds = 5_000;
@@ -70,6 +75,7 @@
 	let appliedViewerRevision = $state(0);
 	let connectivityStatus = $state<ConnectivityStatus>('checking');
 	let connectionProbeController: AbortController | null = null;
+	let editingNote = $state<EditingNote | null>(null);
 
 	const itemTypeLabels: Record<ItineraryItem['type'], string> = {
 		transport: 'Transport',
@@ -80,6 +86,8 @@
 	const detailedTrip = $derived(getDetailedTrip(data.trip));
 	const canModifyItinerary = $derived(detailedTrip?.canEdit === true && connectivityStatus === 'reachable');
 	const itinerary = $derived(data.trip.itinerary);
+	const notesHref = $derived(resolve('/trips/[slug]/notes', { slug: data.trip.slug }));
+	const notesEndpoint = $derived(resolve('/api/trips/[tripId]/notes', { tripId: data.trip.id }));
 	const localDays = $derived(localScheduleReady ? getLocalItineraryDays(itinerary.items, viewerContext.timeZone) : []);
 	const dateRange = $derived(
 		localScheduleReady ? getItineraryDateRange(itinerary.items, viewerContext.timeZone) : null
@@ -103,6 +111,17 @@
 		mutationError = null;
 		itemCreationLocalDay = localDay;
 		creatingItem = true;
+	}
+
+	function beginEditingDayNote(date: string): void {
+		if (!canModifyItinerary || !detailedTrip) {
+			return;
+		}
+		const target: ItineraryNoteTarget = { date, kind: 'day' };
+		editingNote = {
+			note: detailedTrip.itinerary.notes.find((note) => note.kind === 'day' && note.date === date),
+			target
+		};
 	}
 
 	function beginCreatingItem(type: ItineraryItemType): void {
@@ -307,6 +326,12 @@
 		refreshOfflineTripPage();
 	}
 
+	async function finishNoteEditing(): Promise<void> {
+		editingNote = null;
+		await invalidateAll();
+		refreshOfflineTripPage();
+	}
+
 	async function visitCreatedTrip(slug: string): Promise<void> {
 		editingTripMode = null;
 		await goto(resolve('/trips/[slug]', { slug }));
@@ -501,6 +526,9 @@
 			</p>
 		{/if}
 		<nav aria-label="Account">
+			{#if data.trip.access !== 'visitor'}
+				<a href={notesHref}>Notes</a>
+			{/if}
 			{#if data.trip.access === 'admin' || data.trip.access === 'sudo'}
 				<a href={resolve('/trips/[slug]/costs', { slug: data.trip.slug })}>Costs</a>
 			{/if}
@@ -589,6 +617,7 @@
 								{#if canModifyItinerary}
 									<div class="add-item-actions" aria-label={`Add an item on ${formatLocalDay(day.date)}`}>
 										<button onclick={() => beginItemCreation(day.date)} type="button"> Add item </button>
+										<button onclick={() => beginEditingDayNote(day.date)} type="button">Notes</button>
 									</div>
 								{/if}
 							</div>
@@ -652,6 +681,19 @@
 			onImported={beginImportedItem}
 			onManual={beginCreatingItem}
 			onTransportJourney={beginTransportJourney}
+		/>
+	{/if}
+
+	{#if detailedTrip && canModifyItinerary && editingNote}
+		<ItineraryNoteEditor
+			defaultTimeZone={detailedTrip.itinerary.timeZone}
+			initialNote={editingNote.note}
+			localCurrency={detailedTrip.itinerary.localCurrency}
+			{notesEndpoint}
+			onDismiss={() => (editingNote = null)}
+			onSaved={finishNoteEditing}
+			revision={detailedTrip.revision}
+			target={editingNote.target}
 		/>
 	{/if}
 

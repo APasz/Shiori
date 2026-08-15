@@ -215,6 +215,46 @@ describe('expense schemas', () => {
 	});
 });
 
+describe('planning note schemas', () => {
+	it('defaults notes and validates unique day entries with independent estimates', () => {
+		const itinerary = {
+			items: [],
+			timeZone: 'Asia/Tokyo',
+			title: 'Note test'
+		};
+		expect(itinerarySchema.parse(itinerary).notes).toEqual([]);
+
+		const dayNote = {
+			date: '2026-04-03',
+			entries: [
+				{
+					estimatedCosts: [{ amountMinor: 3_000, currency: 'JPY', id: 'museum-ticket' }],
+					id: 'museum',
+					state: 'idea',
+					startTime: '10:00',
+					title: 'Museum option'
+				}
+			],
+			kind: 'day',
+			text: 'Possible alternatives.',
+			timeZone: 'Asia/Tokyo'
+		};
+		expect(itinerarySchema.safeParse({ ...itinerary, notes: [dayNote] }).success).toBe(true);
+		expect(itinerarySchema.safeParse({ ...itinerary, notes: [dayNote, dayNote] }).success).toBe(false);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				notes: [
+					{
+						...dayNote,
+						entries: [{ ...dayNote.entries[0], endTime: '09:00' }]
+					}
+				]
+			}).success
+		).toBe(false);
+	});
+});
+
 describe('OpenRailwayMap URLs', () => {
 	it('accepts secure map permalinks for itinerary locations', () => {
 		const item = itineraryItemSchema.parse({

@@ -188,6 +188,7 @@ export const currencyCodeSchema = z.enum([
 export const costStatusSchema = z.enum(['unpaid', 'paid']);
 export const expenseCategorySchema = z.enum(['transport', 'accommodation', 'activity', 'food', 'misc', 'other']);
 export const expenseStatusSchema = z.enum(['unpaid', 'paid']);
+export const noteEntryStateSchema = z.enum(['idea', 'shortlisted', 'discarded']);
 
 export const locationCoordinatesSchema = z.strictObject({
 	latitude: z.number().gte(-90).lte(90),
@@ -233,6 +234,49 @@ const costAmountSchema = z.strictObject({
 	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
 	currency: currencyCodeSchema
 });
+
+const estimatedNoteCostSchema = z.strictObject({
+	amountMinor: minorUnitAmountSchema.min(1, 'Use an estimated amount greater than zero.'),
+	currency: currencyCodeSchema,
+	id: itineraryIdentifierSchema,
+	label: nonEmptyTextSchema.optional()
+});
+
+const noteEntrySchema = z
+	.strictObject({
+		estimatedCosts: z.array(estimatedNoteCostSchema).default([]),
+		id: itineraryIdentifierSchema,
+		note: z.string().trim().min(1, 'The note cannot be empty.').max(10_000).optional(),
+		state: noteEntryStateSchema.default('idea'),
+		endTime: localTimeSchema.optional(),
+		startTime: localTimeSchema.optional(),
+		title: nonEmptyTextSchema
+	})
+	.superRefine((entry, context) => {
+		if (entry.startTime !== undefined && entry.endTime !== undefined && entry.endTime < entry.startTime) {
+			context.addIssue({
+				code: 'custom',
+				path: ['endTime'],
+				message: 'The end time cannot be before the start time.'
+			});
+		}
+	});
+
+const itineraryNoteBaseShape = {
+	entries: z.array(noteEntrySchema).default([]),
+	text: z.string().max(100_000, 'Use at most 100,000 characters.').default(''),
+	timeZone: ianaTimeZoneSchema
+};
+
+export const itineraryNoteSchema = z.discriminatedUnion('kind', [
+	z.strictObject({ ...itineraryNoteBaseShape, kind: z.literal('trip') }),
+	z.strictObject({ ...itineraryNoteBaseShape, date: calendarDateSchema, kind: z.literal('day') })
+]);
+
+export const itineraryNoteTargetSchema = z.discriminatedUnion('kind', [
+	z.strictObject({ kind: z.literal('trip') }),
+	z.strictObject({ date: calendarDateSchema, kind: z.literal('day') })
+]);
 
 const expenseBaseShape = {
 	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
@@ -404,7 +448,8 @@ export const tripDetailsSchema = z.strictObject({
 export const itinerarySchema = tripDetailsSchema
 	.extend({
 		expenses: z.array(expenseSchema).default([]),
-		items: z.array(itineraryItemSchema)
+		items: z.array(itineraryItemSchema),
+		notes: z.array(itineraryNoteSchema).default([])
 	})
 	.superRefine((itinerary, context) => {
 		const expenseIds = new Set<string>();
@@ -420,6 +465,43 @@ export const itinerarySchema = tripDetailsSchema
 		}
 
 		const itemIds = new Set<string>();
+		const noteKeys = new Set<string>();
+
+		for (const [noteIndex, note] of itinerary.notes.entries()) {
+			const noteKey = note.kind === 'trip' ? 'trip' : `day:${note.date}`;
+			if (noteKeys.has(noteKey)) {
+				context.addIssue({
+					code: 'custom',
+					path: ['notes', noteIndex],
+					message: note.kind === 'trip' ? 'A trip can have only one trip note.' : 'A day can have only one note.'
+				});
+			}
+			noteKeys.add(noteKey);
+
+			const entryIds = new Set<string>();
+			for (const [entryIndex, entry] of note.entries.entries()) {
+				if (entryIds.has(entry.id)) {
+					context.addIssue({
+						code: 'custom',
+						path: ['notes', noteIndex, 'entries', entryIndex, 'id'],
+						message: 'Each note entry ID must be unique within a note.'
+					});
+				}
+				entryIds.add(entry.id);
+
+				const estimatedCostIds = new Set<string>();
+				for (const [costIndex, estimatedCost] of entry.estimatedCosts.entries()) {
+					if (estimatedCostIds.has(estimatedCost.id)) {
+						context.addIssue({
+							code: 'custom',
+							path: ['notes', noteIndex, 'entries', entryIndex, 'estimatedCosts', costIndex, 'id'],
+							message: 'Each estimated cost ID must be unique within a note entry.'
+						});
+					}
+					estimatedCostIds.add(estimatedCost.id);
+				}
+			}
+		}
 
 		for (const [itemIndex, item] of itinerary.items.entries()) {
 			if (itemIds.has(item.id)) {
@@ -487,6 +569,11 @@ export const itinerarySchema = tripDetailsSchema
 
 export type Itinerary = z.infer<typeof itinerarySchema>;
 export type TripDetails = z.infer<typeof tripDetailsSchema>;
+export type ItineraryNote = z.infer<typeof itineraryNoteSchema>;
+export type ItineraryNoteTarget = z.infer<typeof itineraryNoteTargetSchema>;
+export type ItineraryNoteEntry = z.infer<typeof noteEntrySchema>;
+export type EstimatedNoteCost = z.infer<typeof estimatedNoteCostSchema>;
+export type NoteEntryState = z.infer<typeof noteEntryStateSchema>;
 export type ItineraryItem = z.infer<typeof itineraryItemSchema>;
 export type ItineraryItemDraft = z.infer<typeof itineraryItemDraftSchema>;
 export type ItineraryItemType = z.infer<typeof itineraryItemTypeSchema>;

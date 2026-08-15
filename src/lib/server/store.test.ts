@@ -113,11 +113,11 @@ describe('JSON store', () => {
 		]);
 
 		for (const source of [users, shares, sessions, editLocks, trip]) {
-			expect(source).toContain('\n    "version": 11');
+			expect(source).toContain('\n    "version": 12');
 			expect(source).toMatch(/\n$/);
 		}
-		expect(JSON.parse(users)).toMatchObject({ version: 11, users: [{ username: 'owner' }] });
-		expect(JSON.parse(trip)).toMatchObject({ version: 11, trip: { id: expect.any(String) } });
+		expect(JSON.parse(users)).toMatchObject({ version: 12, users: [{ username: 'owner' }] });
+		expect(JSON.parse(trip)).toMatchObject({ version: 12, trip: { id: expect.any(String) } });
 		expect(JSON.parse(trip)).not.toHaveProperty('trip.slug');
 	});
 
@@ -131,6 +131,41 @@ describe('JSON store', () => {
 		const restartedStore = await import('./store');
 		await expect(restartedStore.getTripView('renamed-trip', owner)).resolves.toMatchObject({
 			slug: 'renamed-trip'
+		});
+	});
+
+	it('migrates pre-notes trips to an empty notes list', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const persistedTrip: { trip: { itinerary: Record<string, unknown> }; version: number } = JSON.parse(
+			await readFile(managedTripPath(trip.slug), 'utf8')
+		);
+		delete persistedTrip.trip.itinerary.notes;
+		persistedTrip.version = 11;
+		await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		for (const filePath of [
+			managedDataPath('users.json'),
+			managedDataPath('shares.json'),
+			managedDataPath('sessions.json'),
+			managedDataPath('edit-locks.json')
+		]) {
+			const persistedGlobalData: { version: number } = JSON.parse(await readFile(filePath, 'utf8'));
+			persistedGlobalData.version = 11;
+			await writeFile(filePath, JSON.stringify(persistedGlobalData, null, 4), 'utf8');
+		}
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		const migratedTrip = await restartedStore.getTripView(trip.slug, owner);
+		if (!migratedTrip || migratedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the migrated trip.');
+		}
+		expect(migratedTrip.itinerary.notes).toEqual([]);
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({
+			trip: { itinerary: { notes: [] } },
+			version: 12
 		});
 	});
 
@@ -191,7 +226,7 @@ describe('JSON store', () => {
 					managedTripPath(trip.slug)
 				].map(async (filePath) => JSON.parse(await readFile(filePath, 'utf8')) as { version: number })
 			);
-			expect(migratedFiles.map((file) => file.version)).toEqual([11, 11, 11, 11, 11]);
+			expect(migratedFiles.map((file) => file.version)).toEqual([12, 12, 12, 12, 12]);
 		}
 	);
 
@@ -224,7 +259,7 @@ describe('JSON store', () => {
 			throw new Error('The owner should be able to read the migrated trip.');
 		}
 		expect(migratedTrip.itinerary.expenses).toEqual([]);
-		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 11 });
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 12 });
 	});
 
 	it('migrates version 9 daily spending into paid expenses', async () => {
@@ -281,7 +316,7 @@ describe('JSON store', () => {
 				useDate: '2026-01-01'
 			}
 		]);
-		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 11 });
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 12 });
 	});
 
 	it('migrates version 10 expenses and items with default expense links', async () => {
@@ -323,7 +358,7 @@ describe('JSON store', () => {
 		}
 		expect(migratedTrip.itinerary.expenses[0]?.availableForItemCosts).toBe(false);
 		expect(migratedTrip.itinerary.items.find((item) => item.id === 'legacy-item')?.linkedExpenseIds).toEqual([]);
-		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 11 });
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 12 });
 	});
 
 	it('rejects incomplete or invalid split data before serving it', async () => {
@@ -484,6 +519,75 @@ describe('JSON store', () => {
 			throw new Error('The owner should be able to read deleted expenses.');
 		}
 		expect(deletedTrip.itinerary.expenses).toEqual([]);
+	});
+
+	it('saves, replaces, and deletes separate planning notes', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const dayNote = {
+			date: '2026-01-02',
+			entries: [
+				{
+					estimatedCosts: [{ amountMinor: 1_500, currency: 'JPY' as const, id: 'tea-cost', label: 'Tea' }],
+					id: 'tea-entry',
+					note: 'Keep this as an alternate plan.',
+					startTime: '15:00',
+					state: 'shortlisted' as const,
+					title: 'Tea ceremony'
+				}
+			],
+			kind: 'day' as const,
+			text: 'Ideas for the afternoon.',
+			timeZone: 'Asia/Tokyo'
+		};
+
+		await expect(
+			store.saveNote({ note: dayNote, revision: trip.revision, tripId: trip.id, userId: owner.id })
+		).resolves.toEqual({ revision: trip.revision + 1 });
+		const savedTrip = await store.getTripView(trip.slug, owner);
+		if (!savedTrip || savedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read saved notes.');
+		}
+		expect(savedTrip.itinerary.notes).toEqual([dayNote]);
+
+		const replacementNote = { ...dayNote, text: 'A shorter afternoon plan.' };
+		await expect(
+			store.saveNote({
+				note: replacementNote,
+				revision: savedTrip.revision,
+				tripId: savedTrip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: savedTrip.revision + 1 });
+		const replacedTrip = await store.getTripView(trip.slug, owner);
+		if (!replacedTrip || replacedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read replaced notes.');
+		}
+		expect(replacedTrip.itinerary.notes).toEqual([replacementNote]);
+
+		await expect(
+			store.deleteNote({
+				revision: replacedTrip.revision,
+				target: { date: dayNote.date, kind: 'day' },
+				tripId: replacedTrip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: replacedTrip.revision + 1 });
+		const deletedTrip = await store.getTripView(trip.slug, owner);
+		if (!deletedTrip || deletedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read deleted notes.');
+		}
+		expect(deletedTrip.itinerary.notes).toEqual([]);
+
+		await expect(
+			store.saveNote({
+				note: { entries: [], kind: 'trip', text: '   ', timeZone: 'UTC' },
+				revision: deletedTrip.revision,
+				tripId: deletedTrip.id,
+				userId: owner.id
+			})
+		).rejects.toMatchObject({ status: 400 });
 	});
 
 	it('links selectable expenses alongside an item’s direct cost', async () => {

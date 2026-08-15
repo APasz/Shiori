@@ -6,6 +6,7 @@ const testItinerary = {
 	localCurrency: 'AUD' as const,
 	title: 'Test itinerary',
 	timeZone: 'UTC',
+	notes: [{ entries: [], kind: 'trip', text: 'Keep this private.', timeZone: 'UTC' }],
 	expenses: [
 		{
 			amountMinor: 1_250,
@@ -93,6 +94,7 @@ describe('itinerary visibility projection', () => {
 			type: 'transport'
 		});
 		expect(item).not.toHaveProperty('reservation');
+		expect(publicItinerary).not.toHaveProperty('notes');
 	});
 
 	it('withholds every restricted detail from standard users', () => {
@@ -103,6 +105,7 @@ describe('itinerary visibility projection', () => {
 		expect(transport.cost).toBeUndefined();
 		expect(transport.linkedExpenseIds).toEqual([]);
 		expect(projectDetailedItinerary(testItinerary, 'user').expenses).toEqual([]);
+		expect(projectDetailedItinerary(testItinerary, 'user').notes).toEqual(testItinerary.notes);
 		expect(transport.transport.seat).toBeUndefined();
 		expect(transport.transport.stops.every((stop) => stop.platform === undefined)).toBe(true);
 	});

@@ -59,6 +59,7 @@
 	const conversionEndpoint = $derived(resolve('/api/exchange-rates'));
 	const expensesEndpoint = $derived(resolve('/api/trips/[tripId]/expenses', { tripId: data.trip.id }));
 	const itineraryHref = $derived(resolve('/trips/[slug]', { slug: data.trip.slug }));
+	const notesHref = $derived(resolve('/trips/[slug]/notes', { slug: data.trip.slug }));
 	const sourceCurrencies = $derived(sourceCurrenciesFor(overview));
 	const canStartExpenseAction = $derived(
 		data.trip.canEdit && !expenseSaving && deletingExpenseId === null && expenseEditorMode === null
@@ -415,6 +416,7 @@
 		<nav aria-label="Trip">
 			<a href={itineraryHref}>Itinerary</a>
 			<span aria-current="page">Costs</span>
+			<a href={notesHref}>Notes</a>
 			{#if data.currentUser}
 				<span>Signed as {data.currentUser.username}</span>
 				<form action="/logout" method="POST" onsubmit={clearOfflineTripPages}>

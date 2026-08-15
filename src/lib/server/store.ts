@@ -17,6 +17,8 @@ import {
 	itineraryIdentifierSchema,
 	itineraryItemDraftSchema,
 	itineraryItemSchema,
+	itineraryNoteSchema,
+	itineraryNoteTargetSchema,
 	itinerarySchema,
 	minorUnitAmountSchema,
 	tripDetailsSchema,
@@ -27,6 +29,7 @@ import {
 	type Itinerary,
 	type ItineraryItem,
 	type ItineraryItemDraft,
+	type ItineraryNote,
 	type CostAmount,
 	type TripDetails
 } from '$lib/itinerary/schema';
@@ -41,7 +44,8 @@ const previousStoredDataVersion = 7;
 const priorStoredDataVersion = 8;
 const dailyExpenseStoredDataVersion = 9;
 const freeformExpenseStoredDataVersion = 10;
-const storedDataVersion = 11;
+const preNotesStoredDataVersion = 11;
+const storedDataVersion = 12;
 const tripStructureLockTargetId = 'trip-structure';
 const jsonIndentation = 4;
 
@@ -62,6 +66,7 @@ const supportedStoredDataVersionSchema = z.union([
 	z.literal(priorStoredDataVersion),
 	z.literal(dailyExpenseStoredDataVersion),
 	z.literal(freeformExpenseStoredDataVersion),
+	z.literal(preNotesStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 
@@ -113,7 +118,8 @@ const migratableStoredTripFileEnvelopeSchema = z
 			z.literal(previousStoredDataVersion),
 			z.literal(priorStoredDataVersion),
 			z.literal(dailyExpenseStoredDataVersion),
-			z.literal(freeformExpenseStoredDataVersion)
+			z.literal(freeformExpenseStoredDataVersion),
+			z.literal(preNotesStoredDataVersion)
 		]),
 		trip: z
 			.object({
@@ -1149,7 +1155,7 @@ export async function createTrip(input: { details: unknown; ownerId: string }): 
 			ownerId: input.ownerId,
 			isPublic: false,
 			revision: 0,
-			itinerary: { ...details, expenses: [], items: [] },
+			itinerary: { ...details, expenses: [], items: [], notes: [] },
 			createdAt,
 			updatedAt: createdAt
 		};
@@ -1289,6 +1295,56 @@ export async function saveTripDetails(input: {
 		assertExpectedRevision(trip, input.revision);
 		assertNoActiveEditLock(data, trip);
 		return commitItineraryChange(trip, { ...trip.itinerary, ...details });
+	});
+}
+
+function noteMatchesTarget(note: ItineraryNote, target: { kind: 'trip' } | { date: string; kind: 'day' }): boolean {
+	return target.kind === 'trip' ? note.kind === 'trip' : note.kind === 'day' && note.date === target.date;
+}
+
+function noteHasContent(note: ItineraryNote): boolean {
+	return note.text.trim() !== '' || note.entries.length > 0;
+}
+
+export async function saveNote(input: {
+	note: unknown;
+	revision: number;
+	tripId: string;
+	userId: string;
+}): Promise<{ revision: number }> {
+	const note = itineraryNoteSchema.parse(input.note);
+	if (!noteHasContent(note)) {
+		throw new StoreError(400, 'Add text or at least one structured entry before saving a note.');
+	}
+
+	return transaction((data) => {
+		const trip = getTripForMutation(data, input.tripId, input.userId);
+		assertExpectedRevision(trip, input.revision);
+		assertNoActiveEditLock(data, trip);
+		const notes = trip.itinerary.notes.filter((existingNote) => !noteMatchesTarget(existingNote, note));
+		return commitItineraryChange(trip, { ...trip.itinerary, notes: [...notes, note] });
+	});
+}
+
+export async function deleteNote(input: {
+	revision: number;
+	target: unknown;
+	tripId: string;
+	userId: string;
+}): Promise<{ revision: number }> {
+	const target = itineraryNoteTargetSchema.parse(input.target);
+
+	return transaction((data) => {
+		const trip = getTripForMutation(data, input.tripId, input.userId);
+		assertExpectedRevision(trip, input.revision);
+		assertNoActiveEditLock(data, trip);
+		if (!trip.itinerary.notes.some((note) => noteMatchesTarget(note, target))) {
+			throw new StoreError(404, 'Note not found.');
+		}
+		return commitItineraryChange(trip, {
+			...trip.itinerary,
+			notes: trip.itinerary.notes.filter((note) => !noteMatchesTarget(note, target))
+		});
 	});
 }
 
