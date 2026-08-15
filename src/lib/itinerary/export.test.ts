@@ -59,6 +59,7 @@ const itinerary = itinerarySchema.parse({
 				{
 					estimatedCosts: [{ amountMinor: 3_500, currency: 'JPY', id: 'museum-entry-cost', label: 'Entry' }],
 					id: 'museum-entry',
+					links: [{ label: 'Museum details', url: 'https://example.com/museum' }],
 					note: 'Book tickets before arrival.',
 					state: 'shortlisted',
 					startTime: '10:00',
@@ -120,6 +121,7 @@ describe('itinerary exports', () => {
 				entries: [
 					{
 						estimatedCosts: [{ amountMinor: 3_500, currency: 'JPY', label: 'Entry' }],
+						links: [{ label: 'Museum details', url: 'https://example.com/museum' }],
 						note: 'Book tickets before arrival.',
 						state: 'shortlisted',
 						startTime: '10:00',
@@ -212,6 +214,7 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Notes:');
 		expect(text).toContain('Trip note (Asia/Tokyo)');
 		expect(text).toContain('Estimate: Entry: JPY 3500 minor units');
+		expect(text).toContain('Link: Museum details: https://example.com/museum');
 		expect(text).toContain('Day note · 2026-04-13 (Asia/Tokyo)');
 		expect(file).toMatchObject({ filename: 'japan-2026-itinerary.yaml', mediaType: 'application/yaml' });
 	});

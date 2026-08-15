@@ -169,6 +169,7 @@ type ExportedEstimatedNoteCost = Readonly<{
 
 type ExportedNoteEntry = Readonly<{
 	estimatedCosts: ExportedEstimatedNoteCost[];
+	links: ItineraryLink[];
 	note?: string;
 	state: ItineraryNote['entries'][number]['state'];
 	endTime?: string;
@@ -390,6 +391,7 @@ function exportItineraryNote(note: ItineraryNote): ExportedItineraryNote {
 			currency: estimatedCost.currency,
 			...(estimatedCost.label === undefined ? {} : { label: estimatedCost.label })
 		})),
+		links: entry.links.map((link) => ({ ...link })),
 		...(entry.note === undefined ? {} : { note: entry.note }),
 		state: entry.state,
 		...(entry.endTime === undefined ? {} : { endTime: entry.endTime }),
@@ -525,6 +527,9 @@ function textLinesForItineraryNote(note: ExportedItineraryNote, index: number): 
 		for (const estimatedCost of entry.estimatedCosts) {
 			const label = estimatedCost.label === undefined ? '' : `${estimatedCost.label}: `;
 			lines.push(`     Estimate: ${label}${estimatedCost.currency} ${estimatedCost.amountMinor} minor units`);
+		}
+		for (const link of entry.links) {
+			lines.push(`     Link: ${link.label}: ${link.url}`);
 		}
 	}
 	return lines;

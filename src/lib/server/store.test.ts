@@ -531,6 +531,7 @@ describe('JSON store', () => {
 				{
 					estimatedCosts: [{ amountMinor: 1_500, currency: 'JPY' as const, id: 'tea-cost', label: 'Tea' }],
 					id: 'tea-entry',
+					links: [],
 					note: 'Keep this as an alternate plan.',
 					startTime: '15:00',
 					state: 'shortlisted' as const,

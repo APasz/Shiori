@@ -70,6 +70,18 @@
 									</ul>
 								</section>
 							{/if}
+							{#if entry.links.length > 0}
+								<section aria-label={`Links for ${entry.title}`} class="links">
+									<h3>Links</h3>
+									<ul>
+										{#each entry.links as link, index (`${link.label}:${link.url}:${index}`)}
+											<li>
+												<a href={link.url} rel="external noopener noreferrer" target="_blank">{link.label}</a>
+											</li>
+										{/each}
+									</ul>
+								</section>
+							{/if}
 						</div>
 					</details>
 				</li>
@@ -196,7 +208,12 @@
 		margin-top: 1rem;
 	}
 
-	.costs ul {
+	.links {
+		margin-top: 1rem;
+	}
+
+	.costs ul,
+	.links ul {
 		display: grid;
 		gap: 0.375rem;
 		list-style: none;

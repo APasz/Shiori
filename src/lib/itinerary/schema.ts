@@ -246,6 +246,7 @@ const noteEntrySchema = z
 	.strictObject({
 		estimatedCosts: z.array(estimatedNoteCostSchema).default([]),
 		id: itineraryIdentifierSchema,
+		links: z.array(itineraryLinkSchema).default([]),
 		note: z.string().trim().min(1, 'The note cannot be empty.').max(10_000).optional(),
 		state: noteEntryStateSchema.default('idea'),
 		endTime: localTimeSchema.optional(),

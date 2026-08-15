@@ -28,9 +28,15 @@
 		id: string;
 		label: string;
 	};
+	type LinkDraft = {
+		id: string;
+		name: string;
+		url: string;
+	};
 	type EntryDraft = {
 		estimatedCosts: EstimatedCostDraft[];
 		id: string;
+		links: LinkDraft[];
 		note: string;
 		state: NoteEntryState;
 		endTime: string;
@@ -89,6 +95,11 @@
 				label: estimatedCost.label ?? ''
 			})),
 			id: entry.id,
+			links: entry.links.map((link, index) => ({
+				id: `${entry.id}-link-${index}`,
+				name: link.label,
+				url: link.url
+			})),
 			note: entry.note ?? '',
 			state: entry.state,
 			endTime: entry.endTime ?? '',
@@ -136,6 +147,25 @@
 		return estimatedCosts;
 	}
 
+	function linksCandidate(entry: EntryDraft, showError: boolean): unknown[] | null {
+		const links: unknown[] = [];
+		for (const link of entry.links) {
+			const name = optionalText(link.name);
+			const url = optionalText(link.url);
+			if (name === undefined && url === undefined) {
+				continue;
+			}
+			if (name === undefined || url === undefined) {
+				if (showError) {
+					errorMessage = 'Each link needs both a name and URL.';
+				}
+				return null;
+			}
+			links.push({ label: name, url });
+		}
+		return links;
+	}
+
 	function noteCandidate(showError: boolean): unknown | null {
 		const candidateEntries: unknown[] = [];
 		for (const entry of entries) {
@@ -143,10 +173,15 @@
 			if (estimatedCosts === null) {
 				return null;
 			}
+			const links = linksCandidate(entry, showError);
+			if (links === null) {
+				return null;
+			}
 			const note = optionalText(entry.note);
 			candidateEntries.push({
 				estimatedCosts,
 				id: entry.id,
+				links,
 				...(note ? { note } : {}),
 				state: entry.state,
 				...(entry.endTime ? { endTime: entry.endTime } : {}),
@@ -170,6 +205,7 @@
 			{
 				estimatedCosts: [],
 				id: crypto.randomUUID(),
+				links: [],
 				note: '',
 				state: 'idea',
 				endTime: '',
@@ -192,6 +228,14 @@
 
 	function removeEstimatedCost(entry: EntryDraft, costId: string): void {
 		entry.estimatedCosts = entry.estimatedCosts.filter((estimatedCost) => estimatedCost.id !== costId);
+	}
+
+	function addLink(entry: EntryDraft): void {
+		entry.links = [...entry.links, { id: crypto.randomUUID(), name: '', url: '' }];
+	}
+
+	function removeLink(entry: EntryDraft, linkId: string): void {
+		entry.links = entry.links.filter((link) => link.id !== linkId);
 	}
 
 	function confirmDiscard(): boolean {
@@ -375,111 +419,150 @@
 			{:else}
 				<div class="entry-list">
 					{#each entries as entry, entryIndex (entry.id)}
-						<fieldset class="entry">
-							<legend>Entry {entryIndex + 1}</legend>
-							<div class="entry-heading">
+						<details class="entry" open>
+							<summary>
+								<span>Entry {entryIndex + 1}: {entry.title || 'Untitled entry'}</span>
+								<span class="entry-state">{entry.state}</span>
+							</summary>
+							<div class="entry-content">
+								<div class="entry-heading">
+									<label class="shiori-form-label">
+										Title
+										<input
+											bind:value={entry.title}
+											class="shiori-form-control"
+											disabled={editorState !== 'editing'}
+											required
+										/>
+									</label>
+									<label class="shiori-form-label">
+										Planning state
+										<select bind:value={entry.state} class="shiori-form-control" disabled={editorState !== 'editing'}>
+											{#each stateOptions as state (state)}
+												<option value={state}>{state[0].toUpperCase()}{state.slice(1)}</option>
+											{/each}
+										</select>
+									</label>
+								</div>
 								<label class="shiori-form-label">
-									Title
-									<input
-										bind:value={entry.title}
+									Details <span class="field-hint">Optional</span>
+									<textarea
+										bind:value={entry.note}
 										class="shiori-form-control"
 										disabled={editorState !== 'editing'}
-										required
-									/>
+										rows="3"></textarea>
 								</label>
-								<label class="shiori-form-label">
-									Planning state
-									<select bind:value={entry.state} class="shiori-form-control" disabled={editorState !== 'editing'}>
-										{#each stateOptions as state (state)}
-											<option value={state}>{state[0].toUpperCase()}{state.slice(1)}</option>
-										{/each}
-									</select>
-								</label>
-							</div>
-							<label class="shiori-form-label">
-								Details <span class="field-hint">Optional</span>
-								<textarea
-									bind:value={entry.note}
-									class="shiori-form-control"
-									disabled={editorState !== 'editing'}
-									rows="3"></textarea>
-							</label>
-							<div class="time-range">
-								<label class="shiori-form-label" for={`${entry.id}-start-time`}>
-									Start time <span class="field-hint">Optional</span>
-									<TimePicker
-										id={`${entry.id}-start-time`}
-										value={entry.startTime}
-										onChange={(value) => (entry.startTime = value)}
-									/>
-								</label>
-								<label class="shiori-form-label" for={`${entry.id}-end-time`}>
-									End time <span class="field-hint">Optional</span>
-									<TimePicker
-										id={`${entry.id}-end-time`}
-										value={entry.endTime}
-										onChange={(value) => (entry.endTime = value)}
-									/>
-								</label>
-							</div>
-							<section
-								aria-label={`Estimated costs for ${entry.title || `entry ${entryIndex + 1}`}`}
-								class="estimated-costs"
-							>
-								<div class="cost-heading">
-									<h4>Estimated costs</h4>
-									<button disabled={editorState !== 'editing'} onclick={() => addEstimatedCost(entry)} type="button"
-										>Add estimate</button
-									>
+								<div class="time-range">
+									<label class="shiori-form-label" for={`${entry.id}-start-time`}>
+										Start time <span class="field-hint">Optional</span>
+										<TimePicker
+											id={`${entry.id}-start-time`}
+											value={entry.startTime}
+											onChange={(value) => (entry.startTime = value)}
+										/>
+									</label>
+									<label class="shiori-form-label" for={`${entry.id}-end-time`}>
+										End time <span class="field-hint">Optional</span>
+										<TimePicker
+											id={`${entry.id}-end-time`}
+											value={entry.endTime}
+											onChange={(value) => (entry.endTime = value)}
+										/>
+									</label>
 								</div>
-								{#each entry.estimatedCosts as estimatedCost (estimatedCost.id)}
-									<div class="estimated-cost">
-										<label class="shiori-form-label">
-											Label <span class="field-hint">Optional</span>
-											<input
-												bind:value={estimatedCost.label}
-												class="shiori-form-control"
-												disabled={editorState !== 'editing'}
-											/>
-										</label>
-										<label class="shiori-form-label">
-											Amount
-											<input
-												bind:value={estimatedCost.amount}
-												class="shiori-form-control"
-												disabled={editorState !== 'editing'}
-												inputmode="decimal"
-											/>
-										</label>
-										<label class="shiori-form-label">
-											Currency
-											<select
-												bind:value={estimatedCost.currency}
-												class="shiori-form-control"
-												disabled={editorState !== 'editing'}
-											>
-												{#each currencyOptions as currency (currency)}
-													<option value={currency}>{currency}</option>
-												{/each}
-											</select>
-										</label>
-										<button
-											disabled={editorState !== 'editing'}
-											onclick={() => removeEstimatedCost(entry, estimatedCost.id)}
-											type="button">Remove</button
+								<section
+									aria-label={`Estimated costs for ${entry.title || `entry ${entryIndex + 1}`}`}
+									class="estimated-costs"
+								>
+									<div class="cost-heading">
+										<h4>Estimated costs</h4>
+										<button disabled={editorState !== 'editing'} onclick={() => addEstimatedCost(entry)} type="button"
+											>Add estimate</button
 										>
 									</div>
-								{/each}
-							</section>
-							<button
-								class="remove-entry"
-								disabled={editorState !== 'editing'}
-								onclick={() => removeEntry(entry.id)}
-								type="button"
-							>
-								Remove entry
-							</button>
-						</fieldset>
+									{#each entry.estimatedCosts as estimatedCost (estimatedCost.id)}
+										<div class="estimated-cost">
+											<label class="shiori-form-label">
+												Label <span class="field-hint">Optional</span>
+												<input
+													bind:value={estimatedCost.label}
+													class="shiori-form-control"
+													disabled={editorState !== 'editing'}
+												/>
+											</label>
+											<label class="shiori-form-label">
+												Amount
+												<input
+													bind:value={estimatedCost.amount}
+													class="shiori-form-control"
+													disabled={editorState !== 'editing'}
+													inputmode="decimal"
+												/>
+											</label>
+											<label class="shiori-form-label">
+												Currency
+												<select
+													bind:value={estimatedCost.currency}
+													class="shiori-form-control"
+													disabled={editorState !== 'editing'}
+												>
+													{#each currencyOptions as currency (currency)}
+														<option value={currency}>{currency}</option>
+													{/each}
+												</select>
+											</label>
+											<button
+												disabled={editorState !== 'editing'}
+												onclick={() => removeEstimatedCost(entry, estimatedCost.id)}
+												type="button">Remove</button
+											>
+										</div>
+									{/each}
+								</section>
+								<section aria-label={`Links for ${entry.title || `entry ${entryIndex + 1}`}`} class="entry-links">
+									<div class="link-heading">
+										<h4>Links</h4>
+										<button disabled={editorState !== 'editing'} onclick={() => addLink(entry)} type="button"
+											>Add link</button
+										>
+									</div>
+									{#each entry.links as link (link.id)}
+										<div class="note-link">
+											<label class="shiori-form-label">
+												Name
+												<input
+													bind:value={link.name}
+													class="shiori-form-control"
+													disabled={editorState !== 'editing'}
+												/>
+											</label>
+											<label class="shiori-form-label">
+												URL
+												<input
+													bind:value={link.url}
+													class="shiori-form-control"
+													disabled={editorState !== 'editing'}
+													type="url"
+												/>
+											</label>
+											<button
+												disabled={editorState !== 'editing'}
+												onclick={() => removeLink(entry, link.id)}
+												type="button">Remove</button
+											>
+										</div>
+									{/each}
+								</section>
+								<button
+									class="remove-entry"
+									disabled={editorState !== 'editing'}
+									onclick={() => removeEntry(entry.id)}
+									type="button"
+								>
+									Remove entry
+								</button>
+							</div>
+						</details>
 					{/each}
 				</div>
 			{/if}
@@ -521,14 +604,16 @@
 	.editor-actions,
 	.section-heading,
 	.entry-heading,
-	.cost-heading {
+	.cost-heading,
+	.link-heading {
 		display: flex;
 		gap: 1rem;
 	}
 
 	header,
 	.section-heading,
-	.cost-heading {
+	.cost-heading,
+	.link-heading {
 		align-items: start;
 		justify-content: space-between;
 	}
@@ -614,16 +699,36 @@
 
 	.entry {
 		border: 1px solid var(--color-border-default);
-		display: grid;
-		gap: 1rem;
 		margin: 0;
+	}
+
+	.entry summary {
+		align-items: center;
+		cursor: pointer;
+		display: flex;
+		font-size: 0.8125rem;
+		font-weight: 700;
+		gap: 1rem;
+		justify-content: space-between;
 		padding: 1rem;
 	}
 
-	.entry legend {
-		font-size: 0.8125rem;
-		font-weight: 700;
-		padding: 0 0.25rem;
+	.entry summary:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: -3px;
+	}
+
+	.entry-state {
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		font-weight: 400;
+		text-transform: capitalize;
+	}
+
+	.entry-content {
+		display: grid;
+		gap: 1rem;
+		padding: 0 1rem 1rem;
 	}
 
 	.entry-heading > label:first-child {
@@ -631,7 +736,8 @@
 	}
 
 	.time-range,
-	.estimated-cost {
+	.estimated-cost,
+	.note-link {
 		display: grid;
 		gap: 1rem;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -644,12 +750,22 @@
 		padding-top: 1rem;
 	}
 
-	.cost-heading {
+	.entry-links {
+		border-top: 1px solid var(--color-border-default);
+		display: grid;
+		gap: 0.75rem;
+		padding-top: 1rem;
+	}
+
+	.cost-heading,
+	.link-heading {
 		align-items: center;
 	}
 
 	.cost-heading button,
+	.link-heading button,
 	.estimated-cost button,
+	.note-link button,
 	.remove-entry,
 	.delete-note {
 		background: transparent;
@@ -663,6 +779,11 @@
 	.estimated-cost {
 		align-items: end;
 		grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.65fr) minmax(5rem, 0.4fr) auto;
+	}
+
+	.note-link {
+		align-items: end;
+		grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr) auto;
 	}
 
 	.remove-entry,
@@ -698,7 +819,8 @@
 		header,
 		.section-heading,
 		.entry-heading,
-		.estimated-cost {
+		.estimated-cost,
+		.note-link {
 			align-items: stretch;
 			flex-direction: column;
 			grid-template-columns: 1fr;

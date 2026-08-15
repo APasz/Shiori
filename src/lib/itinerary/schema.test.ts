@@ -230,6 +230,7 @@ describe('planning note schemas', () => {
 				{
 					estimatedCosts: [{ amountMinor: 3_000, currency: 'JPY', id: 'museum-ticket' }],
 					id: 'museum',
+					links: [{ label: 'Museum details', url: 'https://example.com/museum' }],
 					state: 'idea',
 					startTime: '10:00',
 					title: 'Museum option'
@@ -240,6 +241,17 @@ describe('planning note schemas', () => {
 			timeZone: 'Asia/Tokyo'
 		};
 		expect(itinerarySchema.safeParse({ ...itinerary, notes: [dayNote] }).success).toBe(true);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				notes: [
+					{
+						...dayNote,
+						entries: [{ ...dayNote.entries[0], links: [{ label: 'Museum details', url: 'not a URL' }] }]
+					}
+				]
+			}).success
+		).toBe(false);
 		expect(itinerarySchema.safeParse({ ...itinerary, notes: [dayNote, dayNote] }).success).toBe(false);
 		expect(
 			itinerarySchema.safeParse({
