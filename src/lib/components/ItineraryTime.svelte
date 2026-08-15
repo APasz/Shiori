@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { formatTimestampInTimeZone, type FormattedLocalTimestamp } from '$lib/itinerary/time';
-	import { timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
+	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { onMount } from 'svelte';
 
@@ -10,6 +10,7 @@
 	let browserReady = $state(false);
 	const machineDateTime = $derived(new Date(startAt).toISOString());
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
+	const localTimeZoneOffset = $derived(timeZoneOffsetLabel(timeZone, startAt));
 
 	onMount(() => {
 		browserReady = true;
@@ -26,7 +27,10 @@
 <span class="itinerary-time">
 	<time datetime={machineDateTime}>{viewerTime?.time ?? 'Localizing…'}</time>
 	{#if showLocalTime && localTime}
-		<span class="local-time">{localTime.time} {timeZoneShortLabel(timeZone)}</span>
+		<span class="local-time" title={localTimeZoneOffset ?? undefined}>
+			{localTime.time}
+			{timeZoneShortLabel(timeZone, startAt)}
+		</span>
 	{/if}
 </span>
 

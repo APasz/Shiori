@@ -8,6 +8,7 @@
 		themeStorageKey,
 		type ThemeName
 	} from '$lib/theme/theme';
+	import Icon from '$lib/visuals/Icon.svelte';
 
 	let theme = $state<ThemeName>(defaultTheme);
 
@@ -42,7 +43,7 @@
 	title={`Switch to ${alternateTheme(theme)} mode`}
 	type="button"
 >
-	<span aria-hidden="true">{theme === 'dark' ? '☾' : '☀'}</span>
+	<Icon name={theme === 'dark' ? 'darkTheme' : 'lightTheme'} size="1rem" stroke={1.8} />
 	<span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
 </button>
 

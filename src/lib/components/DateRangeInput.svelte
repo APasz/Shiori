@@ -3,6 +3,7 @@
 	import { DateRangePicker, Portal } from 'bits-ui';
 	import { parseDate, today, type CalendarDate, type DateValue } from '@internationalized/date';
 	import './date-picker.css';
+	import Icon from '$lib/visuals/Icon.svelte';
 
 	type DateRangeChange = Readonly<{
 		checkInDate: string;
@@ -94,7 +95,7 @@
 					{/each}
 				{/snippet}
 			</DateRangePicker.Input>
-			<span aria-hidden="true" class="stay-date-separator">→</span>
+			<Icon class="stay-date-separator" name="forward" size="1rem" />
 			<DateRangePicker.Input
 				aria-label="Check-out date"
 				class="date-field shiori-form-control"
@@ -109,9 +110,9 @@
 					{/each}
 				{/snippet}
 			</DateRangePicker.Input>
-			<DateRangePicker.Trigger aria-label={`Choose ${label.toLowerCase()}`} class="calendar-trigger"
-				>⌄</DateRangePicker.Trigger
-			>
+			<DateRangePicker.Trigger aria-label={`Choose ${label.toLowerCase()}`} class="calendar-trigger">
+				<Icon name="disclosure" />
+			</DateRangePicker.Trigger>
 		</div>
 	</div>
 	<Portal disabled={portalTarget === undefined} to={portalTarget}>
@@ -127,16 +128,16 @@
 			>
 				{#snippet children({ months, weekdays })}
 					<DateRangePicker.Header class="calendar-header">
-						<DateRangePicker.PrevButton aria-label="Previous months" class="calendar-navigation"
-							>‹</DateRangePicker.PrevButton
-						>
+						<DateRangePicker.PrevButton aria-label="Previous months" class="calendar-navigation">
+							<Icon name="previous" />
+						</DateRangePicker.PrevButton>
 						<div class="calendar-selects">
 							<DateRangePicker.MonthSelect class="calendar-select" monthFormat="long" />
 							<DateRangePicker.YearSelect class="calendar-select" />
 						</div>
-						<DateRangePicker.NextButton aria-label="Next months" class="calendar-navigation"
-							>›</DateRangePicker.NextButton
-						>
+						<DateRangePicker.NextButton aria-label="Next months" class="calendar-navigation">
+							<Icon name="next" />
+						</DateRangePicker.NextButton>
 					</DateRangePicker.Header>
 					<div class="calendar-months">
 						{#each months as month (month.value.toString())}
@@ -181,7 +182,7 @@
 		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
 	}
 
-	.stay-date-separator {
+	:global(.stay-date-separator) {
 		color: var(--color-text-muted);
 	}
 
@@ -216,7 +217,7 @@
 			grid-template-columns: minmax(0, 1fr) auto;
 		}
 
-		.stay-date-separator {
+		:global(.stay-date-separator) {
 			display: none;
 		}
 

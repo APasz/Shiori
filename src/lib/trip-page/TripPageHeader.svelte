@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import ItineraryNowNext from '$lib/components/ItineraryNowNext.svelte';
 	import { clearOfflineTripPages } from '$lib/offline';
+	import Icon from '$lib/visuals/Icon.svelte';
 	import type { ConnectivityStatus, TripPageData } from './types';
 
 	let {
@@ -73,7 +74,7 @@
 		<button onclick={onExport} type="button">Export</button>
 		{#if canManageTrip}
 			<details bind:open={tripOverflowOpen} class="trip-overflow">
-				<summary aria-label="Trip options" title="Trip options">•••</summary>
+				<summary aria-label="Trip options" title="Trip options"><Icon name="more" /></summary>
 				<div class="trip-overflow-menu">
 					<button onclick={switchTrips} type="button">Switch trip</button>
 					{#if canModifyItinerary}

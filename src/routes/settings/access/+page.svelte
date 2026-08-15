@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
+	import Icon from '$lib/visuals/Icon.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -19,9 +20,9 @@
 <main>
 	<p>
 		{#if data.trip.slug === 'example'}
-			<a href={resolve('/')}>← {data.trip.itinerary.title}</a>
+			<a href={resolve('/')}><Icon name="back" /> {data.trip.itinerary.title}</a>
 		{:else}
-			<a href={resolve('/trips/[slug]', { slug: data.trip.slug })}>← {data.trip.itinerary.title}</a>
+			<a href={resolve('/trips/[slug]', { slug: data.trip.slug })}><Icon name="back" /> {data.trip.itinerary.title}</a>
 		{/if}
 	</p>
 	<h1>Access</h1>

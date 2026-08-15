@@ -7,6 +7,7 @@
 	import TimeZonePicker from '$lib/components/TimeZonePicker.svelte';
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import Icon from '$lib/visuals/Icon.svelte';
 
 	type PickerPresentation = 'popover' | 'dialog';
 	type DialogPlacement = 'center' | 'above-development-controls';
@@ -135,8 +136,9 @@
 								{segmentValue}
 							</DatePicker.Segment>
 						{/each}
-						<DatePicker.Trigger aria-label={`Open calendar for ${label}`} class="calendar-trigger">⌄</DatePicker.Trigger
-						>
+						<DatePicker.Trigger aria-label={`Open calendar for ${label}`} class="calendar-trigger">
+							<Icon name="disclosure" />
+						</DatePicker.Trigger>
 					{/snippet}
 				</DatePicker.Input>
 			</div>
@@ -153,12 +155,16 @@
 					<DatePicker.Calendar class="calendar-panel">
 						{#snippet children({ months, weekdays })}
 							<DatePicker.Header class="calendar-header">
-								<DatePicker.PrevButton aria-label="Previous month" class="calendar-navigation">‹</DatePicker.PrevButton>
+								<DatePicker.PrevButton aria-label="Previous month" class="calendar-navigation">
+									<Icon name="previous" />
+								</DatePicker.PrevButton>
 								<div class="calendar-selects">
 									<DatePicker.MonthSelect class="calendar-select" monthFormat="long" />
 									<DatePicker.YearSelect class="calendar-select" />
 								</div>
-								<DatePicker.NextButton aria-label="Next month" class="calendar-navigation">›</DatePicker.NextButton>
+								<DatePicker.NextButton aria-label="Next month" class="calendar-navigation">
+									<Icon name="next" />
+								</DatePicker.NextButton>
 							</DatePicker.Header>
 							<div class="calendar-months">
 								{#each months as month (month.value.toString())}

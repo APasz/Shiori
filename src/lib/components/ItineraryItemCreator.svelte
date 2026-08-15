@@ -24,6 +24,7 @@
 	import type { TransportJourneySchedule } from '$lib/itinerary/transport-schedule';
 	import { formatTimestampForTimeZoneInput } from '$lib/itinerary/zoned-time';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import Icon from '$lib/visuals/Icon.svelte';
 	import {
 		currencyCodeSchema,
 		reservationStatusSchema,
@@ -256,7 +257,7 @@
 		if (item.type === 'activity') {
 			return 'Activity details were detected.';
 		}
-		const route = item.locations.map((location) => location.name).join(' → ');
+		const route = item.locations.map((location) => location.name).join(' to ');
 		const service = item.transport.operator
 			? `${item.transport.operator}${item.transport.serviceNumber ? ` ${item.transport.serviceNumber}` : ''} · `
 			: item.transport.serviceNumber
@@ -944,7 +945,7 @@
 				{/if}
 				<label class="shiori-form-label">
 					Journey title <span class="field-hint">Optional; a route title is generated otherwise.</span>
-					<input class="shiori-form-control" bind:value={transportTitle} placeholder="Travel: Melbourne → Tokyo" />
+					<input class="shiori-form-control" bind:value={transportTitle} placeholder="Travel: Melbourne to Tokyo" />
 				</label>
 				{#if transportErrorMessage}<p class="error" role="alert">{transportErrorMessage}</p>{/if}
 				<div class="wizard-actions">
@@ -961,7 +962,7 @@
 			</p>
 			<section class="journey-summary" aria-label="Transport journey summary">
 				<strong>{journeyPreview()}</strong>
-				<p>{departure.name} <span aria-hidden="true">→</span> {arrival.name}</p>
+				<p>{departure.name} <Icon class="journey-direction" name="forward" size="1rem" /> {arrival.name}</p>
 				<dl>
 					<div>
 						<dt>Mode</dt>
@@ -1474,6 +1475,10 @@
 	.journey-summary p {
 		color: var(--color-text-secondary);
 		margin: 0;
+	}
+
+	:global(.journey-direction) {
+		vertical-align: -0.125em;
 	}
 
 	.journey-summary dl {

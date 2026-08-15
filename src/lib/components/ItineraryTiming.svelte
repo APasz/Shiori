@@ -7,10 +7,11 @@
 		formatAccommodationTimingParts,
 		formatItineraryTiming,
 		formatItineraryTimingForDay,
+		timingStartTimestamp,
 		type TimingDisplayPart
 	} from '$lib/itinerary/timing';
 	import type { ItineraryItem, ItineraryTiming } from '$lib/itinerary/schema';
-	import { timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
+	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 
 	let {
@@ -55,6 +56,7 @@
 	);
 	const localLabel = $derived(browserReady && !localParts ? formatTiming(timeZone, viewerContext.timeZone) : null);
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
+	const localTimeZoneOffset = $derived(timeZoneOffsetLabel(timeZone, timingStartTimestamp(timing)));
 
 	onMount(() => {
 		browserReady = true;
@@ -76,16 +78,19 @@
 	{/if}
 	{#if showLocalTime && (localParts || localLabel)}
 		{#if localParts}
-			<span class="local-time timing-parts">
+			<span class="local-time timing-parts" title={localTimeZoneOffset ?? undefined}>
 				{#each localParts as part (`${part.label ?? ''}:${part.value}`)}
 					<span class="timing-part">
 						<span>{part.value}</span>
 					</span>
 				{/each}
-				<span class="time-zone-label">{timeZoneShortLabel(timeZone)}</span>
+				<span class="time-zone-label">{timeZoneShortLabel(timeZone, timingStartTimestamp(timing))}</span>
 			</span>
 		{:else}
-			<span class="local-time">{localLabel} {timeZoneShortLabel(timeZone)}</span>
+			<span class="local-time" title={localTimeZoneOffset ?? undefined}>
+				{localLabel}
+				{timeZoneShortLabel(timeZone, timingStartTimestamp(timing))}
+			</span>
 		{/if}
 	{/if}
 </span>
