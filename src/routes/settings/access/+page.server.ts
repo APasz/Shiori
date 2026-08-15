@@ -1,18 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
-import {
-	createSharedUser,
-	forceReleaseTripEditLocks,
-	getTripView,
-	hasActiveTripEditSession,
-	listTripMembers,
-	setTripPublic,
-	StoreError,
-	type AuthenticatedUser,
-	type DetailedTripView,
-	type ShareRole
-} from '$lib/server/store';
+import { createSharedUser, listTripMembers, setTripPublic } from '$lib/server/store/members';
+import { forceReleaseTripEditLocks, hasActiveTripEditSession } from '$lib/server/store/edit-locks';
+import { StoreError } from '$lib/server/store/error';
+import type { AuthenticatedUser, ShareRole } from '$lib/server/store/model';
+import { getTripView } from '$lib/server/store/trips';
+import type { DetailedTripView } from '$lib/server/store/views';
 
 function sharedRole(value: string): ShareRole | null {
 	return value === 'user' || value === 'admin' ? value : null;

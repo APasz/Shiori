@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { itineraryItemImportRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
 import { GoogleItineraryImportError, resolveGoogleItineraryUrl } from '$lib/server/google-itinerary';
-import { assertTripOwnerAccess } from '$lib/server/store';
+import { assertTripOwnerAccess } from '$lib/server/store/trips';
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
 	const user = locals.user;

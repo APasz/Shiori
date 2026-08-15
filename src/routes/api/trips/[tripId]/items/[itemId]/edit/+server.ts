@@ -2,7 +2,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { editLockTokenRequestSchema, editSaveRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
-import { acquireItemLock, releaseItemLock, renewItemLock, saveItem } from '$lib/server/store';
+import { acquireItemLock, releaseItemLock, renewItemLock } from '$lib/server/store/edit-locks';
+import { saveItem } from '$lib/server/store/items';
 
 export const POST: RequestHandler = async ({ locals, params }) => {
 	const user = locals.user;

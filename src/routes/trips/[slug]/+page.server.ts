@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getTripView, listTripSwitchOptions, needsInitialSetup } from '$lib/server/store';
+import { needsInitialSetup } from '$lib/server/store/auth';
+import { getTripView, listTripSwitchOptions } from '$lib/server/store/trips';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const setupRequired = await needsInitialSetup();

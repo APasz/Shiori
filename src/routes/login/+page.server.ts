@@ -3,7 +3,8 @@ import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
 import { loginRateLimiter } from '$lib/server/login-rate-limit';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
-import { authenticate, createSession, needsInitialSetup } from '$lib/server/store';
+import { authenticate, needsInitialSetup } from '$lib/server/store/auth';
+import { createSession } from '$lib/server/store/sessions';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) {

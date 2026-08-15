@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { StoreError } from './store';
+import { StoreError } from './store/error';
 
 export function unauthenticatedEditResponse(): Response {
 	return json({ message: 'Sign in as the trip owner to edit an itinerary.' }, { status: 401 });

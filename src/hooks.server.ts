@@ -1,6 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { sessionCookieName } from '$lib/server/session';
-import { getSessionUser } from '$lib/server/store';
+import { getSessionUser } from '$lib/server/store/sessions';
 
 const securityHeaders = {
 	'cache-control': 'no-store',

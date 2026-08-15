@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { noteDeleteRequestSchema, noteSaveRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
-import { deleteNote, saveNote } from '$lib/server/store';
+import { deleteNote, saveNote } from '$lib/server/store/itinerary-mutations';
 
 export const PUT: RequestHandler = async ({ locals, params, request }) => {
 	if (!locals.user) {

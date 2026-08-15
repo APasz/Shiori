@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { itemCreateRequestSchema, itemMutationRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
-import { createItem, deleteItem } from '$lib/server/store';
+import { createItem, deleteItem } from '$lib/server/store/items';
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
 	if (!locals.user) {

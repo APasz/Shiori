@@ -5,7 +5,7 @@
 	import { formatLocalDay } from '$lib/itinerary/presentation';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
-	import type { TripSwitchOption } from '$lib/server/store';
+	import type { TripSwitchOption } from '$lib/server/store/views';
 
 	let {
 		currentSlug,

@@ -7,7 +7,7 @@ import { GoogleHotelPropertyResolveError, resolveGoogleHotelPropertyUrl } from '
 import { GoogleMapsResolveError, googleMapsSearchUrl, resolveGoogleMapsLocation } from '$lib/server/google-maps';
 import { lookupGoogleMapsPlace } from '$lib/server/google-places';
 import { OpenRailwayMapResolveError, parseOpenRailwayMapLocationUrl } from '$lib/server/openrailwaymap';
-import { assertTripOwnerAccess } from '$lib/server/store';
+import { assertTripOwnerAccess } from '$lib/server/store/trips';
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
 	const user = locals.user;

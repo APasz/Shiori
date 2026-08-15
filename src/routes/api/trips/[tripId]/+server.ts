@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { tripDetailsSaveRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
-import { saveTripDetails } from '$lib/server/store';
+import { saveTripDetails } from '$lib/server/store/itinerary-mutations';
 
 export const PUT: RequestHandler = async ({ locals, params, request }) => {
 	const user = locals.user;

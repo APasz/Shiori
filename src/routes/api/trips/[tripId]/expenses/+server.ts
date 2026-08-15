@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { expenseDeleteRequestSchema, expenseSaveRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
-import { createExpense, deleteExpense, saveExpense } from '$lib/server/store';
+import { createExpense, deleteExpense, saveExpense } from '$lib/server/store/itinerary-mutations';
 
 function invalidExpenseResponse(): Response {
 	return json({ message: 'The expense is invalid.' }, { status: 400 });

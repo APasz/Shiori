@@ -4,7 +4,9 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
-import { createInitialSudo, createSession, needsInitialSetup, StoreError } from '$lib/server/store';
+import { createInitialSudo, needsInitialSetup } from '$lib/server/store/auth';
+import { StoreError } from '$lib/server/store/error';
+import { createSession } from '$lib/server/store/sessions';
 
 const minimumSetupTokenLength = 32;
 

@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { tripCreateRequestSchema } from '$lib/editing/contracts';
 import { requestJson, storeErrorResponse } from '$lib/server/api';
-import { createTrip } from '$lib/server/store';
+import { createTrip } from '$lib/server/store/trips';
 
 export const POST: RequestHandler = async ({ locals, request }) => {
 	const user = locals.user;

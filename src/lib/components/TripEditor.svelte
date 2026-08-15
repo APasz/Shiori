@@ -5,7 +5,7 @@
 	import { currencyCodeSchema, tripDetailsSchema, type CurrencyCode, type TripDetails } from '$lib/itinerary/schema';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
-	import type { DetailedTripView } from '$lib/server/store';
+	import type { DetailedTripView } from '$lib/server/store/views';
 	import { formatValidationIssues } from '$lib/validation';
 	import TimeZonePicker from './TimeZonePicker.svelte';
 

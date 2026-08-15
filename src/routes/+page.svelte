@@ -30,7 +30,8 @@
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { clearOfflineTripPages, refreshOfflineTripPage } from '$lib/offline';
-	import type { AuthenticatedUser, DetailedTripView, TripSwitchOption, TripView } from '$lib/server/store';
+	import type { AuthenticatedUser } from '$lib/server/store/model';
+	import type { DetailedTripView, TripSwitchOption, TripView } from '$lib/server/store/views';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import { onMount } from 'svelte';
 
