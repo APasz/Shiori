@@ -26,6 +26,7 @@
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { amountInputValue, amountMinorFromInput, convertAmountMinor, formatMonetaryAmount } from '$lib/money';
 	import { refreshOfflineTripPage } from '$lib/offline';
+	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageData } from './$types';
 
@@ -230,6 +231,7 @@
 				expenseError = errorMessage(responseData, 'The expense could not be saved.');
 				return;
 			}
+			brandIconFeedback.publish('success');
 			expenseEditorMode = null;
 			editingExpense = null;
 			await invalidateAll();
@@ -264,6 +266,7 @@
 				expenseError = errorMessage(responseData, 'The expense could not be deleted.');
 				return;
 			}
+			brandIconFeedback.publish('success');
 			await invalidateAll();
 			refreshOfflineTripPage();
 		} catch {
@@ -418,7 +421,13 @@
 	trip={data.trip}
 />
 
-<main>
+<main
+	data-brand-feedback={expenseSaving || deletingExpenseId !== null || conversionStatus === 'loading'
+		? 'loading'
+		: conversionStatus === 'unavailable'
+			? 'warning'
+			: undefined}
+>
 	<header class="page-heading">
 		<PageTitle eyebrow={data.trip.itinerary.title} title="Costs" />
 	</header>

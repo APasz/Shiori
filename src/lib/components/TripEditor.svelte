@@ -15,6 +15,7 @@
 		type TripBackup
 	} from '$lib/trip-backup';
 	import { formatValidationIssues } from '$lib/validation';
+	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import TimeZonePicker from './TimeZonePicker.svelte';
 
 	type EditorState = 'editing' | 'importing' | 'saving';
@@ -173,6 +174,7 @@
 				errorMessage = errorFrom(data, 'The trip backup could not be imported.');
 				return;
 			}
+			brandIconFeedback.publish('success');
 			await props.onCompleted({ kind: 'created', slug: created.data.slug });
 		} catch {
 			editorState = 'editing';
@@ -204,6 +206,7 @@
 					errorMessage = errorFrom(data, 'The trip could not be created.');
 					return;
 				}
+				brandIconFeedback.publish('success');
 				await props.onCompleted({ kind: 'created', slug: created.data.slug });
 				return;
 			}
@@ -219,6 +222,7 @@
 				errorMessage = errorFrom(data, 'The trip details could not be saved.');
 				return;
 			}
+			brandIconFeedback.publish('success');
 			await props.onCompleted({ kind: 'saved' });
 		} catch {
 			editorState = 'editing';
@@ -251,7 +255,11 @@
 				<h2 id="trip-editor-heading">
 					{props.mode === 'create' ? 'Create a trip' : props.trip.itinerary.title}
 				</h2>
-				<p class:changed={hasUnsavedChanges} class="editor-status">
+				<p
+					class:changed={hasUnsavedChanges}
+					class="editor-status"
+					data-brand-feedback={editorState === 'editing' ? undefined : 'loading'}
+				>
 					{editorState === 'saving'
 						? 'Saving changes…'
 						: editorState === 'importing'

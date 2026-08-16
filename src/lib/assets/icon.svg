@@ -1,0 +1,140 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="840"
+  height="1456"
+  viewBox="0 0 840 1456"
+  role="img"
+  aria-label="Shiori logo"
+  style="
+  --bookmark-outline: var(--color-icon-bookmark-outline, #3a3a3c);
+  --route: var(--color-icon-route, #00e4ec);
+  --bookmark-background: var(--color-icon-bookmark-background, #000000);
+  "
+  >
+  <style>
+    .bookmark-outline {
+    fill: var(--bookmark-outline);
+    }
+
+    .bookmark-background {
+    fill: var(--bookmark-background);
+    }
+
+    .route {
+    fill: none;
+    stroke: var(--route);
+    stroke-width: 72;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    }
+
+    .route-node {
+    fill: var(--bookmark-background);
+    stroke: var(--route);
+    stroke-width: 38;
+    }
+    </style>
+
+    <!-- Outer bookmark line -->
+    <path
+      class="bookmark-outline"
+      fill-rule="evenodd"
+      d="
+      M 74 0
+      H 766
+      C 807 0 840 33 840 74
+      V 1384
+      C 840 1424 808 1456 768 1456
+      C 748 1456 730 1448 716 1434
+
+      L 420 1138
+      L 124 1434
+
+      C 110 1448 92 1456 72 1456
+      C 32 1456 0 1424 0 1384
+      V 74
+      C 0 33 33 0 74 0
+      Z
+
+      M 106 72
+      C 87 72 72 87 72 106
+      V 1304
+      C 72 1325 84 1338 104 1338
+      C 117 1338 128 1333 139 1322
+
+      L 420 1038
+      L 701 1322
+
+      C 712 1333 723 1338 736 1338
+      C 756 1338 768 1325 768 1304
+      V 106
+      C 768 87 753 72 734 72
+      H 106
+      Z
+      "
+      />
+
+    <!-- Bookmark inner/background -->
+    <path
+      class="bookmark-background"
+      d="
+      M 106 72
+      C 87 72 72 87 72 106
+      V 1304
+      C 72 1325 84 1338 104 1338
+      C 117 1338 128 1333 139 1322
+
+      L 420 1038
+      L 701 1322
+
+      C 712 1333 723 1338 736 1338
+      C 756 1338 768 1325 768 1304
+      V 106
+      C 768 87 753 72 734 72
+      H 106
+      Z
+      "
+      />
+
+    <!-- S-shaped route -->
+    <path
+      class="route"
+      d="
+      M 576 234
+      C 462 255 348 315 284 394
+      C 225 467 218 535 264 565
+      C 303 591 355 589 426 585
+      "
+      />
+
+    <path
+      class="route"
+      d="
+      M 426 585
+      C 520 590 581 637 575 711
+      C 566 817 450 917 222 968
+      "
+      />
+
+    <!-- Route points -->
+    <circle
+      class="route-node"
+      cx="576"
+      cy="234"
+      r="41"
+      />
+
+    <circle
+      class="route-node"
+      cx="426"
+      cy="585"
+      r="41"
+      />
+
+    <circle
+      class="route-node"
+      cx="222"
+      cy="968"
+      r="41"
+      />
+    </svg>

@@ -16,7 +16,7 @@
 
 <header class="page-heading">
 	{#if connectivityStatus === 'unreachable'}
-		<p class="offline-status" role="status">
+		<p class="offline-status" data-brand-feedback="warning" role="status">
 			Shiori is unreachable · showing the last saved itinerary. Changes require a connection.
 		</p>
 	{/if}

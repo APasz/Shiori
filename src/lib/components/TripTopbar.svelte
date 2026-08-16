@@ -5,6 +5,8 @@
 	import type { AuthenticatedUser } from '$lib/server/store/model';
 	import type { TripView } from '$lib/server/store/views';
 	import Icon from '$lib/visuals/Icon.svelte';
+	import ShioriIcon from '$lib/visuals/ShioriIcon.svelte';
+	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
 	type TopbarPage = 'access' | 'accounts' | 'costs' | 'itinerary' | 'notes' | 'trips';
@@ -94,6 +96,7 @@
 <header class="trip-topbar">
 	<div class="topbar-content">
 		<a aria-current={activePage === 'trips' ? 'page' : undefined} class="trip-identity" href={homeHref}>
+			<ShioriIcon eventId={brandIconFeedback.eventId} feedbackState={brandIconFeedback.state} size="1.75rem" />
 			<span class="product-name">Shiori</span>
 		</a>
 
@@ -204,7 +207,7 @@
 	}
 
 	.trip-identity {
-		align-items: baseline;
+		align-items: center;
 		color: inherit;
 		display: flex;
 		flex: 0 1 auto;

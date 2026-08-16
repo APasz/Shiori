@@ -25,6 +25,7 @@
 	import { formatTimestampForTimeZoneInput } from '$lib/itinerary/zoned-time';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import Icon from '$lib/visuals/Icon.svelte';
+	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import {
 		currencyCodeSchema,
 		reservationStatusSchema,
@@ -202,6 +203,7 @@
 				errorMessage = errorFrom(data, 'The link could not be imported.');
 				return;
 			}
+			brandIconFeedback.publish('success');
 			const [onlyImportedItem] = imported.data.items;
 			if (imported.data.items.length === 1 && onlyImportedItem?.type === 'accommodation') {
 				startAccommodationStay(onlyImportedItem);
@@ -503,6 +505,7 @@
 				return;
 			}
 			saved = true;
+			brandIconFeedback.publish('success');
 			await onAccommodationSaved();
 		} catch {
 			accommodationErrorMessage = 'The accommodation could not be saved because the server is unavailable.';
@@ -775,7 +778,11 @@
 	use:draggableDialog={{ handleSelector: '[data-dialog-drag-handle]' }}
 	onclose={onDismiss}
 >
-	<div class="creator" data-dialog-scroll-area>
+	<div
+		class="creator"
+		data-brand-feedback={creatorState === 'importing' || savingAccommodation ? 'loading' : undefined}
+		data-dialog-scroll-area
+	>
 		<header data-dialog-drag-handle>
 			<div>
 				<p class="eyebrow">New itinerary item</p>

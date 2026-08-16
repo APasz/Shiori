@@ -3,7 +3,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount, type Component } from 'svelte';
-	import favicon from '$lib/assets/favicon.svg';
+	import appIcon from '$lib/assets/icon.svg';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import '$lib/styles/dialogs.css';
@@ -11,6 +11,7 @@
 	import '$lib/styles/page-titles.css';
 	import { themeStyleTag } from '$lib/theme/palette';
 	import { themeInitializationScript } from '$lib/theme/theme';
+	import BrandFeedbackMonitor from '$lib/visuals/BrandFeedbackMonitor.svelte';
 	import { refreshOfflineTripPage, registerOfflineSupport } from '$lib/offline';
 
 	let { children } = $props();
@@ -45,7 +46,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href={appIcon} type="image/svg+xml" />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- The static theme initializer contains only local constants. -->
 	{@html themeInitializationScript}
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- The local palette is validated before rendering. -->
@@ -55,6 +56,8 @@
 {#if !hasInlineThemeToggle}
 	<ThemeToggle />
 {/if}
+
+<BrandFeedbackMonitor />
 
 {@render children()}
 

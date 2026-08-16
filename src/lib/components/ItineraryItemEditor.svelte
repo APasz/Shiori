@@ -40,6 +40,7 @@
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import { formatValidationIssues } from '$lib/validation';
+	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 
 	type EditorMode = 'create' | 'edit';
 	type EditorState = 'acquiring' | 'editing' | 'error' | 'saving';
@@ -970,6 +971,7 @@
 
 		lockToken = null;
 		stopHeartbeat();
+		brandIconFeedback.publish('success');
 		await onSaved();
 	}
 </script>
@@ -993,7 +995,11 @@
 				<p class="eyebrow">{mode === 'create' ? 'New itinerary item' : `Edit ${itemType}`}</p>
 				<h2 id="item-editor-heading">{mode === 'create' ? 'Add item' : item.title}</h2>
 				{#if editorState === 'editing' || editorState === 'saving'}
-					<p class:changed={hasUnsavedChanges} class="editor-status">
+					<p
+						class:changed={hasUnsavedChanges}
+						class="editor-status"
+						data-brand-feedback={editorState === 'saving' ? 'loading' : undefined}
+					>
 						{editorState === 'saving' ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
 					</p>
 				{/if}
@@ -1016,7 +1022,7 @@
 		</header>
 
 		{#if editorState === 'acquiring'}
-			<p>Acquiring edit lock…</p>
+			<p data-brand-feedback="loading">Acquiring edit lock…</p>
 		{:else if editorState === 'editing' || editorState === 'saving'}
 			<div class="editor-layout">
 				<nav aria-label="Edit sections" class="section-nav">

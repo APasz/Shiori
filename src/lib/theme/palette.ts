@@ -21,6 +21,11 @@ const themeVariantSchema = z.strictObject({
 		strong: hexColorSchema,
 		subtle: hexColorSchema
 	}),
+	icon: z.strictObject({
+		'bookmark-outline': hexColorSchema,
+		'bookmark-background': hexColorSchema,
+		route: hexColorSchema
+	}),
 	itemType: z.strictObject({
 		transport: hexColorSchema,
 		accommodation: hexColorSchema,
@@ -56,6 +61,7 @@ function themeVariables(variant: z.infer<typeof themeVariantSchema>): string {
 		['surface', variant.surface],
 		['text', variant.text],
 		['border', variant.border],
+		['icon', variant.icon],
 		['item-type', variant.itemType],
 		['state', variant.state],
 		['overlay', variant.overlay]

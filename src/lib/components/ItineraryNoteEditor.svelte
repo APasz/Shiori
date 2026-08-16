@@ -22,6 +22,7 @@
 		itineraryNoteTargetTitle
 	} from '$lib/itinerary/note-presentation';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import ItineraryNoteEntryEditor from './ItineraryNoteEntryEditor.svelte';
 	import TimeZonePicker from './TimeZonePicker.svelte';
 
@@ -107,6 +108,7 @@
 				errorMessage = result.error;
 				return;
 			}
+			brandIconFeedback.publish('success');
 			await onSaved();
 			dialogElement.close();
 		} catch {
@@ -129,6 +131,7 @@
 				errorMessage = result.error;
 				return;
 			}
+			brandIconFeedback.publish('success');
 			await onSaved();
 			dialogElement.close();
 		} catch {
@@ -157,7 +160,11 @@
 			<div>
 				<p class="eyebrow">{targetLabel}</p>
 				<h2 id="note-editor-heading">{targetTitle}</h2>
-				<p class:changed={hasUnsavedChanges} class="editor-status">
+				<p
+					class:changed={hasUnsavedChanges}
+					class="editor-status"
+					data-brand-feedback={editorState === 'editing' ? undefined : 'loading'}
+				>
 					{editorState === 'saving'
 						? 'Saving changes…'
 						: editorState === 'deleting'

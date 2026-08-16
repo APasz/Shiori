@@ -5,6 +5,7 @@ import type { ItineraryItem, ItineraryItemType } from '$lib/itinerary/schema';
 import { createTransportJourneyItem, type TransportJourneyDraft } from '$lib/itinerary/transport-journey';
 import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 import type { DetailedTripView } from '$lib/server/store/views';
+import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 import { refreshTripPage } from './refresh';
 import { itemMutationEndpoint } from './trip';
 import type { EditingItem } from './types';
@@ -135,6 +136,7 @@ export class ItineraryWorkflow {
 				this.mutationError = this.errorMessage(responseData, 'The itinerary item could not be deleted.');
 				return;
 			}
+			brandIconFeedback.publish('success');
 			if (this.selectedItemId === item.id) {
 				this.selectedItemId = null;
 			}
