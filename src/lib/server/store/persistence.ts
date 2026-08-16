@@ -37,6 +37,10 @@ type ReadStoredDataResult = {
 	migrationRequired: boolean;
 };
 type SessionData = Pick<StoredData, 'sessions' | 'users'>;
+type SessionTransactionResult<Result> = {
+	changed: boolean;
+	value: Result;
+};
 
 let transactionTail: Promise<void> = Promise.resolve();
 let startupLockCleanup: Promise<void> | undefined;
@@ -135,6 +139,17 @@ async function readStoredData(): Promise<ReadStoredDataResult> {
 		return readSplitStoredData();
 	}
 	return { data: defaultData(), migrationRequired: false };
+}
+
+async function readSessionData(): Promise<SessionData> {
+	if (!hasSplitData()) {
+		return { sessions: [], users: [] };
+	}
+
+	const [usersFile, sessionsFile] = await Promise.all([readJsonFile(usersDataPath), readJsonFile(sessionsDataPath)]);
+	const users = storedUsersFileSchema.parse(usersFile);
+	const sessions = storedSessionsFileSchema.parse(sessionsFile);
+	return { sessions: sessions.sessions, users: users.users };
 }
 
 async function synchronizeDirectory(directoryPath: string): Promise<void> {
@@ -238,9 +253,13 @@ async function clearPersistedEditLocksAtStartup(): Promise<void> {
 	await writeData(data);
 }
 
-export async function readData(): Promise<StoredData> {
+async function completeStartupLockCleanup(): Promise<void> {
 	startupLockCleanup ??= clearPersistedEditLocksAtStartup();
 	await startupLockCleanup;
+}
+
+export async function readData(): Promise<StoredData> {
+	await completeStartupLockCleanup();
 	return (await readStoredData()).data;
 }
 
@@ -271,13 +290,17 @@ export async function transaction<Result>(operation: (data: StoredData) => Promi
 }
 
 export async function sessionTransaction<Result>(
-	operation: (data: SessionData) => Promise<Result> | Result
+	operation: (data: SessionData) => Promise<SessionTransactionResult<Result>> | SessionTransactionResult<Result>
 ): Promise<Result> {
 	return runSerializedTransaction(async () => {
-		const data = await readData();
+		await completeStartupLockCleanup();
+		const data = await readSessionData();
+		const sessionCount = data.sessions.length;
 		data.sessions = data.sessions.filter((session) => !isExpired(session.expiresAt));
 		const result = await operation(data);
-		await writeSessions(data);
-		return result;
+		if (result.changed || data.sessions.length !== sessionCount) {
+			await writeSessions(data);
+		}
+		return result.value;
 	});
 }

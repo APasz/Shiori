@@ -30,13 +30,13 @@ describe('server hook', () => {
 		refreshSession.mockReset();
 	});
 
-	it('refreshes the browser cookie for an authenticated session', async () => {
+	it('refreshes the browser cookie when the authenticated session is renewed', async () => {
 		const cookies: TestCookies = {
 			delete: vi.fn(),
 			get: vi.fn(() => 'active-session'),
 			set: vi.fn()
 		};
-		refreshSession.mockResolvedValue({ id: 'user-1', username: 'owner' });
+		refreshSession.mockResolvedValue({ renewed: true, user: { id: 'user-1', username: 'owner' } });
 
 		await handle(handleInput(cookies));
 
@@ -48,6 +48,20 @@ describe('server hook', () => {
 			sameSite: 'lax',
 			secure: true
 		});
+		expect(cookies.delete).not.toHaveBeenCalled();
+	});
+
+	it('does not refresh the browser cookie before session renewal is due', async () => {
+		const cookies: TestCookies = {
+			delete: vi.fn(),
+			get: vi.fn(() => 'active-session'),
+			set: vi.fn()
+		};
+		refreshSession.mockResolvedValue({ renewed: false, user: { id: 'user-1', username: 'owner' } });
+
+		await handle(handleInput(cookies));
+
+		expect(cookies.set).not.toHaveBeenCalled();
 		expect(cookies.delete).not.toHaveBeenCalled();
 	});
 

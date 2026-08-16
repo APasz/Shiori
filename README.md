@@ -139,7 +139,8 @@ Accounts are global and do not receive access to a private trip by default. A su
 accounts at `/accounts`, then use `/settings/access` to grant read-only `user` or `admin`
 access to a specific trip or enable its public visitor schedule. Passwords are hashed with Node's
 `scrypt`; sessions are stored server-side and issued in HTTP-only cookies. Sessions expire after
-seven days of inactivity and renew while the account remains active.
+seven days without a persisted renewal; active sessions renew at most once every nine hours, so
+their effective idle timeout can be up to nine hours shorter than the browser's most recent request.
 
 Visitors receive only each item's start time, type, and title. Standard `user` accounts can view
 normal details, while documents, reservations, transport seat assignments, and platform data are

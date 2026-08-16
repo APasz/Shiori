@@ -12,10 +12,13 @@ const securityHeaders = {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(sessionCookieName);
-	event.locals.user = await refreshSession(sessionId);
+	const session = await refreshSession(sessionId);
+	event.locals.user = session?.user ?? null;
 
-	if (event.locals.user && sessionId) {
-		event.cookies.set(sessionCookieName, sessionId, sessionCookieOptions(event.url));
+	if (session && sessionId) {
+		if (session.renewed) {
+			event.cookies.set(sessionCookieName, sessionId, sessionCookieOptions(event.url));
+		}
 	} else if (sessionId) {
 		event.cookies.delete(sessionCookieName, { path: '/' });
 	}

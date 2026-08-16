@@ -507,27 +507,29 @@ describe('JSON store', () => {
 		expect(persisted).toMatchObject({ sessions: [] });
 	});
 
-	it('renews an active session for another seven days', async () => {
+	it('renews an active session every nine hours', async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
 
 		const store = await import('./store');
 		const user = await store.createInitialSudo('owner', 'a strong test password');
 		const sessionId = await store.createSession(user.id);
+		const beforeRefresh = await readFile(managedDataPath('sessions.json'), 'utf8');
 
-		vi.setSystemTime(new Date('2026-01-07T00:00:00.000Z'));
-		await expect(store.refreshSession(sessionId)).resolves.toEqual(user);
+		vi.setSystemTime(new Date('2026-01-01T08:59:00.000Z'));
+		await expect(store.refreshSession(sessionId)).resolves.toEqual({ renewed: false, user });
+		expect(await readFile(managedDataPath('sessions.json'), 'utf8')).toBe(beforeRefresh);
+
+		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
+		await expect(store.refreshSession(sessionId)).resolves.toEqual({ renewed: true, user });
 
 		const persisted: { sessions: Array<{ expiresAt: number; id: string }> } = JSON.parse(
 			await readFile(managedDataPath('sessions.json'), 'utf8')
 		);
 		expect(persisted.sessions.find((session) => session.id === sessionId)).toMatchObject({
-			expiresAt: Date.UTC(2026, 0, 14),
+			expiresAt: Date.UTC(2026, 0, 8, 9),
 			id: sessionId
 		});
-
-		vi.setSystemTime(new Date('2026-01-13T00:00:00.000Z'));
-		await expect(store.refreshSession(sessionId)).resolves.toEqual(user);
 	});
 
 	it('creates a private empty trip and updates its basic details', async () => {
