@@ -36,6 +36,7 @@ type ReadStoredDataResult = {
 	data: StoredData;
 	migrationRequired: boolean;
 };
+type SessionData = Pick<StoredData, 'sessions' | 'users'>;
 
 let transactionTail: Promise<void> = Promise.resolve();
 let startupLockCleanup: Promise<void> | undefined;
@@ -217,6 +218,11 @@ async function writeData(data: StoredData): Promise<void> {
 	]);
 }
 
+async function writeSessions(data: SessionData): Promise<void> {
+	const sessions = storedSessionsFileSchema.parse({ version: storedDataVersion, sessions: data.sessions });
+	await writeManagedJsonFile(sessionsDataPath, sessions);
+}
+
 function purgeExpiredRecords(data: StoredData): void {
 	data.sessions = data.sessions.filter((session) => !isExpired(session.expiresAt));
 	data.editLocks = data.editLocks.filter((lock) => !isExpired(lock.expiresAt));
@@ -238,7 +244,7 @@ export async function readData(): Promise<StoredData> {
 	return (await readStoredData()).data;
 }
 
-export async function transaction<Result>(operation: (data: StoredData) => Promise<Result> | Result): Promise<Result> {
+async function runSerializedTransaction<Result>(operation: () => Promise<Result>): Promise<Result> {
 	let release: (() => void) | undefined;
 	const nextTransaction = new Promise<void>((resolve) => {
 		release = resolve;
@@ -248,12 +254,30 @@ export async function transaction<Result>(operation: (data: StoredData) => Promi
 	await previousTransaction;
 
 	try {
+		return await operation();
+	} finally {
+		release?.();
+	}
+}
+
+export async function transaction<Result>(operation: (data: StoredData) => Promise<Result> | Result): Promise<Result> {
+	return runSerializedTransaction(async () => {
 		const data = await readData();
 		purgeExpiredRecords(data);
 		const result = await operation(data);
 		await writeData(data);
 		return result;
-	} finally {
-		release?.();
-	}
+	});
+}
+
+export async function sessionTransaction<Result>(
+	operation: (data: SessionData) => Promise<Result> | Result
+): Promise<Result> {
+	return runSerializedTransaction(async () => {
+		const data = await readData();
+		data.sessions = data.sessions.filter((session) => !isExpired(session.expiresAt));
+		const result = await operation(data);
+		await writeSessions(data);
+		return result;
+	});
 }

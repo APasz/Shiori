@@ -1,6 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
-import { sessionCookieName } from '$lib/server/session';
-import { getSessionUser } from '$lib/server/store/sessions';
+import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
+import { refreshSession } from '$lib/server/store/sessions';
 
 const securityHeaders = {
 	'cache-control': 'no-store',
@@ -12,9 +12,11 @@ const securityHeaders = {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(sessionCookieName);
-	event.locals.user = await getSessionUser(sessionId);
+	event.locals.user = await refreshSession(sessionId);
 
-	if (!event.locals.user && sessionId) {
+	if (event.locals.user && sessionId) {
+		event.cookies.set(sessionCookieName, sessionId, sessionCookieOptions(event.url));
+	} else if (sessionId) {
 		event.cookies.delete(sessionCookieName, { path: '/' });
 	}
 

@@ -424,6 +424,29 @@ describe('JSON store', () => {
 		expect(persisted).toMatchObject({ sessions: [] });
 	});
 
+	it('renews an active session for another seven days', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+		const store = await import('./store');
+		const user = await store.createInitialSudo('owner', 'a strong test password');
+		const sessionId = await store.createSession(user.id);
+
+		vi.setSystemTime(new Date('2026-01-07T00:00:00.000Z'));
+		await expect(store.refreshSession(sessionId)).resolves.toEqual(user);
+
+		const persisted: { sessions: Array<{ expiresAt: number; id: string }> } = JSON.parse(
+			await readFile(managedDataPath('sessions.json'), 'utf8')
+		);
+		expect(persisted.sessions.find((session) => session.id === sessionId)).toMatchObject({
+			expiresAt: Date.UTC(2026, 0, 14),
+			id: sessionId
+		});
+
+		vi.setSystemTime(new Date('2026-01-13T00:00:00.000Z'));
+		await expect(store.refreshSession(sessionId)).resolves.toEqual(user);
+	});
+
 	it('creates a private empty trip and updates its basic details', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
@@ -852,7 +875,7 @@ describe('JSON store', () => {
 			id: person.id,
 			username: person.username
 		});
-		await expect(store.getSessionUser(sessionId)).resolves.toBeNull();
+		await expect(store.refreshSession(sessionId)).resolves.toBeNull();
 
 		await store.removeTripAccess({ actorId: owner.id, tripId: trip.id, userId: person.id });
 		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
@@ -886,7 +909,7 @@ describe('JSON store', () => {
 		await store.deleteAccount({ actorId: owner.id, userId: person.id });
 
 		await expect(store.listAccounts(owner.id)).resolves.toEqual([owner]);
-		await expect(store.getSessionUser(sessionId)).resolves.toBeNull();
+		await expect(store.refreshSession(sessionId)).resolves.toBeNull();
 		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
 		await expect(store.deleteAccount({ actorId: owner.id, userId: owner.id })).rejects.toMatchObject({ status: 409 });
 	});

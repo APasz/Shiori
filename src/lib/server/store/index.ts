@@ -37,7 +37,7 @@ export {
 	setTripMemberAccess,
 	setTripPublic
 } from './members';
-export { createSession, destroySession, getSessionUser } from './sessions';
+export { createSession, destroySession, refreshSession } from './sessions';
 export { assertTripOwnerAccess, createTrip, getTripView, listOwnedTripOptions, listTripSwitchOptions } from './trips';
 export type { AccountManagementEntry, AuthenticatedUser, ShareRole } from './model';
 export type {

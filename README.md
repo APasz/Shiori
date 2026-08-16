@@ -134,7 +134,8 @@ duplicate requests are coalesced and a `429` response is retried once after `Ret
 Accounts are global and do not receive access to a private trip by default. A sudo user can create
 accounts at `/accounts`, then use `/settings/access` to grant read-only `user` or `admin`
 access to a specific trip or enable its public visitor schedule. Passwords are hashed with Node's
-`scrypt`; sessions are stored server-side and issued in HTTP-only cookies.
+`scrypt`; sessions are stored server-side and issued in HTTP-only cookies. Sessions expire after
+seven days of inactivity and renew while the account remains active.
 
 Visitors receive only each item's start time, type, and title. Standard `user` accounts can view
 normal details, while documents, reservations, transport seat assignments, and platform data are

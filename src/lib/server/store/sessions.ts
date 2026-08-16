@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { sessionLifetimeMilliseconds } from '../session';
 import { StoreError } from './error';
 import type { AuthenticatedUser } from './model';
-import { readData, transaction } from './persistence';
+import { sessionTransaction, transaction } from './persistence';
 import { futureTimestamp, isExpired } from './time';
-
-const sessionLifetimeMilliseconds = 7 * 24 * 60 * 60 * 1000;
 
 export async function createSession(userId: string): Promise<string> {
 	return transaction((data) => {
@@ -22,19 +21,26 @@ export async function createSession(userId: string): Promise<string> {
 	});
 }
 
-export async function getSessionUser(sessionId: string | undefined): Promise<AuthenticatedUser | null> {
+/** Validates an active session and restarts its seven-day idle timeout. */
+export async function refreshSession(sessionId: string | undefined): Promise<AuthenticatedUser | null> {
 	if (!sessionId) {
 		return null;
 	}
 
-	const data = await readData();
-	const session = data.sessions.find((candidate) => candidate.id === sessionId && !isExpired(candidate.expiresAt));
-	if (!session) {
-		return null;
-	}
+	return sessionTransaction((data) => {
+		const session = data.sessions.find((candidate) => candidate.id === sessionId && !isExpired(candidate.expiresAt));
+		if (!session) {
+			return null;
+		}
 
-	const user = data.users.find((candidate) => candidate.id === session.userId);
-	return user ? { id: user.id, username: user.username } : null;
+		const user = data.users.find((candidate) => candidate.id === session.userId);
+		if (!user) {
+			return null;
+		}
+
+		session.expiresAt = futureTimestamp(sessionLifetimeMilliseconds);
+		return { id: user.id, username: user.username };
+	});
 }
 
 export async function destroySession(sessionId: string | undefined): Promise<void> {
