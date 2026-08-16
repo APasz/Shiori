@@ -39,8 +39,12 @@ function newStoredUser(account: { passwordHash: string; username: string }): Sto
 	});
 }
 
-function assertAccountManager(data: StoredData, actorId: string): void {
-	if (!data.trips.some((trip) => trip.ownerId === actorId)) {
+export function isAccountManager(data: StoredData, userId: string): boolean {
+	return data.trips.some((trip) => trip.ownerId === userId);
+}
+
+export function assertAccountManager(data: StoredData, actorId: string): void {
+	if (!isAccountManager(data, actorId)) {
 		throw new StoreError(403, 'Only a sudo owner can manage accounts.');
 	}
 }

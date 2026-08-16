@@ -12,6 +12,7 @@ export { StoreError } from './error';
 export {
 	acquireItemLock,
 	acquireTripStructureLock,
+	forceReleaseAllEditLocks,
 	forceReleaseTripEditLocks,
 	hasActiveTripEditSession,
 	releaseItemLock,
@@ -37,7 +38,7 @@ export {
 	setTripMemberAccess,
 	setTripPublic
 } from './members';
-export { createSession, destroySession, refreshSession } from './sessions';
+export { createSession, destroySession, listActiveSessionUsers, refreshSession } from './sessions';
 export {
 	assertTripOwnerAccess,
 	createTrip,
@@ -47,6 +48,7 @@ export {
 	listOwnedTripOptions,
 	listTripSwitchOptions
 } from './trips';
+export type { ActiveSessionUser } from './sessions';
 export type { AccountManagementEntry, AuthenticatedUser, ShareRole, TripMemberRole } from './model';
 export type {
 	DetailedTripAccessRole,

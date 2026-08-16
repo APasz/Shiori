@@ -539,6 +539,33 @@ describe('JSON store', () => {
 		});
 	});
 
+	it('lists signed-in users by their most recent session renewal', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		await createTestTrip(store, owner.id);
+		const member = await store.createAccount({
+			actorId: owner.id,
+			password: 'another strong password',
+			username: 'member'
+		});
+		await store.createSession(owner.id);
+
+		vi.setSystemTime(new Date('2026-01-01T01:00:00.000Z'));
+		await store.createSession(member.id);
+
+		await expect(store.listActiveSessionUsers(owner.id)).resolves.toEqual([
+			{ id: member.id, lastSeenAt: Date.UTC(2026, 0, 1, 1), username: 'member' },
+			{ id: owner.id, lastSeenAt: Date.UTC(2026, 0, 1), username: 'owner' }
+		]);
+		await expect(store.listActiveSessionUsers(member.id)).rejects.toMatchObject({ status: 403 });
+
+		vi.setSystemTime(new Date('2026-01-09T00:00:00.000Z'));
+		await expect(store.listActiveSessionUsers(owner.id)).resolves.toEqual([]);
+	});
+
 	it('creates a private empty trip and updates its basic details', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
@@ -1113,6 +1140,28 @@ describe('JSON store', () => {
 				userId: user.id
 			})
 		).resolves.toMatchObject({ revisionAtStart: trip.revision });
+	});
+
+	it('lets a sudo owner close all active edit sessions', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const firstTrip = await createTestTrip(store, owner.id);
+		const secondTrip = await store.createTrip({
+			details: { title: 'Second trip', timeZone: 'UTC' },
+			ownerId: owner.id
+		});
+		const member = await store.createAccount({
+			actorId: owner.id,
+			password: 'another strong password',
+			username: 'trip-member'
+		});
+		await store.acquireTripStructureLock({ tripId: firstTrip.id, userId: owner.id });
+		await store.acquireTripStructureLock({ tripId: secondTrip.id, userId: owner.id });
+
+		await expect(store.forceReleaseAllEditLocks(member.id)).rejects.toMatchObject({ status: 403 });
+		await expect(store.forceReleaseAllEditLocks(owner.id)).resolves.toEqual({ released: 2 });
+		await expect(store.hasActiveTripEditSession({ tripId: firstTrip.id, userId: owner.id })).resolves.toBe(false);
+		await expect(store.hasActiveTripEditSession({ tripId: secondTrip.id, userId: owner.id })).resolves.toBe(false);
 	});
 
 	it('creates and deletes an itinerary item through revisioned lifecycle operations', async () => {

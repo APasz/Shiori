@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { assertAccountManager } from './auth';
 import { StoreError } from './error';
 import { tripStructureLockTargetId, type StoredData, type StoredEditLock } from './model';
 import { readData, transaction } from './persistence';
@@ -118,6 +119,15 @@ export async function forceReleaseTripEditLocks(input: {
 		const trip = getTripForMutation(data, input.tripId, input.userId);
 		const released = data.editLocks.filter((lock) => lock.tripId === trip.id).length;
 		data.editLocks = data.editLocks.filter((lock) => lock.tripId !== trip.id);
+		return { released };
+	});
+}
+
+export async function forceReleaseAllEditLocks(userId: string): Promise<{ released: number }> {
+	return transaction((data) => {
+		assertAccountManager(data, userId);
+		const released = data.editLocks.length;
+		data.editLocks = [];
 		return { released };
 	});
 }

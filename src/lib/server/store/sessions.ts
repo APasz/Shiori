@@ -1,13 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { isSessionRefreshDue, sessionLifetimeMilliseconds } from '../session';
+import { assertAccountManager } from './auth';
 import { StoreError } from './error';
 import type { AuthenticatedUser } from './model';
-import { sessionTransaction, transaction } from './persistence';
+import { readData, sessionTransaction, transaction } from './persistence';
 import { futureTimestamp, isExpired } from './time';
 
 export type SessionRefresh = {
 	renewed: boolean;
 	user: AuthenticatedUser;
+};
+
+export type ActiveSessionUser = AuthenticatedUser & {
+	lastSeenAt: number;
 };
 
 export async function createSession(userId: string): Promise<string> {
@@ -60,4 +65,28 @@ export async function destroySession(sessionId: string | undefined): Promise<voi
 	await transaction((data) => {
 		data.sessions = data.sessions.filter((session) => session.id !== sessionId);
 	});
+}
+
+/** Lists signed-in users with the timestamp from their most recently renewed session. */
+export async function listActiveSessionUsers(actorId: string): Promise<ActiveSessionUser[]> {
+	const data = await readData();
+	assertAccountManager(data, actorId);
+	const lastSeenByUserId = new Map<string, number>();
+	for (const session of data.sessions) {
+		if (isExpired(session.expiresAt)) {
+			continue;
+		}
+		const lastSeenAt = session.expiresAt - sessionLifetimeMilliseconds;
+		const previousLastSeenAt = lastSeenByUserId.get(session.userId);
+		if (previousLastSeenAt === undefined || lastSeenAt > previousLastSeenAt) {
+			lastSeenByUserId.set(session.userId, lastSeenAt);
+		}
+	}
+
+	return data.users
+		.flatMap((user) => {
+			const lastSeenAt = lastSeenByUserId.get(user.id);
+			return lastSeenAt === undefined ? [] : [{ id: user.id, username: user.username, lastSeenAt }];
+		})
+		.sort((left, right) => right.lastSeenAt - left.lastSeenAt || left.username.localeCompare(right.username));
 }

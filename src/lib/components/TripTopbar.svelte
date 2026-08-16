@@ -9,7 +9,7 @@
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
-	type TopbarPage = 'access' | 'accounts' | 'costs' | 'itinerary' | 'notes' | 'trips';
+	type TopbarPage = 'access' | 'accounts' | 'admin' | 'costs' | 'itinerary' | 'notes' | 'trips';
 	type TopbarTrip = Pick<TripView, 'access' | 'itinerary' | 'slug'>;
 	type TopbarUser = Pick<AuthenticatedUser, 'username'>;
 
@@ -165,6 +165,15 @@
 						<Icon name="disclosure" size="0.875rem" />
 					</summary>
 					<div class="topbar-menu">
+						{#if canManageAccounts}
+							<a
+								aria-current={activePage === 'admin' ? 'page' : undefined}
+								href={resolve('/admin')}
+								onclick={() => (accountMenuOpen = false)}
+							>
+								Admin
+							</a>
+						{/if}
 						{#if canManageAccounts}
 							<a
 								aria-current={activePage === 'accounts' ? 'page' : undefined}
