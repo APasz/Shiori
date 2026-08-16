@@ -26,6 +26,7 @@
 	const canModifyItinerary = $derived(detailedTrip?.canEdit === true && connectivity.status === 'reachable');
 	const itinerary = $derived(data.trip.itinerary);
 	const notesEndpoint = $derived(resolve('/api/trips/[tripId]/notes', { tripId: data.trip.id }));
+	const tripBackupTripId = $derived(canModifyItinerary ? data.trip.id : undefined);
 	const itemWorkflow = new ItineraryWorkflow({
 		canModify: () => canModifyItinerary,
 		detailedTrip: () => detailedTrip
@@ -85,6 +86,7 @@
 	{canModifyItinerary}
 	currentUser={data.currentUser}
 	isOffline={connectivity.status === 'unreachable'}
+	backupTripId={tripBackupTripId}
 	onEditTrip={beginEditingTrip}
 	onExport={() => (exportingItinerary = true)}
 	trip={data.trip}

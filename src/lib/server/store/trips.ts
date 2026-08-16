@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { projectDetailedItinerary, projectPublicItinerary, type TripAccessRole } from '$lib/itinerary/access';
 import { itinerarySchema, tripDetailsSchema, type Itinerary } from '$lib/itinerary/schema';
+import { createTripBackup, tripBackupSchema, type TripBackup } from '$lib/trip-backup';
 import { timingStartTimestamp } from '$lib/itinerary/timing';
 import { StoreError } from './error';
 import type { AuthenticatedUser, StoredData, StoredTrip } from './model';
@@ -99,6 +100,29 @@ function uniqueTripSlug(trips: StoredTrip[], title: string): string {
 	}
 }
 
+function assertTripOwnerExists(data: StoredData, ownerId: string): void {
+	if (!data.users.some((user) => user.id === ownerId)) {
+		throw new StoreError(401, 'The signed-in account no longer exists.');
+	}
+}
+
+function addTrip(data: StoredData, ownerId: string, itinerary: Itinerary): TripReference {
+	assertTripOwnerExists(data, ownerId);
+	const createdAt = timestamp();
+	const trip: StoredTrip = {
+		id: randomUUID(),
+		slug: uniqueTripSlug(data.trips, itinerary.title),
+		ownerId,
+		isPublic: false,
+		revision: 0,
+		itinerary,
+		createdAt,
+		updatedAt: createdAt
+	};
+	data.trips.push(trip);
+	return { id: trip.id, slug: trip.slug };
+}
+
 function latestItemStartAt(itinerary: Itinerary): number | null {
 	if (itinerary.items.length === 0) {
 		return null;
@@ -166,25 +190,20 @@ export async function getTripView(slug: string, user: AuthenticatedUser | null):
 export async function createTrip(input: { details: unknown; ownerId: string }): Promise<TripReference> {
 	const details = tripDetailsSchema.parse(input.details);
 
-	return transaction((data) => {
-		if (!data.users.some((user) => user.id === input.ownerId)) {
-			throw new StoreError(401, 'The signed-in account no longer exists.');
-		}
+	return transaction((data) => addTrip(data, input.ownerId, { ...details, expenses: [], items: [], notes: [] }));
+}
 
-		const createdAt = timestamp();
-		const trip: StoredTrip = {
-			id: randomUUID(),
-			slug: uniqueTripSlug(data.trips, details.title),
-			ownerId: input.ownerId,
-			isPublic: false,
-			revision: 0,
-			itinerary: { ...details, expenses: [], items: [], notes: [] },
-			createdAt,
-			updatedAt: createdAt
-		};
-		data.trips.push(trip);
-		return { id: trip.id, slug: trip.slug };
-	});
+/** Returns a complete backup only to the trip owner, never to shared users or visitors. */
+export async function exportTripBackup(input: { tripId: string; userId: string }): Promise<TripBackup> {
+	const data = await readData();
+	const trip = getTripForMutation(data, input.tripId, input.userId);
+	return createTripBackup(trip.itinerary, timestamp());
+}
+
+/** Restores an itinerary as a new private trip owned by the importing account. */
+export async function importTripBackup(input: { backup: TripBackup; ownerId: string }): Promise<TripReference> {
+	const backup = tripBackupSchema.parse(input.backup);
+	return transaction((data) => addTrip(data, input.ownerId, backup.itinerary));
 }
 
 export async function listTripSwitchOptions(userId: string): Promise<TripSwitchOption[]> {

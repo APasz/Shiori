@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyItineraryItem } from '../itinerary/draft';
+import { itinerarySchema } from '../itinerary/schema';
+import { createTripBackup } from '../trip-backup';
 
 let dataDirectory = '';
 
@@ -97,6 +99,87 @@ describe('JSON store', () => {
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 
 		await expect(store.listTripSwitchOptions(owner.id)).resolves.toEqual([]);
+	});
+
+	it('restores a backup as a new private trip without changing itinerary data', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const sourceItinerary = itinerarySchema.parse({
+			expenses: [
+				{
+					amountMinor: 12_500,
+					availableForItemCosts: true,
+					category: 'transport',
+					currency: 'USD',
+					id: 'rail-pass',
+					paidDate: '2026-04-03',
+					status: 'paid',
+					title: 'Rail pass',
+					useDate: '2026-04-12'
+				}
+			],
+			items: [
+				{
+					id: 'train-to-kyoto',
+					linkedExpenseIds: ['rail-pass'],
+					locations: [
+						{ id: 'tokyo', name: 'Tokyo Station', role: 'departure' },
+						{ id: 'kyoto', name: 'Kyoto Station', role: 'arrival' }
+					],
+					notes: ['Bring the rail pass.'],
+					timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 0, 0) },
+					title: 'Shinkansen to Kyoto',
+					transport: {
+						mode: 'rail',
+						stops: [{ locationId: 'tokyo', platform: '20' }, { locationId: 'kyoto' }]
+					},
+					type: 'transport'
+				}
+			],
+			localCurrency: 'AUD',
+			notes: [
+				{
+					entries: [
+						{
+							estimatedCosts: [{ amountMinor: 3_500, currency: 'JPY', id: 'museum-entry-cost' }],
+							id: 'museum-entry',
+							links: [],
+							state: 'shortlisted',
+							title: 'Museum option'
+						}
+					],
+					kind: 'trip',
+					text: 'Keep the second afternoon flexible.',
+					timeZone: 'Asia/Tokyo'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Japan 2026'
+		});
+
+		const imported = await store.importTripBackup({
+			backup: createTripBackup(sourceItinerary, Date.UTC(2026, 3, 1)),
+			ownerId: owner.id
+		});
+		const restored = await store.getTripView(imported.slug, owner);
+		const reexported = await store.exportTripBackup({ tripId: imported.id, userId: owner.id });
+		const sharedUser = await store.createAccount({
+			actorId: owner.id,
+			password: 'a second strong test password',
+			username: 'shared-user'
+		});
+
+		expect(restored).toMatchObject({
+			access: 'sudo',
+			canEdit: true,
+			isPublic: false,
+			revision: 0,
+			itinerary: sourceItinerary
+		});
+		expect(reexported.itinerary).toEqual(sourceItinerary);
+		await expect(store.exportTripBackup({ tripId: imported.id, userId: sharedUser.id })).rejects.toMatchObject({
+			status: 403
+		});
 	});
 
 	it('persists global domains and trips as separate four-space JSON files', async () => {

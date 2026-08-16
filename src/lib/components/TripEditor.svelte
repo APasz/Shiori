@@ -6,10 +6,18 @@
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
 	import type { DetailedTripView } from '$lib/server/store/views';
+	import {
+		maximumTripBackupBytes,
+		maximumTripBackupSizeLabel,
+		tripBackupFileExtension,
+		tripBackupMediaType,
+		validateTripBackup,
+		type TripBackup
+	} from '$lib/trip-backup';
 	import { formatValidationIssues } from '$lib/validation';
 	import TimeZonePicker from './TimeZonePicker.svelte';
 
-	type EditorState = 'editing' | 'saving';
+	type EditorState = 'editing' | 'importing' | 'saving';
 	type CreatedTripCompletion = { readonly kind: 'created'; readonly slug: string };
 	type SavedTripCompletion = { readonly kind: 'saved' };
 	type TripDetailsValidation =
@@ -38,6 +46,9 @@
 	let editorState = $state<EditorState>('editing');
 	let errorMessage = $state('');
 	let initialDraftFingerprint = $state<string | null>(null);
+	let backupFileInput = $state<HTMLInputElement | null>(null);
+	let selectedBackup = $state<TripBackup | null>(null);
+	let selectedBackupFileName = $state('');
 
 	const draftFingerprint = $derived(JSON.stringify(detailsCandidate()));
 	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
@@ -100,6 +111,72 @@
 	function cancelEditing(): void {
 		if (confirmDiscard()) {
 			dialogElement.close();
+		}
+	}
+
+	function chooseBackupFile(): void {
+		backupFileInput?.click();
+	}
+
+	async function selectBackupFile(event: Event): Promise<void> {
+		if (!(event.currentTarget instanceof HTMLInputElement)) {
+			throw new Error('The trip backup selection did not originate from a file input.');
+		}
+
+		const file = event.currentTarget.files?.item(0);
+		event.currentTarget.value = '';
+		if (!file) {
+			return;
+		}
+		if (file.size > maximumTripBackupBytes) {
+			selectedBackup = null;
+			selectedBackupFileName = '';
+			errorMessage = `Choose a trip backup no larger than ${maximumTripBackupSizeLabel}.`;
+			return;
+		}
+
+		try {
+			const validation = validateTripBackup(JSON.parse(await file.text()));
+			if (!validation.valid) {
+				selectedBackup = null;
+				selectedBackupFileName = '';
+				errorMessage = validation.message;
+				return;
+			}
+			selectedBackup = validation.backup;
+			selectedBackupFileName = file.name;
+			errorMessage = '';
+		} catch {
+			selectedBackup = null;
+			selectedBackupFileName = '';
+			errorMessage = 'Select a valid Shiori trip backup.';
+		}
+	}
+
+	async function importSelectedBackup(): Promise<void> {
+		if (props.mode !== 'create' || !selectedBackup) {
+			return;
+		}
+
+		editorState = 'importing';
+		errorMessage = '';
+		try {
+			const response = await fetch('/api/trips/import', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(selectedBackup)
+			});
+			const data = await responseData(response);
+			const created = tripCreateResponseSchema.safeParse(data);
+			if (!response.ok || !created.success) {
+				editorState = 'editing';
+				errorMessage = errorFrom(data, 'The trip backup could not be imported.');
+				return;
+			}
+			await props.onCompleted({ kind: 'created', slug: created.data.slug });
+		} catch {
+			editorState = 'editing';
+			errorMessage = 'The trip backup could not be imported because the server is unavailable.';
 		}
 	}
 
@@ -175,16 +252,22 @@
 					{props.mode === 'create' ? 'Create a trip' : props.trip.itinerary.title}
 				</h2>
 				<p class:changed={hasUnsavedChanges} class="editor-status">
-					{editorState === 'saving' ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
+					{editorState === 'saving'
+						? 'Saving changes…'
+						: editorState === 'importing'
+							? 'Importing trip…'
+							: hasUnsavedChanges
+								? 'Unsaved changes'
+								: 'All changes saved'}
 				</p>
 			</div>
 			<div class="editor-actions">
-				<button class="save-button shiori-form-button" disabled={editorState === 'saving'} type="submit">
+				<button class="save-button shiori-form-button" disabled={editorState !== 'editing'} type="submit">
 					{editorState === 'saving' ? 'Saving…' : props.mode === 'create' ? 'Create trip' : 'Save changes'}
 				</button>
 				<button
 					class="close-button shiori-form-button"
-					disabled={editorState === 'saving'}
+					disabled={editorState !== 'editing'}
 					onclick={cancelEditing}
 					type="button"
 				>
@@ -216,6 +299,54 @@
 				{/each}
 			</select>
 		</label>
+		{#if props.mode === 'create'}
+			<section aria-labelledby="trip-backup-heading" class="backup-import">
+				<div>
+					<h3 id="trip-backup-heading">Import Trip</h3>
+					<p>Restore a <code>.{tripBackupFileExtension}</code> file as a new private trip.</p>
+				</div>
+				{#if selectedBackup}
+					<p class="backup-summary">
+						Ready to import <strong>{selectedBackup.itinerary.title}</strong> from {selectedBackupFileName} with
+						{selectedBackup.itinerary.items.length} itinerary
+						{selectedBackup.itinerary.items.length === 1 ? 'item' : 'items'}.
+					</p>
+					<div class="backup-actions">
+						<button
+							class="import-button shiori-form-button"
+							disabled={editorState !== 'editing'}
+							onclick={importSelectedBackup}
+							type="button"
+						>
+							{editorState === 'importing' ? 'Importing…' : 'Import trip'}
+						</button>
+						<button
+							class="choose-backup-button shiori-form-button"
+							disabled={editorState !== 'editing'}
+							onclick={chooseBackupFile}
+							type="button"
+						>
+							Choose another file
+						</button>
+					</div>
+				{:else}
+					<button
+						class="choose-backup-button shiori-form-button"
+						disabled={editorState !== 'editing'}
+						onclick={chooseBackupFile}
+						type="button"
+					>
+						Import Trip
+					</button>
+				{/if}
+				<input
+					bind:this={backupFileInput}
+					accept={`${tripBackupMediaType},.${tripBackupFileExtension}`}
+					onchange={selectBackupFile}
+					type="file"
+				/>
+			</section>
+		{/if}
 		{#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
 	</form>
 </dialog>
@@ -294,6 +425,51 @@
 	.error {
 		color: var(--color-state-error);
 		margin: 0;
+	}
+
+	.backup-import {
+		border-top: 1px solid var(--color-border-default);
+		display: grid;
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+		padding-top: 1rem;
+	}
+
+	.backup-import h3,
+	.backup-import p {
+		margin: 0;
+	}
+
+	.backup-import h3 {
+		font-size: 0.9375rem;
+	}
+
+	.backup-import p {
+		color: var(--color-text-secondary);
+		font-size: 0.8125rem;
+		line-height: 1.4;
+	}
+
+	.backup-import .backup-summary {
+		color: var(--color-text-primary);
+	}
+
+	.backup-import input[type='file'] {
+		display: none;
+	}
+
+	.backup-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.import-button {
+		background: var(--color-surface-subtle);
+	}
+
+	.choose-backup-button {
+		border-color: var(--color-border-strong);
 	}
 
 	@media (max-width: 32rem) {

@@ -17,6 +17,7 @@
 		canModifyItinerary = false,
 		currentUser,
 		isOffline = false,
+		backupTripId,
 		onEditTrip,
 		onExport,
 		trip = undefined
@@ -26,6 +27,7 @@
 		canModifyItinerary?: boolean;
 		currentUser: TopbarUser | null;
 		isOffline?: boolean;
+		backupTripId?: string;
 		onEditTrip?: () => void;
 		onExport?: () => void;
 		trip?: TopbarTrip;
@@ -132,14 +134,24 @@
 			{#if isOffline}
 				<span class="connection-status" role="status">Offline</span>
 			{/if}
-			{#if onExport}
-				<button class="export-button" onclick={onExport} type="button">Export</button>
-			{/if}
-			{#if trip && canModifyItinerary && onEditTrip}
+			{#if trip && (backupTripId || onExport || (canModifyItinerary && onEditTrip))}
 				<details bind:this={tripMenuElement} bind:open={tripMenuOpen} class="trip-menu" ontoggle={synchronizeTripMenu}>
 					<summary aria-label="Trip options" title="Trip options"><Icon name="more" /></summary>
 					<div class="topbar-menu">
-						<button onclick={() => runTripAction(onEditTrip)} type="button">Edit trip</button>
+						{#if canModifyItinerary && onEditTrip}
+							<button onclick={() => runTripAction(onEditTrip)} type="button">Edit trip</button>
+						{/if}
+						{#if backupTripId}
+							<a
+								href={resolve('/api/trips/[tripId]/backup', { tripId: backupTripId })}
+								onclick={() => (tripMenuOpen = false)}
+							>
+								Back up trip
+							</a>
+						{/if}
+						{#if onExport}
+							<button onclick={() => runTripAction(onExport)} type="button">Export itinerary</button>
+						{/if}
 					</div>
 				</details>
 			{/if}
@@ -211,7 +223,6 @@
 	}
 
 	.section-nav a,
-	.export-button,
 	.sign-in-link,
 	.trip-menu summary,
 	.account-menu summary {
@@ -273,17 +284,12 @@
 		width: 0.5rem;
 	}
 
-	.export-button,
 	.sign-in-link,
 	.trip-menu summary,
 	.account-menu summary {
 		border-color: var(--color-border-default);
 		border-radius: 0.25rem;
 		cursor: pointer;
-	}
-
-	.export-button {
-		font-weight: 700;
 	}
 
 	.trip-menu,
@@ -339,6 +345,7 @@
 		z-index: 1;
 	}
 
+	.topbar-menu a,
 	.topbar-menu button {
 		background: transparent;
 		border: 0;
@@ -351,9 +358,9 @@
 		text-decoration: none;
 	}
 
+	.topbar-menu a:hover,
 	.topbar-menu button:hover,
 	.section-nav a:hover,
-	.export-button:hover,
 	.sign-in-link:hover,
 	.trip-menu summary:hover,
 	.account-menu summary:hover {
@@ -362,10 +369,10 @@
 	}
 
 	.section-nav a:focus-visible,
-	.export-button:focus-visible,
 	.sign-in-link:focus-visible,
 	.trip-menu summary:focus-visible,
 	.account-menu summary:focus-visible,
+	.topbar-menu a:focus-visible,
 	.topbar-menu button:focus-visible {
 		outline: 3px solid var(--color-state-focus);
 		outline-offset: 2px;
@@ -402,19 +409,6 @@
 
 		.account-menu summary {
 			padding-inline: 0.5rem;
-		}
-	}
-
-	@media (max-width: 28rem) {
-		.export-button {
-			font-size: 0;
-			min-width: 2.25rem;
-			padding-inline: 0.25rem;
-		}
-
-		.export-button::after {
-			content: '⇩';
-			font-size: 1rem;
 		}
 	}
 </style>
