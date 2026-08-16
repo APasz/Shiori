@@ -176,7 +176,10 @@
 <style>
 	h3 {
 		font-size: 1rem;
+		line-height: 1.3;
 		margin: 0;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	ul {
@@ -186,7 +189,7 @@
 	}
 
 	li {
-		padding: 0.5rem 0;
+		padding: 0.25rem 0;
 	}
 
 	li + li {
@@ -196,15 +199,18 @@
 	.day {
 		background: var(--color-surface-raised);
 		border: 1px solid var(--color-border-default);
+		container-type: inline-size;
+		min-width: 0;
 	}
 
 	.day summary {
-		align-items: center;
+		align-items: flex-start;
 		cursor: pointer;
 		display: flex;
+		gap: 0.75rem;
 		justify-content: space-between;
 		list-style: none;
-		padding: 0.625rem 0.875rem;
+		padding: 0.5rem 0.75rem;
 	}
 
 	.day summary::-webkit-details-marker {
@@ -216,7 +222,9 @@
 		content: '+';
 		font-size: 1.25rem;
 		font-weight: 400;
+		flex: 0 0 auto;
 		line-height: 1;
+		margin-top: 0.0625rem;
 	}
 
 	.day[open] summary {
@@ -237,13 +245,13 @@
 	}
 
 	.day-content {
-		padding: 0.75rem 0.875rem 0.875rem;
+		padding: 0.625rem 0.75rem 0.75rem;
 	}
 
 	.stay-block {
 		border: 1px solid var(--color-border-default);
 		border-left: 3px solid var(--color-item-type-accommodation);
-		margin: 0 0 0.875rem;
+		margin: 0 0 0.625rem;
 	}
 
 	.stay-block h4 {
@@ -251,7 +259,7 @@
 		font-size: 0.6875rem;
 		letter-spacing: 0.08em;
 		margin: 0;
-		padding: 0.375rem 0.5rem;
+		padding: 0.25rem 0.5rem 0;
 		text-transform: uppercase;
 	}
 
@@ -270,7 +278,7 @@
 		font: inherit;
 		gap: 0.5rem;
 		grid-template-columns: minmax(0, 1fr) max-content;
-		padding: 0.5rem;
+		padding: 0.125rem 0.5rem 0.375rem;
 		text-align: left;
 		width: 100%;
 	}
@@ -293,6 +301,15 @@
 		grid-row: 1;
 	}
 
+	:global(.itinerary-timing),
+	:global(.itinerary-time) {
+		min-width: 0;
+	}
+
+	:global(.itinerary-timing .local-time) {
+		white-space: normal;
+	}
+
 	.stay-title {
 		align-self: center;
 		color: var(--color-text-primary);
@@ -300,18 +317,19 @@
 		grid-column: 1;
 		grid-row: 1;
 		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.stay-boundary-button,
 	.stay-boundary-summary {
-		align-items: center;
+		align-items: start;
 		background: transparent;
 		border: 1px solid transparent;
 		color: inherit;
 		display: grid;
 		font: inherit;
 		gap: 0.75rem;
-		grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr);
+		grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
 		padding: 0.375rem 0.5rem;
 		text-align: left;
 		width: 100%;
@@ -331,19 +349,22 @@
 
 	.stay-boundary-label {
 		font-size: 0.8125rem;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.item-button,
 	.item-summary {
-		align-items: center;
+		align-items: start;
 		background: transparent;
 		border: 1px solid transparent;
 		color: inherit;
 		display: grid;
 		font: inherit;
 		gap: 0.25rem 0.75rem;
-		grid-template-columns: minmax(7.5rem, max-content) 7rem minmax(0, 1fr);
-		padding: 0.5rem;
+		grid-template-columns: minmax(7rem, 9rem) 7rem minmax(0, 1fr);
+		min-block-size: 3.25rem;
+		padding: 0.375rem 0.5rem;
 		position: relative;
 		text-align: left;
 		width: 100%;
@@ -357,6 +378,8 @@
 	}
 
 	.item-title {
+		min-width: 0;
+		overflow-wrap: anywhere;
 		position: relative;
 		z-index: 1;
 	}
@@ -369,8 +392,7 @@
 	}
 
 	.item-row {
-		display: grid;
-		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	.add-item-actions {
@@ -381,8 +403,8 @@
 		flex-wrap: wrap;
 		font-size: 0.75rem;
 		gap: 0.375rem;
-		margin-top: 0.75rem;
-		padding-top: 0.75rem;
+		margin-top: 0.625rem;
+		padding-top: 0.625rem;
 	}
 
 	.add-item-actions button {
@@ -410,16 +432,33 @@
 		margin: 0;
 	}
 
-	@media (max-width: 32rem) {
+	@container (max-width: 33.999rem) {
 		.item-button,
 		.item-summary {
 			align-items: start;
-			grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr);
+			grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
 		}
 
 		.item-type,
 		.item-title {
 			grid-column: 2;
+		}
+	}
+
+	@container (max-width: 23.999rem) {
+		.day summary,
+		.day-content {
+			padding-left: 0.625rem;
+			padding-right: 0.625rem;
+		}
+
+		.stay-boundary-button,
+		.stay-boundary-summary,
+		.item-button,
+		.item-summary {
+			gap: 0.25rem 0.5rem;
+			padding-left: 0.375rem;
+			padding-right: 0.375rem;
 		}
 	}
 </style>

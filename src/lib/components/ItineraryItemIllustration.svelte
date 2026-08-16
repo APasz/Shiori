@@ -4,7 +4,7 @@
 	import { itineraryIllustration, type ItineraryIllustrationSource } from '$lib/itinerary/illustration';
 
 	const maximumIllustrationWidth = 176;
-	const illustrationEdgeBleed = 24;
+	const illustrationInset = 8;
 	const minimumIllustrationWidth = 66;
 	const illustrationGap = 8;
 
@@ -29,7 +29,7 @@
 			}
 
 			const titleRight = Math.max(...titleRectangles.map((rectangle) => rectangle.right));
-			const illustrationRight = itemContainer.getBoundingClientRect().right + illustrationEdgeBleed;
+			const illustrationRight = itemContainer.getBoundingClientRect().right - illustrationInset;
 			const availableWidth = illustrationRight - titleRight - illustrationGap;
 			const illustrationWidth = Math.min(maximumIllustrationWidth, Math.max(minimumIllustrationWidth, availableWidth));
 
@@ -70,7 +70,7 @@
 		height: 3rem;
 		opacity: 0.3;
 		position: absolute;
-		right: -1.5rem;
+		right: 0.5rem;
 		top: 50%;
 		transform: translateY(-50%) scaleX(-1);
 		width: var(--item-illustration-width, 11rem);

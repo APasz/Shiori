@@ -169,12 +169,14 @@
 <style>
 	.itinerary-content {
 		margin: 0 auto;
+		min-width: 0;
 		width: min(100% - 2rem, 48rem);
 	}
 
 	.itinerary-summary {
-		align-items: center;
+		align-items: flex-start;
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.75rem;
 	}
 
@@ -184,6 +186,8 @@
 
 	.itinerary-summary .dates {
 		margin-bottom: 0;
+		min-width: 0;
+		flex: 1 1 16rem;
 	}
 
 	.day-disclosure-toggle {
@@ -208,12 +212,13 @@
 	}
 
 	section {
-		margin-top: 1.25rem;
+		margin-top: 1rem;
+		min-width: 0;
 	}
 
 	.days {
 		display: grid;
-		gap: 0.75rem;
+		gap: 0.625rem;
 	}
 
 	.add-item-actions {
@@ -254,5 +259,11 @@
 
 	.detail-prompt {
 		margin: 1.5rem 0 0;
+	}
+
+	@media (max-width: 24rem) {
+		.itinerary-content {
+			width: min(100% - 1rem, 48rem);
+		}
 	}
 </style>
