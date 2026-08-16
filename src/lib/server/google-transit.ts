@@ -1,4 +1,3 @@
-import { env } from '$env/dynamic/private';
 import { z } from 'zod';
 import {
 	ExpiringCache,
@@ -8,6 +7,7 @@ import {
 } from '$lib/server/external-api';
 import { ianaTimeZoneSchema, type ItineraryLocation, type TransportDetails } from '$lib/itinerary/schema';
 import { transportJourneyScheduleSchema, type TransportJourneySchedule } from '$lib/itinerary/transport-schedule';
+import { configuredGoogleApiKey } from '$lib/server/google-api-key';
 
 const computeRoutesEndpoint = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const responseFieldMask = 'routes.legs.steps.transitDetails';
@@ -119,8 +119,7 @@ const providerRequests = new ProviderRequestCoordinator<readonly GoogleTransitLe
 });
 
 function configuredApiKey(): string | undefined {
-	const apiKey = env.GOOGLE_ROUTES_API_KEY?.trim();
-	return apiKey || undefined;
+	return configuredGoogleApiKey('routes');
 }
 
 function normalizedAddress(value: string): string | undefined {

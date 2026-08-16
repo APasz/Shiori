@@ -53,30 +53,6 @@
 		<p class="success page-status" role="status">Password reset.</p>
 	{/if}
 
-	<section aria-labelledby="create-account-heading">
-		<h2 id="create-account-heading">Create account</h2>
-		<form class="shiori-form" method="POST">
-			<label class="shiori-form-label">
-				Username <input class="shiori-form-control" autocomplete="username" name="username" required />
-			</label>
-			<label class="shiori-form-label">
-				Password
-				<input
-					class="shiori-form-control"
-					autocomplete="new-password"
-					minlength={minimumPasswordLength}
-					name="password"
-					required
-					type="password"
-				/>
-			</label>
-			{#if form?.createAccountError}<p class="error" role="alert">{form.createAccountError}</p>{/if}
-			{#if form?.createdAccount}<p class="success" role="status">{form.createdAccount} can now sign in.</p>{/if}
-			<button class="shiori-form-button" type="submit">Create account</button>
-		</form>
-		<p class="access-note">New accounts have no private-trip access until you assign it below.</p>
-	</section>
-
 	<section aria-labelledby="users-heading">
 		<div class="section-heading">
 			<div>
@@ -165,6 +141,30 @@
 		{:else if form?.accountDeletionError}
 			<p class="error" role="alert">{form.accountDeletionError}</p>
 		{/if}
+	</section>
+
+	<section aria-labelledby="create-account-heading">
+		<h2 id="create-account-heading">Create account</h2>
+		<form class="shiori-form" method="POST">
+			<label class="shiori-form-label">
+				Username <input class="shiori-form-control" autocomplete="username" name="username" required />
+			</label>
+			<label class="shiori-form-label">
+				Password
+				<input
+					class="shiori-form-control"
+					autocomplete="new-password"
+					minlength={minimumPasswordLength}
+					name="password"
+					required
+					type="password"
+				/>
+			</label>
+			{#if form?.createAccountError}<p class="error" role="alert">{form.createAccountError}</p>{/if}
+			{#if form?.createdAccount}<p class="success" role="status">{form.createdAccount} can now sign in.</p>{/if}
+			<button class="shiori-form-button" type="submit">Create account</button>
+		</form>
+		<p class="access-note">New accounts have no private-trip access until you assign it using the list above.</p>
 	</section>
 </main>
 

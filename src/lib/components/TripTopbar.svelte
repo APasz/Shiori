@@ -122,12 +122,6 @@
 					<span aria-hidden="true" class="label-width">Access</span>
 				</a>
 			{/if}
-			{#if canManageAccounts}
-				<a aria-current={activePage === 'accounts' ? 'page' : undefined} href={resolve('/accounts')}>
-					<span>Accounts</span>
-					<span aria-hidden="true" class="label-width">Accounts</span>
-				</a>
-			{/if}
 		</nav>
 
 		<div class="topbar-actions">
@@ -168,6 +162,15 @@
 						<Icon name="disclosure" size="0.875rem" />
 					</summary>
 					<div class="topbar-menu">
+						{#if canManageAccounts}
+							<a
+								aria-current={activePage === 'accounts' ? 'page' : undefined}
+								href={resolve('/accounts')}
+								onclick={() => (accountMenuOpen = false)}
+							>
+								Accounts
+							</a>
+						{/if}
 						<form action="/logout" method="POST" onsubmit={clearOfflineTripPages}>
 							<button type="submit">Sign out</button>
 						</form>

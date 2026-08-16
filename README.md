@@ -103,15 +103,20 @@ Successful flight results are kept in a bounded, process-local cache for 24 hour
 coalesced and paced at one per second to respect AeroDataBox's Basic/RapidAPI rate limit; a `429`
 response honours `Retry-After` before one retry.
 
-Configure `GOOGLE_PLACES_API_KEY` with a Google Places API (New) key to resolve flight IATA airport
-codes to named locations and coordinates. Flight titles then use concise names such as `Perth > Kuala
-Lumpur`, rather than airport codes, and locations receive their Google Maps links. The same key can
-add a Google Maps link and coordinates to a Google Hotels destination import, and a street address to
-a Google Maps place link when Places confirms both the same name and a location within 100 metres. To
-prefill a selected Google Hotels property when Google does not expose its page details, also enable the
-Google Knowledge Graph Search API for this key and permit it in the key's API restrictions. Shiori uses
-the property's stable Knowledge Graph ID to confirm the returned Google Maps place before accepting its
-name, address, coordinates, and Maps URL.
+Configure `GOOGLE_API_KEY` with a Google Cloud key to enable Shiori's Google integrations. Enable the
+required APIs, billing, and key restrictions for it: Places API (New) resolves flight IATA airport codes
+to named locations and coordinates; Google Knowledge Graph Search API can prefill a selected Google
+Hotels property when Google does not expose its page details; Routes API enriches selected Google Maps
+transit directions; and Time Zone API interprets local-time transit links. Set a domain-specific key when
+those permissions or billing must be separated: `GOOGLE_PLACES_API_KEY`,
+`GOOGLE_KNOWLEDGE_GRAPH_API_KEY`, `GOOGLE_ROUTES_API_KEY`, or `GOOGLE_TIME_ZONE_API_KEY`. Each override
+applies only to its matching API and otherwise falls back to `GOOGLE_API_KEY`.
+
+Places results give flight titles concise names such as `Perth > Kuala Lumpur`, rather than airport codes,
+and add Google Maps links to locations. Places can also add a Google Maps link and coordinates to a Google
+Hotels destination import, and a street address to a Google Maps place link when it confirms both the same
+name and a location within 100 metres. Knowledge Graph uses a property's stable ID to confirm the returned
+Google Maps place before accepting its name, address, coordinates, and Maps URL.
 To avoid a misleading airport result, an IATA-specific, strictly typed search is used automatically only when
 it returns one airport. When it returns multiple airports, Shiori asks the user to select the correct one.
 Successful results are retained in a bounded process-local cache for seven days
@@ -120,16 +125,15 @@ Google Places calls are capped at 4,500 per UTC month for each running Shiori pr
 `GOOGLE_PLACES_MONTHLY_LIMIT` lower if required. This is defensive rather than a replacement for a Google
 Cloud quota and billing alert, because a server restart starts a new process-local counter.
 
-Configure `GOOGLE_ROUTES_API_KEY` with a Google Routes API key to enrich a selected Google Maps transit
-direction with its returned vehicle legs. Each returned train, coach, ferry, or other transit leg is prepared
-as a separate transport item with its stops, operator, line or service label, and schedule when Google returns
-valid source time zones. For a link that encodes its selected time as a local clock time, enable the Google Time
-Zone API on that key or configure `GOOGLE_TIME_ZONE_API_KEY`; Shiori resolves the departure or arrival endpoint’s
-IANA zone before requesting Google Routes. If the selected time, coordinates, or time zone cannot be established,
-the importer safely falls back to ordinary directions rather than attach an incorrect schedule. Routes are
-recomputed rather than extracted from Google Maps’ private page state, so always confirm that the returned service
-matches the intended one. Successful Routes results are kept in a bounded process-local cache for 15 minutes;
-duplicate requests are coalesced and a `429` response is retried once after `Retry-After`.
+The Routes integration enriches a selected Google Maps transit direction with its returned vehicle legs. Each
+returned train, coach, ferry, or other transit leg is prepared as a separate transport item with its stops,
+operator, line or service label, and schedule when Google returns valid source time zones. For a link that
+encodes its selected time as a local clock time, Shiori uses the Time Zone API to resolve the departure or arrival
+endpoint’s IANA zone before requesting Google Routes. If the selected time, coordinates, or time zone cannot be
+established, the importer safely falls back to ordinary directions rather than attach an incorrect schedule. Routes
+are recomputed rather than extracted from Google Maps’ private page state, so always confirm that the returned
+service matches the intended one. Successful Routes results are kept in a bounded process-local cache for 15
+minutes; duplicate requests are coalesced and a `429` response is retried once after `Retry-After`.
 
 Accounts are global and do not receive access to a private trip by default. A sudo user can create
 accounts at `/accounts`, then use `/settings/access` to grant read-only `user` or `admin`

@@ -8,6 +8,7 @@ import {
 	throwIfRateLimited
 } from '$lib/server/external-api';
 import { googleMapsUrlSchema, type ItineraryLocation } from '$lib/itinerary/schema';
+import { configuredGoogleApiKey } from '$lib/server/google-api-key';
 
 const textSearchEndpoint = 'https://places.googleapis.com/v1/places:searchText';
 const responseFieldMask =
@@ -88,8 +89,7 @@ const airportProviderRequests = new ProviderRequestCoordinator<GoogleAirportLook
 const monthlyRequestLimit = new MonthlyRequestLimit({ maximumRequests: configuredMonthlyRequestLimit() });
 
 function configuredApiKey(): string | undefined {
-	const apiKey = env.GOOGLE_PLACES_API_KEY?.trim();
-	return apiKey || undefined;
+	return configuredGoogleApiKey('places');
 }
 
 function configuredMonthlyRequestLimit(): number {

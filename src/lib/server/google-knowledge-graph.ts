@@ -1,4 +1,3 @@
-import { env } from '$env/dynamic/private';
 import { z } from 'zod';
 import {
 	ExpiringCache,
@@ -6,6 +5,7 @@ import {
 	ProviderRequestCoordinator,
 	throwIfRateLimited
 } from '$lib/server/external-api';
+import { configuredGoogleApiKey } from '$lib/server/google-api-key';
 
 const knowledgeGraphSearchEndpoint = 'https://kgsearch.googleapis.com/v1/entities:search';
 const cacheLifetimeMilliseconds = 7 * 24 * 60 * 60 * 1_000;
@@ -42,8 +42,7 @@ const providerRequests = new ProviderRequestCoordinator<GoogleKnowledgeGraphEnti
 });
 
 function configuredApiKey(): string | undefined {
-	const apiKey = env.GOOGLE_PLACES_API_KEY?.trim();
-	return apiKey || undefined;
+	return configuredGoogleApiKey('knowledgeGraph');
 }
 
 function entityFromResponse(payload: unknown, id: string): GoogleKnowledgeGraphEntity | null {

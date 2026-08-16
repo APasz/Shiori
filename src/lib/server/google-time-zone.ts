@@ -1,4 +1,3 @@
-import { env } from '$env/dynamic/private';
 import { z } from 'zod';
 import {
 	ExpiringCache,
@@ -7,6 +6,7 @@ import {
 	throwIfRateLimited
 } from '$lib/server/external-api';
 import { ianaTimeZoneSchema, locationCoordinatesSchema } from '$lib/itinerary/schema';
+import { configuredGoogleApiKey } from '$lib/server/google-api-key';
 
 const timeZoneEndpoint = 'https://maps.googleapis.com/maps/api/timezone/json';
 const cacheLifetimeMilliseconds = 7 * 24 * 60 * 60 * 1_000;
@@ -34,8 +34,7 @@ const providerRequests = new ProviderRequestCoordinator<string | null>({
 });
 
 function configuredApiKey(): string | undefined {
-	const apiKey = env.GOOGLE_TIME_ZONE_API_KEY?.trim() || env.GOOGLE_ROUTES_API_KEY?.trim();
-	return apiKey || undefined;
+	return configuredGoogleApiKey('timeZone');
 }
 
 function normalizedCoordinates(value: Coordinates | undefined): Coordinates | undefined {

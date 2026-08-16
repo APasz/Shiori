@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const privateEnvironment = vi.hoisted(() => ({
-	GOOGLE_ROUTES_API_KEY: undefined as string | undefined,
+	GOOGLE_API_KEY: undefined as string | undefined,
 	GOOGLE_TIME_ZONE_API_KEY: undefined as string | undefined
 }));
 
@@ -13,7 +13,7 @@ const klSentralCoordinates = { latitude: 3.1341631, longitude: 101.6860377 };
 const sourceTimestamp = Date.UTC(2026, 9, 27, 10);
 
 afterEach(() => {
-	privateEnvironment.GOOGLE_ROUTES_API_KEY = undefined;
+	privateEnvironment.GOOGLE_API_KEY = undefined;
 	privateEnvironment.GOOGLE_TIME_ZONE_API_KEY = undefined;
 	vi.unstubAllGlobals();
 });
@@ -29,7 +29,7 @@ describe('Google Time Zone lookup', () => {
 	});
 
 	it('returns the configured location IANA zone and prefers a dedicated key', async () => {
-		privateEnvironment.GOOGLE_ROUTES_API_KEY = 'routes-key';
+		privateEnvironment.GOOGLE_API_KEY = 'shared-key';
 		privateEnvironment.GOOGLE_TIME_ZONE_API_KEY = 'time-zone-key';
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ status: 'OK', timeZoneId: 'Asia/Kuala_Lumpur' }), {

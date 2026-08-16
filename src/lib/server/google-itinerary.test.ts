@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const privateEnvironment = vi.hoisted(() => ({
 	AERODATABOX_API_KEY: undefined as string | undefined,
 	AERODATABOX_DIRECT_API_KEY: undefined as string | undefined,
-	GOOGLE_PLACES_API_KEY: undefined as string | undefined,
-	GOOGLE_ROUTES_API_KEY: undefined as string | undefined
+	GOOGLE_API_KEY: undefined as string | undefined,
+	GOOGLE_PLACES_API_KEY: undefined as string | undefined
 }));
 
 vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
@@ -32,8 +32,8 @@ const eleHotelMapsUrl =
 afterEach(() => {
 	privateEnvironment.AERODATABOX_API_KEY = undefined;
 	privateEnvironment.AERODATABOX_DIRECT_API_KEY = undefined;
+	privateEnvironment.GOOGLE_API_KEY = undefined;
 	privateEnvironment.GOOGLE_PLACES_API_KEY = undefined;
-	privateEnvironment.GOOGLE_ROUTES_API_KEY = undefined;
 	vi.unstubAllGlobals();
 });
 
@@ -70,7 +70,7 @@ describe('Google itinerary import', () => {
 	});
 
 	it('imports scheduled transit vehicle legs from a Google Maps transit direction', async () => {
-		privateEnvironment.GOOGLE_ROUTES_API_KEY = 'test-key';
+		privateEnvironment.GOOGLE_API_KEY = 'test-key';
 		const fetchMock = vi
 			.fn()
 			.mockResolvedValueOnce(
@@ -175,7 +175,7 @@ describe('Google itinerary import', () => {
 	});
 
 	it('uses the arrival endpoint and arrival timestamp for a local arrive-by transit selection', async () => {
-		privateEnvironment.GOOGLE_ROUTES_API_KEY = 'test-key';
+		privateEnvironment.GOOGLE_API_KEY = 'test-key';
 		const fetchMock = vi
 			.fn()
 			.mockResolvedValueOnce(
@@ -234,7 +234,7 @@ describe('Google itinerary import', () => {
 	});
 
 	it('confirms a Google Maps hotel with Places data and uses its property time zone', async () => {
-		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		privateEnvironment.GOOGLE_API_KEY = 'test-key';
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue(
@@ -418,7 +418,7 @@ describe('Google itinerary import', () => {
 	});
 
 	it('prefills a Google Hotels property from its Knowledge Graph entity when its page is unavailable', async () => {
-		privateEnvironment.GOOGLE_PLACES_API_KEY = 'test-key';
+		privateEnvironment.GOOGLE_API_KEY = 'test-key';
 		const fetchMock = vi
 			.fn()
 			.mockResolvedValueOnce(new Response('<html><body>Google Travel</body></html>'))
