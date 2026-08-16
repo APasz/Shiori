@@ -6,8 +6,9 @@
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
 	import type { CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
+	import { resolveTransportStopSchedule } from '$lib/itinerary/transport-stop-schedule';
 	import { formatMonetaryAmount } from '$lib/money';
-	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
+	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
 	import { itemTypeAccentStyle, reservationStatusStyle } from '$lib/theme/palette';
 
 	let {
@@ -146,14 +147,12 @@
 					{/if}
 				</dl>
 				<ul class="stops">
-					{#each item.transport.stops as stop (stop.locationId)}
+					{#each item.transport.stops as stop, stopIndex (stop.locationId)}
+						{@const schedule = resolveTransportStopSchedule(item.timing, stop, stopIndex, tripTimeZone)}
 						<li>
 							<strong>{transportStopLabel(stop.locationId)}</strong>
-							{#if stop.scheduledAt}
-								<ItineraryTime
-									startAt={stop.scheduledAt}
-									timeZone={resolveTransportStopTimeZone(stop, timingTimeZone)}
-								/>
+							{#if schedule}
+								<ItineraryTime startAt={schedule.scheduledAt} timeZone={schedule.timeZone} />
 							{/if}
 							{#if stop.platform}<span>Platform {stop.platform}</span>{/if}
 						</li>

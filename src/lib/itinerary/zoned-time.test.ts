@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatTimestampForTimeZoneInput, isValidIanaTimeZone, zonedDateTimeToUnixMilliseconds } from './zoned-time';
+import {
+	formatTimestampForTimeZoneInput,
+	isCompleteLocalDateTime,
+	isValidIanaTimeZone,
+	zonedDateTimeToUnixMilliseconds
+} from './zoned-time';
 
 describe('editor time-zone conversion', () => {
 	it('converts a selected-zone datetime to a canonical timestamp', () => {
@@ -13,5 +18,10 @@ describe('editor time-zone conversion', () => {
 		expect(isValidIanaTimeZone('Asia/Tokyo')).toBe(true);
 		expect(isValidIanaTimeZone('Mars/Olympus')).toBe(false);
 		expect(zonedDateTimeToUnixMilliseconds('2026-10-04T02:30', 'Australia/Melbourne')).toBe(null);
+	});
+
+	it('distinguishes a date-only placeholder from a complete local datetime', () => {
+		expect(isCompleteLocalDateTime('2026-10-28T')).toBe(false);
+		expect(isCompleteLocalDateTime('2026-10-28T11:13')).toBe(true);
 	});
 });

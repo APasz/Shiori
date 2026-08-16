@@ -460,6 +460,18 @@
 			padding-left: 0.375rem;
 			padding-right: 0.375rem;
 		}
+
+		.item-button,
+		.item-summary {
+			grid-template-columns: minmax(5.5rem, 6.25rem) minmax(0, 1fr);
+		}
+	}
+
+	@container (max-width: 27.999rem) {
+		.item-button :global(.item-illustration-viewport),
+		.item-summary :global(.item-illustration-viewport) {
+			display: none;
+		}
 	}
 
 	@container (max-width: 40rem) {

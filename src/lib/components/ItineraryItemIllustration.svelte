@@ -2,10 +2,9 @@
 	import { onMount } from 'svelte';
 	import Artwork from '$lib/visuals/Artwork.svelte';
 	import { itineraryIllustration, type ItineraryIllustrationSource } from '$lib/itinerary/illustration';
+	import { itemIllustrationHeight, itemIllustrationLayout } from './item-illustration-layout';
 
-	const maximumIllustrationWidth = 176;
 	const illustrationInset = 8;
-	const minimumIllustrationWidth = 66;
 	const illustrationGap = 8;
 
 	let { item }: { item: ItineraryIllustrationSource } = $props();
@@ -31,10 +30,10 @@
 			const titleRight = Math.max(...titleRectangles.map((rectangle) => rectangle.right));
 			const illustrationRight = itemContainer.getBoundingClientRect().right - illustrationInset;
 			const availableWidth = illustrationRight - titleRight - illustrationGap;
-			const illustrationWidth = Math.min(maximumIllustrationWidth, Math.max(minimumIllustrationWidth, availableWidth));
+			const layout = itemIllustrationLayout(availableWidth);
 
-			illustrationViewport.style.setProperty('--item-illustration-width', `${illustrationWidth}px`);
-			itemTitle.classList.toggle('item-illustration-overlaps', availableWidth < minimumIllustrationWidth);
+			illustrationViewport.style.setProperty('--item-illustration-width', `${layout.width}px`);
+			itemTitle.classList.toggle('item-illustration-overlaps', layout.overlapsTitle);
 		}
 
 		const resizeObserver = new ResizeObserver(updateLayout);
@@ -52,7 +51,12 @@
 	});
 </script>
 
-<span bind:this={illustrationViewport} aria-hidden="true" class="item-illustration-viewport">
+<span
+	bind:this={illustrationViewport}
+	aria-hidden="true"
+	class="item-illustration-viewport"
+	style={`--item-illustration-height: ${itemIllustrationHeight}px;`}
+>
 	<Artwork class="item-illustration" name={illustration} />
 </span>
 
@@ -67,7 +71,7 @@
 
 	:global(.item-illustration) {
 		color: var(--item-accent);
-		height: 3rem;
+		height: var(--item-illustration-height);
 		opacity: 0.3;
 		position: absolute;
 		right: 0.5rem;

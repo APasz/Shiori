@@ -62,6 +62,10 @@ transport stops. The browser presents its viewer-local time as the primary value
 source-local time as subdued supporting text. Selecting a time zone in the item editor saves that
 timing or stop’s local-time meaning while the instant itself remains a timestamp.
 
+For an exact transport journey, the first stop and item schedule act as fallbacks rather than
+duplicate requirements. Saving an empty Schedule uses the first timed stop; an untimed first stop
+is shown using the item Schedule. Set both only when the stop’s time is intentionally different.
+
 ## Server setup
 
 The Node adapter stores managed data in `data/` by default, split by domain:

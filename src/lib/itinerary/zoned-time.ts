@@ -83,6 +83,11 @@ function parseLocalDateTime(value: string): LocalDateTimeParts | null {
 		: null;
 }
 
+/** Returns whether a value contains a complete, valid local calendar date and time. */
+export function isCompleteLocalDateTime(value: string): boolean {
+	return parseLocalDateTime(value) !== null;
+}
+
 function partsAsUtc(parts: LocalDateTimeParts): number {
 	return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
 }

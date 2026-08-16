@@ -31,6 +31,7 @@
 	import { amountInputValue, amountMinorFromInput, currencyFractionDigits, formatMonetaryAmount } from '$lib/money';
 	import {
 		formatTimestampForTimeZoneInput,
+		isCompleteLocalDateTime,
 		isValidIanaTimeZone,
 		zonedDateTimeToUnixMilliseconds
 	} from '$lib/itinerary/zoned-time';
@@ -38,6 +39,7 @@
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
+	import { resolveTransportScheduleStart, type TransportStopSchedule } from '$lib/itinerary/transport-stop-schedule';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import { formatValidationIssues } from '$lib/validation';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
@@ -268,6 +270,12 @@
 			startAt = suggestedStartDate ? `${suggestedStartDate}T` : '';
 			endAt = suggestedEndDate ? `${suggestedEndDate}T` : '';
 			endAtEnabled = suggestedEndDate !== undefined;
+			if (source.type === 'transport' && suggestedStartDate) {
+				const suggestedDateTime = `${suggestedStartDate}T`;
+				transportStops = transportStops.map((stop) =>
+					optionalText(stop.scheduledAt) ? stop : { ...stop, scheduledAt: suggestedDateTime }
+				);
+			}
 		}
 	}
 
@@ -485,6 +493,35 @@
 		return zonedDateTimeToUnixMilliseconds(value, timeZone) ?? Number.NaN;
 	}
 
+	function firstTransportStopSchedule(): TransportStopSchedule | undefined {
+		const firstStop = transportStops[0];
+		const scheduledAt = firstStop ? optionalText(firstStop.scheduledAt) : undefined;
+		if (!firstStop || !scheduledAt) {
+			return undefined;
+		}
+
+		const timestamp = zonedDateTimeToUnixMilliseconds(scheduledAt, firstStop.timeZone);
+		return timestamp === null ? undefined : { scheduledAt: timestamp, timeZone: firstStop.timeZone };
+	}
+
+	function completeDateTimeValue(value: string): string | undefined {
+		const trimmed = optionalText(value);
+		return trimmed && isCompleteLocalDateTime(trimmed) ? trimmed : undefined;
+	}
+
+	function firstTransportStopHasScheduledTime(): boolean {
+		return optionalText(transportStops[0]?.scheduledAt ?? '') !== undefined;
+	}
+
+	function usesFirstTransportStopForSchedule(): boolean {
+		return (
+			itemType === 'transport' &&
+			timingKind === 'exact' &&
+			completeDateTimeValue(startAt) === undefined &&
+			firstTransportStopHasScheduledTime()
+		);
+	}
+
 	function reformatInTimeZone(value: string, timeZone: string): string {
 		const currentTimestamp = zonedDateTimeToUnixMilliseconds(value, startAtTimeZone);
 		return currentTimestamp !== null && isValidIanaTimeZone(timeZone)
@@ -606,14 +643,20 @@
 	}
 
 	function timingCandidate(): unknown {
-		const override = timeZoneOverride(startAtTimeZone, tripTimeZone);
 		switch (timingKind) {
 			case 'exact': {
 				const end = optionalText(endAt);
+				const scheduledStartAt = completeDateTimeValue(startAt);
+				const scheduleStart = resolveTransportScheduleStart(
+					scheduledStartAt
+						? { scheduledAt: timestampValue(scheduledStartAt, startAtTimeZone), timeZone: startAtTimeZone }
+						: undefined,
+					itemType === 'transport' ? firstTransportStopSchedule() : undefined
+				);
 				return {
 					kind: 'exact',
-					startAt: timestampValue(startAt, startAtTimeZone),
-					...override,
+					startAt: scheduleStart?.scheduledAt ?? Number.NaN,
+					...timeZoneOverride(scheduleStart?.timeZone ?? startAtTimeZone, tripTimeZone),
 					...(endAtEnabled && end ? { endAt: timestampValue(end, startAtTimeZone) } : {}),
 					...(exactTimingDateOnly ? { timePrecision: 'date' as const } : {})
 				};
@@ -622,7 +665,7 @@
 				return {
 					kind: 'approximate',
 					nominalAt: timestampValue(nominalAt, startAtTimeZone),
-					...override,
+					...timeZoneOverride(startAtTimeZone, tripTimeZone),
 					toleranceMinutes
 				};
 			case 'window':
@@ -630,7 +673,7 @@
 					kind: 'window',
 					earliestAt: timestampValue(earliestAt, startAtTimeZone),
 					latestAt: timestampValue(latestAt, startAtTimeZone),
-					...override
+					...timeZoneOverride(startAtTimeZone, tripTimeZone)
 				};
 		}
 	}
@@ -697,7 +740,7 @@
 		const timingInputs =
 			timingKind === 'exact'
 				? [
-						{ label: 'Start date and time', value: startAt },
+						...(usesFirstTransportStopForSchedule() ? [] : [{ label: 'Start date and time', value: startAt }]),
 						...(endAtEnabled ? [{ label: 'End date and time', value: endAt }] : [])
 					]
 				: timingKind === 'approximate'
@@ -1116,6 +1159,9 @@
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
 							/>
+							{#if itemType === 'transport'}
+								<p class="field-hint">Leave this empty to use the first transport stop's scheduled time.</p>
+							{/if}
 							{#if !exactTimingDateOnly}
 								<label class="toggle-label">
 									<input bind:checked={endAtEnabled} type="checkbox" />
@@ -1315,6 +1361,12 @@
 							{#if locations.length === 0}
 								<p class="transport-empty">Add locations under Places before adding stop details.</p>
 							{:else}
+								{#if timingNeedsConfirmation && suggestedStartDate}
+									<p class="field-hint">
+										The selected departure date is prefilled for each stop. Change an arrival date if the journey
+										crosses midnight.
+									</p>
+								{/if}
 								<div class="transport-location-list">
 									{#each locations as location, locationIndex (location.id)}
 										{@const stop = stopForLocation(location.id)}
@@ -1338,6 +1390,9 @@
 														timeZone={stop.timeZone}
 														{timeZoneOptions}
 													/>
+													{#if locationIndex === 0 && !optionalText(stop.scheduledAt)}
+														<p class="field-hint">Uses the Schedule time until you set a different stop time.</p>
+													{/if}
 													<label class="shiori-form-label">
 														Platform <span class="field-hint">Admin and sudo only.</span>
 														<input class="shiori-form-control" bind:value={stop.platform} />
