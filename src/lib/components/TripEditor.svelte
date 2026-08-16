@@ -9,24 +9,26 @@
 	import { formatValidationIssues } from '$lib/validation';
 	import TimeZonePicker from './TimeZonePicker.svelte';
 
-	type EditorMode = 'create' | 'edit';
 	type EditorState = 'editing' | 'saving';
+	type CreatedTripCompletion = { readonly kind: 'created'; readonly slug: string };
+	type SavedTripCompletion = { readonly kind: 'saved' };
 	type TripDetailsValidation =
 		{ readonly details: TripDetails; readonly valid: true } | { readonly error: string; readonly valid: false };
-
-	let {
-		mode,
-		trip,
-		onDismiss,
-		onCreated,
-		onSaved
-	}: {
-		mode: EditorMode;
+	type CreateTripEditorProps = {
+		mode: 'create';
+		trip: null;
+		onDismiss: () => void;
+		onCompleted: (completion: CreatedTripCompletion) => Promise<void>;
+	};
+	type EditTripEditorProps = {
+		mode: 'edit';
 		trip: DetailedTripView;
 		onDismiss: () => void;
-		onCreated: (slug: string) => Promise<void>;
-		onSaved: () => Promise<void>;
-	} = $props();
+		onCompleted: (completion: SavedTripCompletion) => Promise<void>;
+	};
+	type TripEditorProps = CreateTripEditorProps | EditTripEditorProps;
+
+	let props: TripEditorProps = $props();
 
 	let dialogElement: HTMLDialogElement;
 	let title = $state('');
@@ -51,14 +53,14 @@
 	}
 
 	function populateDraft(): void {
-		if (mode === 'create') {
+		if (props.mode === 'create') {
 			timeZone = browserTimeZone();
 			return;
 		}
 
-		localCurrency = trip.itinerary.localCurrency;
-		title = trip.itinerary.title;
-		timeZone = trip.itinerary.timeZone;
+		localCurrency = props.trip.itinerary.localCurrency;
+		title = props.trip.itinerary.title;
+		timeZone = props.trip.itinerary.timeZone;
 	}
 
 	function validateDetails(): TripDetailsValidation {
@@ -112,40 +114,39 @@
 		editorState = 'saving';
 		errorMessage = '';
 		try {
-			const response =
-				mode === 'create'
-					? await fetch('/api/trips', {
-							method: 'POST',
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify({ details: validation.details })
-						})
-					: await fetch(`/api/trips/${encodeURIComponent(trip.id)}`, {
-							method: 'PUT',
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify({ details: validation.details, revision: trip.revision })
-						});
-			const data = await responseData(response);
-			if (mode === 'create') {
+			if (props.mode === 'create') {
+				const response = await fetch('/api/trips', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ details: validation.details })
+				});
+				const data = await responseData(response);
 				const created = tripCreateResponseSchema.safeParse(data);
 				if (!response.ok || !created.success) {
 					editorState = 'editing';
 					errorMessage = errorFrom(data, 'The trip could not be created.');
 					return;
 				}
-				await onCreated(created.data.slug);
+				await props.onCompleted({ kind: 'created', slug: created.data.slug });
 				return;
 			}
 
+			const response = await fetch(`/api/trips/${encodeURIComponent(props.trip.id)}`, {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ details: validation.details, revision: props.trip.revision })
+			});
+			const data = await responseData(response);
 			if (!response.ok || !editSaveResponseSchema.safeParse(data).success) {
 				editorState = 'editing';
 				errorMessage = errorFrom(data, 'The trip details could not be saved.');
 				return;
 			}
-			await onSaved();
+			await props.onCompleted({ kind: 'saved' });
 		} catch {
 			editorState = 'editing';
 			errorMessage =
-				mode === 'create'
+				props.mode === 'create'
 					? 'The trip could not be created because the server is unavailable.'
 					: 'The trip details could not be saved because the server is unavailable.';
 		}
@@ -164,14 +165,14 @@
 	aria-labelledby="trip-editor-heading"
 	use:draggableDialog={{ handleSelector: '[data-dialog-drag-handle]' }}
 	oncancel={handleDialogCancel}
-	onclose={onDismiss}
+	onclose={props.onDismiss}
 >
 	<form class="editor shiori-form" data-dialog-scroll-area onsubmit={saveEditing}>
 		<header data-dialog-drag-handle>
 			<div>
-				<p class="eyebrow">{mode === 'create' ? 'New trip' : 'Edit trip'}</p>
+				<p class="eyebrow">{props.mode === 'create' ? 'New trip' : 'Edit trip'}</p>
 				<h2 id="trip-editor-heading">
-					{mode === 'create' ? 'Create a trip' : trip.itinerary.title}
+					{props.mode === 'create' ? 'Create a trip' : props.trip.itinerary.title}
 				</h2>
 				<p class:changed={hasUnsavedChanges} class="editor-status">
 					{editorState === 'saving' ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
@@ -179,7 +180,7 @@
 			</div>
 			<div class="editor-actions">
 				<button class="save-button shiori-form-button" disabled={editorState === 'saving'} type="submit">
-					{editorState === 'saving' ? 'Saving…' : mode === 'create' ? 'Create trip' : 'Save changes'}
+					{editorState === 'saving' ? 'Saving…' : props.mode === 'create' ? 'Create trip' : 'Save changes'}
 				</button>
 				<button
 					class="close-button shiori-form-button"

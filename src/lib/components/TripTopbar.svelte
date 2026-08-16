@@ -14,26 +14,20 @@
 	let {
 		activePage,
 		canManageAccounts = false,
-		canManageTrip = false,
 		canModifyItinerary = false,
 		currentUser,
 		isOffline = false,
-		onCreateTrip,
 		onEditTrip,
 		onExport,
-		onSwitchTrips,
 		trip = undefined
 	}: {
 		activePage: TopbarPage;
 		canManageAccounts?: boolean;
-		canManageTrip?: boolean;
 		canModifyItinerary?: boolean;
 		currentUser: TopbarUser | null;
 		isOffline?: boolean;
-		onCreateTrip?: () => void;
 		onEditTrip?: () => void;
 		onExport?: () => void;
-		onSwitchTrips?: () => void;
 		trip?: TopbarTrip;
 	} = $props();
 
@@ -48,7 +42,6 @@
 	const accessHref = $derived(trip ? resolve(`/settings/access?trip=${encodeURIComponent(trip.slug)}`) : null);
 	const canViewCosts = $derived(trip?.access === 'admin' || trip?.access === 'sudo');
 	const canViewNotes = $derived(trip !== undefined && trip.access !== 'visitor');
-	const canManageActions = $derived(trip !== undefined && canManageTrip && onSwitchTrips !== undefined);
 
 	function runTripAction(action: (() => void) | undefined): void {
 		tripMenuOpen = false;
@@ -142,15 +135,11 @@
 			{#if onExport}
 				<button class="export-button" onclick={onExport} type="button">Export</button>
 			{/if}
-			{#if trip && canManageActions}
+			{#if trip && canModifyItinerary && onEditTrip}
 				<details bind:this={tripMenuElement} bind:open={tripMenuOpen} class="trip-menu" ontoggle={synchronizeTripMenu}>
 					<summary aria-label="Trip options" title="Trip options"><Icon name="more" /></summary>
 					<div class="topbar-menu">
-						<button onclick={() => runTripAction(onSwitchTrips)} type="button">Switch trip</button>
-						{#if canModifyItinerary}
-							<button onclick={() => runTripAction(onCreateTrip)} type="button">New trip</button>
-							<button onclick={() => runTripAction(onEditTrip)} type="button">Edit trip</button>
-						{/if}
+						<button onclick={() => runTripAction(onEditTrip)} type="button">Edit trip</button>
 					</div>
 				</details>
 			{/if}

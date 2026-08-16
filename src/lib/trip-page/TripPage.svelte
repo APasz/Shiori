@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import ItineraryExporter from '$lib/components/ItineraryExporter.svelte';
 	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
@@ -8,7 +7,6 @@
 	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import TripEditor from '$lib/components/TripEditor.svelte';
-	import TripSwitcher from '$lib/components/TripSwitcher.svelte';
 	import type { ItineraryItem, ItineraryNoteTarget } from '$lib/itinerary/schema';
 	import { onMount } from 'svelte';
 	import { ConnectivityMonitor } from './connectivity.svelte';
@@ -21,8 +19,7 @@
 
 	let { data }: { data: TripPageData } = $props();
 	let exportingItinerary = $state(false);
-	let editingTripMode = $state<'create' | 'edit' | null>(null);
-	let switchingTrips = $state(false);
+	let editingTrip = $state(false);
 	let editingNote = $state<EditingNote | null>(null);
 	const connectivity = new ConnectivityMonitor();
 	const detailedTrip = $derived(detailedTripFor(data.trip));
@@ -45,9 +42,9 @@
 		};
 	}
 
-	function beginEditingTrip(mode: 'create' | 'edit'): void {
+	function beginEditingTrip(): void {
 		if (canModifyItinerary) {
-			editingTripMode = mode;
+			editingTrip = true;
 		}
 	}
 
@@ -62,13 +59,8 @@
 	}
 
 	async function finishTripEditing(): Promise<void> {
-		editingTripMode = null;
+		editingTrip = false;
 		await refreshTripPage();
-	}
-
-	async function visitCreatedTrip(slug: string): Promise<void> {
-		editingTripMode = null;
-		await goto(resolve('/trips/[slug]', { slug }));
 	}
 
 	$effect(() => {
@@ -76,7 +68,7 @@
 			return;
 		}
 		itemWorkflow.dismissForLostConnection();
-		editingTripMode = null;
+		editingTrip = false;
 	});
 
 	onMount(() => connectivity.start());
@@ -90,14 +82,11 @@
 <TripTopbar
 	activePage="itinerary"
 	canManageAccounts={data.canManageAccounts}
-	canManageTrip={detailedTrip?.canEdit === true}
 	{canModifyItinerary}
 	currentUser={data.currentUser}
 	isOffline={connectivity.status === 'unreachable'}
-	onCreateTrip={() => beginEditingTrip('create')}
-	onEditTrip={() => beginEditingTrip('edit')}
+	onEditTrip={beginEditingTrip}
 	onExport={() => (exportingItinerary = true)}
-	onSwitchTrips={() => (switchingTrips = true)}
 	trip={data.trip}
 />
 
@@ -178,18 +167,13 @@
 		/>
 	{/if}
 
-	{#if detailedTrip && canModifyItinerary && editingTripMode}
+	{#if detailedTrip && canModifyItinerary && editingTrip}
 		<TripEditor
-			mode={editingTripMode}
+			mode="edit"
 			trip={detailedTrip}
-			onCreated={visitCreatedTrip}
-			onDismiss={() => (editingTripMode = null)}
-			onSaved={finishTripEditing}
+			onDismiss={() => (editingTrip = false)}
+			onCompleted={finishTripEditing}
 		/>
-	{/if}
-
-	{#if detailedTrip && switchingTrips}
-		<TripSwitcher currentSlug={detailedTrip.slug} onDismiss={() => (switchingTrips = false)} trips={data.trips} />
 	{/if}
 
 	{#if exportingItinerary}

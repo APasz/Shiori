@@ -1,9 +1,17 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import TripEditor from '$lib/components/TripEditor.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+	let creatingTrip = $state(false);
+
+	async function finishTripCreation(completion: { readonly kind: 'created'; readonly slug: string }): Promise<void> {
+		creatingTrip = false;
+		await goto(resolve('/trips/[slug]', { slug: completion.slug }));
+	}
 </script>
 
 <svelte:head>
@@ -14,24 +22,31 @@
 <TripTopbar activePage="trips" canManageAccounts={data.canManageAccounts} currentUser={data.currentUser} />
 
 <main>
-	{#if data.trips.length > 0}
-		<ul class="trip-list">
-			{#each data.trips as trip (trip.slug)}
-				<li>
-					<a href={resolve('/trips/[slug]', { slug: trip.slug })}>
-						<strong>{trip.title}</strong>
-						<small>{trip.latestItemStartAt === null ? 'No itinerary items yet' : 'Itinerary available'}</small>
-					</a>
-				</li>
-			{/each}
-		</ul>
-	{:else}
-		<p class="empty-state">No trips are available to this account yet.</p>
-	{/if}
+	<ul class="trip-list">
+		{#each data.trips as trip (trip.slug)}
+			<li>
+				<a href={resolve('/trips/[slug]', { slug: trip.slug })}>
+					<strong>{trip.title}</strong>
+					<small>{trip.latestItemStartAt === null ? 'No itinerary items yet' : 'Itinerary available'}</small>
+				</a>
+			</li>
+		{/each}
+		<li>
+			<button class="new-trip-button" onclick={() => (creatingTrip = true)} type="button">
+				<strong>New trip</strong>
+				<small>Create a private trip</small>
+			</button>
+		</li>
+	</ul>
 </main>
 
+{#if creatingTrip}
+	<TripEditor mode="create" trip={null} onCompleted={finishTripCreation} onDismiss={() => (creatingTrip = false)} />
+{/if}
+
 <style>
-	.trip-list a:focus-visible {
+	.trip-list a:focus-visible,
+	.new-trip-button:focus-visible {
 		outline: 3px solid var(--color-state-focus);
 		outline-offset: 2px;
 	}
@@ -53,30 +68,34 @@
 		border-top: 1px solid var(--color-border-default);
 	}
 
-	.trip-list a {
+	.trip-list a,
+	.new-trip-button {
+		background: transparent;
+		border: 0;
 		color: inherit;
 		display: grid;
+		font: inherit;
 		gap: 0.25rem;
 		padding: 1rem;
+		text-align: left;
 		text-decoration: none;
+		width: 100%;
 	}
 
-	.trip-list a:hover {
+	.trip-list a:hover,
+	.new-trip-button:hover {
 		background: var(--color-surface-subtle);
+	}
+
+	.new-trip-button {
+		cursor: pointer;
 	}
 
 	.trip-list strong {
 		font-size: 1.125rem;
 	}
 
-	.trip-list small,
-	.empty-state {
+	.trip-list small {
 		color: var(--color-text-muted);
-	}
-
-	.empty-state {
-		border: 1px solid var(--color-border-default);
-		margin: 2rem 0 0;
-		padding: 1rem;
 	}
 </style>
