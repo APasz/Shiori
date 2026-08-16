@@ -388,7 +388,7 @@
 		.topbar-content {
 			column-gap: 0.5rem;
 			flex-wrap: wrap;
-			padding: 0.375rem 0.5rem 0;
+			padding: 0.375rem max(0.5rem, env(safe-area-inset-right)) 0 max(0.5rem, env(safe-area-inset-left));
 		}
 
 		.trip-identity {
@@ -401,11 +401,20 @@
 			flex: 1 0 100%;
 			order: 3;
 			overflow-x: auto;
-			padding: 0.25rem 0;
+			padding: 0.25rem 0 0.375rem;
+			scrollbar-width: thin;
+		}
+
+		.section-nav a,
+		.sign-in-link,
+		.trip-menu summary,
+		.account-menu summary,
+		:global(.theme-toggle.inline) {
+			min-height: 2.75rem;
 		}
 
 		.topbar-actions {
-			gap: 0;
+			gap: 0.125rem;
 		}
 
 		.account-name,

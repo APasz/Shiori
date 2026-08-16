@@ -6,18 +6,30 @@ import {
 	grantTripAccess,
 	listAvailableTripAccounts,
 	listTripMembers,
-	removeTripAccess,
-	setSharedUserRole,
+	setTripMemberAccess,
 	setTripPublic
 } from '$lib/server/store/members';
 import { forceReleaseTripEditLocks, hasActiveTripEditSession } from '$lib/server/store/edit-locks';
 import { StoreError } from '$lib/server/store/error';
-import type { AuthenticatedUser, ShareRole } from '$lib/server/store/model';
+import type { AuthenticatedUser, ShareRole, TripMemberRole } from '$lib/server/store/model';
 import { getTripView } from '$lib/server/store/trips';
 import type { DetailedTripView } from '$lib/server/store/views';
 
-function sharedRole(value: string): ShareRole | null {
-	return value === 'user' || value === 'admin' ? value : null;
+function selectedSharedRole(value: string): ShareRole | undefined {
+	if (value === 'user' || value === 'admin') {
+		return value;
+	}
+	return undefined;
+}
+
+function selectedMemberRole(value: string): TripMemberRole | null | undefined {
+	if (value === 'remove') {
+		return null;
+	}
+	if (value === 'none') {
+		return value;
+	}
+	return selectedSharedRole(value);
 }
 
 function validationMessage(error: ZodError): string {
@@ -61,8 +73,8 @@ export const actions: Actions = {
 	grantUser: async ({ locals, request, url }) => {
 		const access = await requireSudo(locals.user, tripSlug(url));
 		const formData = await request.formData();
-		const role = sharedRole(formDataText(formData, 'role'));
-		if (!role) {
+		const role = selectedSharedRole(formDataText(formData, 'role'));
+		if (role === undefined) {
 			return fail(400, { grantUserError: 'Choose either standard or admin access.' });
 		}
 
@@ -84,16 +96,16 @@ export const actions: Actions = {
 			throw error;
 		}
 	},
-	setMemberRole: async ({ locals, request, url }) => {
+	setMemberAccess: async ({ locals, request, url }) => {
 		const access = await requireSudo(locals.user, tripSlug(url));
 		const formData = await request.formData();
-		const role = sharedRole(formDataText(formData, 'role'));
-		if (!role) {
-			return fail(400, { memberRoleError: 'Choose either standard or admin access.' });
+		const role = selectedMemberRole(formDataText(formData, 'role'));
+		if (role === undefined) {
+			return fail(400, { memberRoleError: 'Choose a valid access level.' });
 		}
 
 		try {
-			await setSharedUserRole({
+			await setTripMemberAccess({
 				actorId: access.user.id,
 				role,
 				tripId: access.trip.id,
@@ -103,24 +115,6 @@ export const actions: Actions = {
 		} catch (error: unknown) {
 			if (error instanceof StoreError) {
 				return fail(error.status, { memberRoleError: error.message });
-			}
-			throw error;
-		}
-	},
-	removeMember: async ({ locals, request, url }) => {
-		const access = await requireSudo(locals.user, tripSlug(url));
-		const formData = await request.formData();
-
-		try {
-			await removeTripAccess({
-				actorId: access.user.id,
-				tripId: access.trip.id,
-				userId: formDataText(formData, 'memberId')
-			});
-			return { memberRemoved: true };
-		} catch (error: unknown) {
-			if (error instanceof StoreError) {
-				return fail(error.status, { memberRemovalError: error.message });
 			}
 			throw error;
 		}

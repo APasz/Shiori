@@ -11,6 +11,7 @@ import {
 	dailyExpenseStoredDataVersion,
 	freeformExpenseStoredDataVersion,
 	legacyStoredDataVersion,
+	preAccessBlockStoredDataVersion,
 	preNotesStoredDataVersion,
 	previousStoredDataVersion,
 	priorStoredDataVersion,
@@ -66,7 +67,8 @@ const migratableStoredTripFileEnvelopeSchema = z
 			z.literal(priorStoredDataVersion),
 			z.literal(dailyExpenseStoredDataVersion),
 			z.literal(freeformExpenseStoredDataVersion),
-			z.literal(preNotesStoredDataVersion)
+			z.literal(preNotesStoredDataVersion),
+			z.literal(preAccessBlockStoredDataVersion)
 		]),
 		trip: z
 			.object({

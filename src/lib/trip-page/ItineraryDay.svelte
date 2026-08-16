@@ -461,4 +461,14 @@
 			padding-right: 0.375rem;
 		}
 	}
+
+	@container (max-width: 40rem) {
+		.day summary {
+			min-block-size: 2.75rem;
+		}
+
+		.add-item-actions button {
+			min-height: 2.75rem;
+		}
+	}
 </style>

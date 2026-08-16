@@ -26,7 +26,7 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 	let dragState: DragState | null = null;
 
 	function handlePointerDown(event: PointerEvent): void {
-		if (dragState || event.button !== 0 || !(event.target instanceof Element)) {
+		if (dragState || event.button !== 0 || event.pointerType !== 'mouse' || !(event.target instanceof Element)) {
 			return;
 		}
 

@@ -47,7 +47,7 @@ export {
 	listOwnedTripOptions,
 	listTripSwitchOptions
 } from './trips';
-export type { AccountManagementEntry, AuthenticatedUser, ShareRole } from './model';
+export type { AccountManagementEntry, AuthenticatedUser, ShareRole, TripMemberRole } from './model';
 export type {
 	DetailedTripAccessRole,
 	PublicItinerary,

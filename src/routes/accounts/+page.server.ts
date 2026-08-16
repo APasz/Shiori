@@ -5,9 +5,8 @@ import { formDataText } from '$lib/server/form-data';
 import { createAccount, deleteAccount, listAccountsForManagement, resetAccountPassword } from '$lib/server/store/auth';
 import { StoreError } from '$lib/server/store/error';
 import { listTripMembers, setTripMemberAccess } from '$lib/server/store/members';
-import type { AuthenticatedUser } from '$lib/server/store/model';
+import type { AuthenticatedUser, ShareRole, TripMemberRole } from '$lib/server/store/model';
 import { listOwnedTripOptions, ownsAnyTrip } from '$lib/server/store/trips';
-import type { ShareRole } from '$lib/server/store/model';
 
 function validationMessage(error: ZodError): string {
 	return error.issues[0]?.message ?? 'Enter valid account details.';
@@ -40,9 +39,12 @@ async function accountContext(user: AuthenticatedUser | null, url: URL) {
 	return { manager, selectedTrip, trips };
 }
 
-function selectedMemberRole(value: string): ShareRole | null | undefined {
-	if (value === 'none') {
+function selectedMemberRole(value: string): TripMemberRole | null | undefined {
+	if (value === 'remove') {
 		return null;
+	}
+	if (value === 'none') {
+		return value;
 	}
 	if (value === 'user' || value === 'admin') {
 		return value;

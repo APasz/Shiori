@@ -45,7 +45,7 @@ export function getTripAccess(
 	if (user) {
 		const share = data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === user.id);
 		if (share) {
-			return share.role;
+			return share.role === 'none' ? null : share.role;
 		}
 	}
 

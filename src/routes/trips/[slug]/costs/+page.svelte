@@ -655,7 +655,7 @@
 	}
 	table {
 		border-collapse: collapse;
-		min-width: 32rem;
+		min-width: 0;
 		width: 100%;
 	}
 	th,
@@ -817,6 +817,135 @@
 		}
 		.expense-editor-fields .paid-control {
 			padding-top: 0;
+		}
+	}
+
+	@media (max-width: 40rem) {
+		.currency-picker select,
+		.expense-actions button,
+		.expense-editor button,
+		.primary-button {
+			min-height: 2.75rem;
+		}
+
+		.currency-picker {
+			font-size: 1rem;
+		}
+
+		.expenses-table {
+			border-collapse: separate;
+			border-spacing: 0;
+			min-width: 0;
+		}
+
+		.expenses-table thead {
+			clip: rect(0 0 0 0);
+			clip-path: inset(50%);
+			height: 1px;
+			overflow: hidden;
+			position: absolute;
+			white-space: nowrap;
+			width: 1px;
+		}
+
+		.expenses-table,
+		.expenses-table tbody,
+		.expenses-table tr,
+		.expenses-table th,
+		.expenses-table td {
+			display: block;
+		}
+
+		.expenses-table tbody {
+			display: grid;
+			gap: 0.75rem;
+		}
+
+		.expenses-table tr {
+			border: 1px solid var(--color-border-default);
+			display: grid;
+			gap: 0.625rem;
+			padding: 0.75rem;
+		}
+
+		.expenses-table th,
+		.expenses-table td {
+			border: 0;
+			padding: 0;
+		}
+
+		.expenses-table th[scope='row'] {
+			padding-bottom: 0.125rem;
+		}
+
+		.expenses-table td:not(.empty-cell) {
+			align-items: baseline;
+			display: grid;
+			gap: 0.75rem;
+			grid-template-columns: minmax(6.5rem, 8rem) minmax(0, 1fr);
+		}
+
+		.expenses-table td:nth-child(2)::before {
+			content: 'Category';
+		}
+
+		.expenses-table td:nth-child(3)::before {
+			content: 'Amount';
+		}
+
+		.expenses-table td:nth-child(4)::before {
+			content: 'Use date';
+		}
+
+		.expenses-table td:nth-child(5)::before {
+			content: 'Status';
+		}
+
+		.expenses-table td::before {
+			color: var(--color-text-muted);
+			font-size: 0.75rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		.expenses-table td.expense-actions {
+			align-items: center;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+		}
+
+		.expenses-table .expense-actions::before {
+			content: 'Actions';
+			flex: 0 0 6.5rem;
+		}
+
+		.expenses-table .expense-editor-row {
+			gap: 0;
+			padding: 0;
+		}
+
+		.expenses-table .expense-editor-row td {
+			display: block;
+		}
+
+		.expenses-table .expense-editor-row td::before {
+			display: none;
+		}
+
+		.expenses-table .empty-cell {
+			display: block;
+		}
+
+		.expense-editor-heading,
+		.expense-editor-actions {
+			align-items: stretch;
+			flex-direction: column;
+		}
+
+		.expense-editor-actions {
+			justify-content: stretch;
 		}
 	}
 </style>

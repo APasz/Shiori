@@ -266,4 +266,11 @@
 			width: min(100% - 1rem, 48rem);
 		}
 	}
+
+	@media (max-width: 40rem) {
+		.day-disclosure-toggle,
+		.add-item-actions button {
+			min-height: 2.75rem;
+		}
+	}
 </style>

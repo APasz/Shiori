@@ -1,6 +1,6 @@
 import type { PublicItinerary } from '$lib/itinerary/access';
 import type { Itinerary } from '$lib/itinerary/schema';
-import type { StoredEditLock } from './model';
+import type { StoredEditLock, TripMemberRole } from './model';
 
 export type VisitorTripView = {
 	access: 'visitor';
@@ -44,7 +44,7 @@ export type OwnedTripOption = {
 
 export type TripMember = {
 	id: string;
-	role: 'admin' | 'sudo' | 'user';
+	role: TripMemberRole | 'sudo';
 	username: string;
 };
 

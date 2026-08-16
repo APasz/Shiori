@@ -87,6 +87,7 @@
 										<option value="none">No access</option>
 										<option value="user">Standard</option>
 										<option value="admin">Admin</option>
+										<option class="remove-access-option" value="remove">Remove access</option>
 									</select>
 								</label>
 								<noscript><button class="shiori-form-button" type="submit">Save</button></noscript>
@@ -242,6 +243,10 @@
 		padding: 0.375rem 1.75rem 0.375rem 0.5rem;
 	}
 
+	.remove-access-option {
+		color: var(--color-state-warning);
+	}
+
 	.trip-selector select {
 		max-width: min(18rem, 45vw);
 	}
@@ -261,6 +266,13 @@
 		justify-content: space-between;
 		min-height: 3.25rem;
 		padding: 0.5rem 0;
+	}
+
+	.account-row > strong {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.account-controls {
@@ -340,6 +352,27 @@
 		.trip-selector select {
 			max-width: 100%;
 			width: 100%;
+		}
+
+		.trip-selector select,
+		.role-control select,
+		.account-actions summary,
+		.delete-account-button {
+			min-height: 2.75rem;
+		}
+
+		.account-actions summary {
+			height: 2.75rem;
+			width: 2.75rem;
+		}
+
+		.account-row {
+			align-items: stretch;
+			flex-direction: column;
+		}
+
+		.account-controls {
+			justify-content: space-between;
 		}
 	}
 </style>

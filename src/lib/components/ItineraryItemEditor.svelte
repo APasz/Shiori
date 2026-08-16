@@ -1582,7 +1582,7 @@
 		background: var(--color-surface-raised);
 		border: 1px solid var(--item-accent);
 		max-height: calc(100dvh - 2rem);
-		overflow-x: clip;
+		overflow-x: auto;
 		overflow-y: auto;
 		padding: 0;
 	}

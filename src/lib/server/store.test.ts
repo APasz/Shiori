@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyItineraryItem } from '../itinerary/draft';
 import { itinerarySchema } from '../itinerary/schema';
 import { createTripBackup } from '../trip-backup';
+import { storedDataVersion } from './store/model';
 
 let dataDirectory = '';
 
@@ -196,11 +197,11 @@ describe('JSON store', () => {
 		]);
 
 		for (const source of [users, shares, sessions, editLocks, trip]) {
-			expect(source).toContain('\n    "version": 12');
+			expect(source).toContain(`\n    "version": ${storedDataVersion}`);
 			expect(source).toMatch(/\n$/);
 		}
-		expect(JSON.parse(users)).toMatchObject({ version: 12, users: [{ username: 'owner' }] });
-		expect(JSON.parse(trip)).toMatchObject({ version: 12, trip: { id: expect.any(String) } });
+		expect(JSON.parse(users)).toMatchObject({ version: storedDataVersion, users: [{ username: 'owner' }] });
+		expect(JSON.parse(trip)).toMatchObject({ version: storedDataVersion, trip: { id: expect.any(String) } });
 		expect(JSON.parse(trip)).not.toHaveProperty('trip.slug');
 	});
 
@@ -248,7 +249,7 @@ describe('JSON store', () => {
 		expect(migratedTrip.itinerary.notes).toEqual([]);
 		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({
 			trip: { itinerary: { notes: [] } },
-			version: 12
+			version: storedDataVersion
 		});
 	});
 
@@ -309,7 +310,7 @@ describe('JSON store', () => {
 					managedTripPath(trip.slug)
 				].map(async (filePath) => JSON.parse(await readFile(filePath, 'utf8')) as { version: number })
 			);
-			expect(migratedFiles.map((file) => file.version)).toEqual([12, 12, 12, 12, 12]);
+			expect(migratedFiles.map((file) => file.version)).toEqual(Array.from({ length: 5 }, () => storedDataVersion));
 		}
 	);
 
@@ -342,7 +343,9 @@ describe('JSON store', () => {
 			throw new Error('The owner should be able to read the migrated trip.');
 		}
 		expect(migratedTrip.itinerary.expenses).toEqual([]);
-		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 12 });
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({
+			version: storedDataVersion
+		});
 	});
 
 	it('migrates version 9 daily spending into paid expenses', async () => {
@@ -399,7 +402,9 @@ describe('JSON store', () => {
 				useDate: '2026-01-01'
 			}
 		]);
-		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 12 });
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({
+			version: storedDataVersion
+		});
 	});
 
 	it('migrates version 10 expenses and items with default expense links', async () => {
@@ -441,7 +446,9 @@ describe('JSON store', () => {
 		}
 		expect(migratedTrip.itinerary.expenses[0]?.availableForItemCosts).toBe(false);
 		expect(migratedTrip.itinerary.items.find((item) => item.id === 'legacy-item')?.linkedExpenseIds).toEqual([]);
-		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({ version: 12 });
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({
+			version: storedDataVersion
+		});
 	});
 
 	it('rejects incomplete or invalid split data before serving it', async () => {
@@ -971,7 +978,7 @@ describe('JSON store', () => {
 		});
 	});
 
-	it('updates an account’s selected-trip access and deletes non-owner accounts', async () => {
+	it('blocks an attached account from a public trip and can later detach it', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 		const trip = await createTestTrip(store, owner.id);
@@ -986,9 +993,20 @@ describe('JSON store', () => {
 		]);
 		await store.setTripMemberAccess({ actorId: owner.id, role: 'admin', tripId: trip.id, userId: person.id });
 		await expect(store.getTripView(trip.slug, person)).resolves.toMatchObject({ access: 'admin' });
-		await store.setTripMemberAccess({ actorId: owner.id, role: null, tripId: trip.id, userId: person.id });
+		await store.setTripMemberAccess({ actorId: owner.id, role: 'none', tripId: trip.id, userId: person.id });
+		await expect(store.listTripMembers(trip.id, owner.id)).resolves.toEqual(
+			expect.arrayContaining([{ id: person.id, role: 'none', username: person.username }])
+		);
+		await expect(store.listAvailableTripAccounts(trip.id, owner.id)).resolves.toEqual([]);
+		await store.setTripPublic({ actorId: owner.id, isPublic: true, tripId: trip.id });
 		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
+		await expect(store.listTripSwitchOptions(person.id)).resolves.toEqual([]);
 
+		await store.setTripMemberAccess({ actorId: owner.id, role: null, tripId: trip.id, userId: person.id });
+		await expect(store.listAvailableTripAccounts(trip.id, owner.id)).resolves.toEqual([person]);
+		await expect(store.getTripView(trip.slug, person)).resolves.toMatchObject({ access: 'visitor' });
+
+		await store.setTripPublic({ actorId: owner.id, isPublic: false, tripId: trip.id });
 		await store.setTripMemberAccess({ actorId: owner.id, role: 'user', tripId: trip.id, userId: person.id });
 		const sessionId = await store.createSession(person.id);
 		await store.deleteAccount({ actorId: owner.id, userId: person.id });

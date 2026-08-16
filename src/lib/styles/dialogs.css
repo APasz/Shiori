@@ -37,3 +37,25 @@ dialog.is-draggable [data-dialog-drag-handle] {
 dialog.is-draggable.is-dragging [data-dialog-drag-handle] {
 	cursor: grabbing;
 }
+
+@media (max-width: 40rem) {
+	dialog:not(.is-dragging) {
+		margin: auto 0 0 !important;
+		max-height: min(90dvh, calc(100dvh - 0.5rem)) !important;
+		max-width: 100% !important;
+		width: 100% !important;
+	}
+
+	dialog > [data-dialog-scroll-area] {
+		border-bottom: 0 !important;
+		border-inline: 0 !important;
+		border-radius: 1rem 1rem 0 0;
+		max-height: min(90dvh, calc(100dvh - 0.5rem)) !important;
+		padding-bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
+	}
+
+	dialog.is-draggable [data-dialog-drag-handle] {
+		cursor: default;
+		touch-action: pan-y;
+	}
+}

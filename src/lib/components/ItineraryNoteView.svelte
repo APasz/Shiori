@@ -237,5 +237,10 @@
 		.badges {
 			justify-content: start;
 		}
+
+		button,
+		summary {
+			min-height: 2.75rem;
+		}
 	}
 </style>

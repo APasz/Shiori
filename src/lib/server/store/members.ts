@@ -1,11 +1,13 @@
 import { StoreError } from './error';
 import {
 	shareRoleSchema,
+	tripMemberRoleSchema,
 	usernameSchema,
 	type AuthenticatedUser,
 	type ShareRole,
 	type StoredData,
-	type StoredTrip
+	type StoredTrip,
+	type TripMemberRole
 } from './model';
 import { readData, transaction } from './persistence';
 import { timestamp } from './time';
@@ -20,7 +22,7 @@ function requireOwnerTrip(data: StoredData, tripId: string, actorId: string): St
 
 function requireSharedMember(data: StoredData, trip: StoredTrip, userId: string): void {
 	if (!data.shares.some((share) => share.tripId === trip.id && share.userId === userId)) {
-		throw new StoreError(404, 'That person does not have access to this trip.');
+		throw new StoreError(404, 'That person is not attached to this trip.');
 	}
 }
 
@@ -107,7 +109,7 @@ export async function setSharedUserRole(input: {
 
 export async function setTripMemberAccess(input: {
 	actorId: string;
-	role: ShareRole | null;
+	role: TripMemberRole | null;
 	tripId: string;
 	userId: string;
 }): Promise<void> {
@@ -130,7 +132,7 @@ export async function setTripMemberAccess(input: {
 			return;
 		}
 
-		const role = shareRoleSchema.parse(input.role);
+		const role = tripMemberRoleSchema.parse(input.role);
 		const share = data.shares[shareIndex];
 		if (share) {
 			share.role = role;

@@ -123,4 +123,10 @@
 		background: var(--color-state-selection);
 		color: var(--color-text-on-accent);
 	}
+
+	@media (max-width: 40rem) {
+		.quick-times button {
+			min-height: 2.75rem;
+		}
+	}
 </style>

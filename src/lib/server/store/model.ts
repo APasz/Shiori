@@ -8,7 +8,8 @@ export const priorStoredDataVersion = 8;
 export const dailyExpenseStoredDataVersion = 9;
 export const freeformExpenseStoredDataVersion = 10;
 export const preNotesStoredDataVersion = 11;
-export const storedDataVersion = 12;
+export const preAccessBlockStoredDataVersion = 12;
+export const storedDataVersion = 13;
 export const tripStructureLockTargetId = 'trip-structure';
 
 export const usernameSchema = z
@@ -20,6 +21,7 @@ export const passwordSchema = z
 	.min(minimumPasswordLength, passwordMinimumMessage())
 	.max(1024, 'Use at most 1,024 characters for a password.');
 export const shareRoleSchema = z.enum(['user', 'admin']);
+export const tripMemberRoleSchema = z.union([z.literal('none'), shareRoleSchema]);
 
 const supportedStoredDataVersionSchema = z.union([
 	z.literal(legacyStoredDataVersion),
@@ -28,6 +30,7 @@ const supportedStoredDataVersionSchema = z.union([
 	z.literal(dailyExpenseStoredDataVersion),
 	z.literal(freeformExpenseStoredDataVersion),
 	z.literal(preNotesStoredDataVersion),
+	z.literal(preAccessBlockStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 
@@ -54,7 +57,7 @@ export const storedTripSchema = persistedTripSchema.extend({
 const storedShareSchema = z.strictObject({
 	tripId: itineraryIdentifierSchema,
 	userId: itineraryIdentifierSchema,
-	role: shareRoleSchema
+	role: tripMemberRoleSchema
 });
 const storedSessionSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
@@ -273,3 +276,4 @@ export type StoredEditLock = z.infer<typeof storedEditLockSchema>;
 export type AuthenticatedUser = Pick<StoredUser, 'id' | 'username'>;
 export type AccountManagementEntry = AuthenticatedUser & { ownsTrip: boolean };
 export type ShareRole = z.infer<typeof shareRoleSchema>;
+export type TripMemberRole = z.infer<typeof tripMemberRoleSchema>;

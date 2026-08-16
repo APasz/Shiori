@@ -1,7 +1,6 @@
 <script lang="ts">
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
-	import Icon from '$lib/visuals/Icon.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -28,14 +27,6 @@
 			event.preventDefault();
 		}
 	}
-
-	function confirmAccessRemoval(event: SubmitEvent, username: string): void {
-		if (
-			!window.confirm(`Remove ${username}'s access to this trip? Their account will remain available for other trips.`)
-		) {
-			event.preventDefault();
-		}
-	}
 </script>
 
 <svelte:head>
@@ -55,8 +46,6 @@
 		<p class="success page-status" role="status">Person added to this trip.</p>
 	{:else if form?.memberRoleUpdated}
 		<p class="success page-status" role="status">Access level updated.</p>
-	{:else if form?.memberRemoved}
-		<p class="success page-status" role="status">Access removed.</p>
 	{:else if form?.editSessionReleased}
 		<p class="success page-status" role="status">The active edit session was force closed.</p>
 	{:else if form?.editSessionReleased === false}
@@ -141,32 +130,19 @@
 					{#if member.role === 'sudo'}
 						<span class="role-badge owner-badge">Owner</span>
 					{:else}
-						<form action={`?trip=${encodeURIComponent(data.trip.slug)}&/setMemberRole`} method="POST">
+						<form action={`?trip=${encodeURIComponent(data.trip.slug)}&/setMemberAccess`} method="POST">
 							<input name="memberId" type="hidden" value={member.id} />
 							<label class="role-control">
 								<span class="visually-hidden">Access level for {member.username}</span>
 								<select name="role" onchange={autoSubmit} value={member.role}>
+									<option value="none">No access</option>
 									<option value="user">Standard</option>
 									<option value="admin">Admin</option>
+									<option class="remove-access-option" value="remove">Remove access</option>
 								</select>
 							</label>
 							<noscript><button class="shiori-form-button" type="submit">Save</button></noscript>
 						</form>
-						<details class="member-actions">
-							<summary aria-label={`Actions for ${member.username}`} title={`Actions for ${member.username}`}>
-								<Icon name="more" />
-							</summary>
-							<div class="member-actions-panel">
-								<form
-									action={`?trip=${encodeURIComponent(data.trip.slug)}&/removeMember`}
-									method="POST"
-									onsubmit={(event) => confirmAccessRemoval(event, member.username)}
-								>
-									<input name="memberId" type="hidden" value={member.id} />
-									<button class="remove-access-button" type="submit">Remove access</button>
-								</form>
-							</div>
-						</details>
 					{/if}
 				</li>
 			{/each}
@@ -174,13 +150,15 @@
 
 		{#if form?.memberRoleError}
 			<p class="error" role="alert">{form.memberRoleError}</p>
-		{:else if form?.memberRemovalError}
-			<p class="error" role="alert">{form.memberRemovalError}</p>
 		{/if}
 
 		<details class="role-access">
 			<summary>Role access</summary>
 			<dl>
+				<div>
+					<dt>No access</dt>
+					<dd>Their signed-in account remains attached but cannot view the trip, including its public schedule</dd>
+				</div>
 				<div>
 					<dt>Standard</dt>
 					<dd>Read-only itinerary and notes</dd>
@@ -188,6 +166,10 @@
 				<div>
 					<dt>Admin</dt>
 					<dd>Read-only plus sensitive itinerary details</dd>
+				</div>
+				<div>
+					<dt>Remove access</dt>
+					<dd>Detaches the account from this trip</dd>
 				</div>
 			</dl>
 		</details>
@@ -274,9 +256,9 @@
 
 	.visibility-toggle {
 		display: inline-flex;
-		height: 1.5rem;
+		height: 2.75rem;
 		position: relative;
-		width: 2.625rem;
+		width: 4.5rem;
 	}
 
 	.visibility-toggle input {
@@ -294,12 +276,12 @@
 		background: var(--color-text-muted);
 		border-radius: 50%;
 		content: '';
-		height: 1rem;
-		left: 0.1875rem;
+		height: 1.75rem;
+		left: 0.5rem;
 		position: absolute;
-		top: 0.1875rem;
+		top: 0.5rem;
 		transition: transform 120ms ease;
-		width: 1rem;
+		width: 1.75rem;
 	}
 
 	.visibility-toggle input:checked {
@@ -309,7 +291,7 @@
 
 	.visibility-toggle input:checked::after {
 		background: var(--color-state-selection);
-		transform: translateX(1.125rem);
+		transform: translateX(1.75rem);
 	}
 
 	.visibility-toggle input:focus-visible {
@@ -342,7 +324,6 @@
 	}
 
 	.add-person summary,
-	.member-actions summary,
 	.role-access summary,
 	.advanced-section > summary {
 		cursor: pointer;
@@ -358,8 +339,7 @@
 		padding: 0.45rem 0.65rem;
 	}
 
-	.add-person summary::-webkit-details-marker,
-	.member-actions summary::-webkit-details-marker {
+	.add-person summary::-webkit-details-marker {
 		display: none;
 	}
 
@@ -393,7 +373,7 @@
 		border-top: 1px solid var(--color-border-default);
 		display: grid;
 		gap: 0.75rem;
-		grid-template-columns: minmax(0, 1fr) auto auto;
+		grid-template-columns: minmax(0, 1fr) auto;
 		min-height: 3.25rem;
 		padding: 0.5rem 0;
 	}
@@ -431,32 +411,30 @@
 		padding: 0.35rem 1.75rem 0.35rem 0.55rem;
 	}
 
-	.member-actions {
-		position: relative;
+	.remove-access-option {
+		color: var(--color-state-warning);
 	}
 
-	.member-actions summary {
-		align-items: center;
-		border: 1px solid var(--color-border-strong);
-		display: flex;
-		height: 2.25rem;
-		justify-content: center;
-		list-style: none;
-		width: 2.25rem;
+	@media (max-width: 34rem) {
+		.add-person summary,
+		.role-control select,
+		.force-close-button {
+			min-height: 2.75rem;
+		}
+
+		.role-control select {
+			font-size: 1rem;
+		}
+
+		.visibility-control {
+			align-items: start;
+		}
+
+		.visibility-state {
+			align-self: center;
+		}
 	}
 
-	.member-actions-panel {
-		background: var(--color-surface-raised);
-		border: 1px solid var(--color-border-strong);
-		padding: 0.875rem;
-		position: absolute;
-		right: 0;
-		top: calc(100% + 0.25rem);
-		width: min(20rem, calc(100vw - 2rem));
-		z-index: 2;
-	}
-
-	.remove-access-button,
 	.force-close-button {
 		background: transparent;
 		border: 1px solid var(--color-state-error);
@@ -468,7 +446,6 @@
 		padding: 0.5rem 0.75rem;
 	}
 
-	.remove-access-button:hover,
 	.force-close-button:hover {
 		background: color-mix(in srgb, var(--color-state-error) 11%, transparent);
 	}
