@@ -1,13 +1,24 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const lastSeenFormatter = new Intl.DateTimeFormat('en-AU', {
-		dateStyle: 'medium',
-		timeStyle: 'short',
-		timeZone: 'UTC'
+	let browserReady = $state(false);
+	const sessionRenewedFormatter = $derived(
+		browserReady
+			? new Intl.DateTimeFormat(undefined, {
+					dateStyle: 'medium',
+					timeStyle: 'short',
+					timeZone: viewerContext.timeZone
+				})
+			: null
+	);
+
+	onMount(() => {
+		browserReady = true;
 	});
 
 	function confirmForceClose(event: SubmitEvent): void {
@@ -16,8 +27,14 @@
 		}
 	}
 
-	function lastSeenLabel(lastSeenAt: number): string {
-		return lastSeenFormatter.format(lastSeenAt);
+	function confirmForceLogout(event: SubmitEvent): void {
+		if (!window.confirm('Force logout all users? You will also be logged out.')) {
+			event.preventDefault();
+		}
+	}
+
+	function sessionRenewedLabel(sessionRenewedAt: number): string {
+		return sessionRenewedFormatter?.format(sessionRenewedAt) ?? 'Localizing…';
 	}
 </script>
 
@@ -32,15 +49,21 @@
 		<PageTitle title="Admin" />
 	</header>
 
-	<section aria-labelledby="edit-sessions-heading">
-		<h2 id="edit-sessions-heading">Edit sessions</h2>
+	<section aria-labelledby="sessions-heading">
+		<h2 id="sessions-heading">Sessions</h2>
 		<form action="?/forceCloseEditSessions" method="POST" onsubmit={confirmForceClose}>
-			<button class="force-close-button" type="submit">Force close active sessions</button>
+			<button class="force-close-button" disabled={!data.hasActiveEdits} type="submit">Force close edits</button>
 		</form>
 		{#if form?.released !== undefined}
 			<p class="success" role="status">Closed {form.released} session{form.released === 1 ? '' : 's'}.</p>
 		{:else if form?.forceCloseError}
 			<p class="error" role="alert">{form.forceCloseError}</p>
+		{/if}
+		<form action="?/forceLogoutUsers" method="POST" onsubmit={confirmForceLogout}>
+			<button class="force-close-button" type="submit">Force logout users</button>
+		</form>
+		{#if form?.forceLogoutError}
+			<p class="error" role="alert">{form.forceLogoutError}</p>
 		{/if}
 	</section>
 
@@ -49,11 +72,11 @@
 		{#if data.users.length > 0}
 			<ul class="user-list">
 				{#each data.users as user (user.id)}
-					{@const lastSeen = lastSeenLabel(user.lastSeenAt)}
+					{@const sessionRenewed = sessionRenewedLabel(user.lastSeenAt)}
 					<li>
 						<strong>{user.username}</strong>
-						<time aria-label={`Last seen ${lastSeen}`} datetime={new Date(user.lastSeenAt).toISOString()}
-							>{lastSeen}</time
+						<time aria-label={`Session renewed ${sessionRenewed}`} datetime={new Date(user.lastSeenAt).toISOString()}
+							>{sessionRenewed}</time
 						>
 					</li>
 				{/each}
@@ -104,6 +127,12 @@
 		cursor: pointer;
 		font: inherit;
 		padding: 0.5rem 0.625rem;
+	}
+
+	.force-close-button:disabled {
+		border-color: var(--color-border-default);
+		color: var(--color-text-muted);
+		cursor: not-allowed;
 	}
 
 	.success {

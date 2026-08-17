@@ -67,6 +67,15 @@ export async function destroySession(sessionId: string | undefined): Promise<voi
 	});
 }
 
+export async function forceLogoutAllUsers(userId: string): Promise<{ loggedOut: number }> {
+	return transaction((data) => {
+		assertAccountManager(data, userId);
+		const loggedOut = new Set(data.sessions.map((session) => session.userId)).size;
+		data.sessions = [];
+		return { loggedOut };
+	});
+}
+
 /** Lists signed-in users with the timestamp from their most recently renewed session. */
 export async function listActiveSessionUsers(actorId: string): Promise<ActiveSessionUser[]> {
 	const data = await readData();

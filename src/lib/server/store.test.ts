@@ -566,6 +566,24 @@ describe('JSON store', () => {
 		await expect(store.listActiveSessionUsers(owner.id)).resolves.toEqual([]);
 	});
 
+	it('lets a sudo owner force logout every signed-in user', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		await createTestTrip(store, owner.id);
+		const member = await store.createAccount({
+			actorId: owner.id,
+			password: 'another strong password',
+			username: 'member'
+		});
+		await store.createSession(owner.id);
+		await store.createSession(owner.id);
+		await store.createSession(member.id);
+
+		await expect(store.forceLogoutAllUsers(member.id)).rejects.toMatchObject({ status: 403 });
+		await expect(store.forceLogoutAllUsers(owner.id)).resolves.toEqual({ loggedOut: 2 });
+		await expect(store.listActiveSessionUsers(owner.id)).resolves.toEqual([]);
+	});
+
 	it('creates a private empty trip and updates its basic details', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
@@ -1155,11 +1173,15 @@ describe('JSON store', () => {
 			password: 'another strong password',
 			username: 'trip-member'
 		});
+		await expect(store.hasActiveEditSessions(owner.id)).resolves.toBe(false);
 		await store.acquireTripStructureLock({ tripId: firstTrip.id, userId: owner.id });
 		await store.acquireTripStructureLock({ tripId: secondTrip.id, userId: owner.id });
 
+		await expect(store.hasActiveEditSessions(member.id)).rejects.toMatchObject({ status: 403 });
+		await expect(store.hasActiveEditSessions(owner.id)).resolves.toBe(true);
 		await expect(store.forceReleaseAllEditLocks(member.id)).rejects.toMatchObject({ status: 403 });
 		await expect(store.forceReleaseAllEditLocks(owner.id)).resolves.toEqual({ released: 2 });
+		await expect(store.hasActiveEditSessions(owner.id)).resolves.toBe(false);
 		await expect(store.hasActiveTripEditSession({ tripId: firstTrip.id, userId: owner.id })).resolves.toBe(false);
 		await expect(store.hasActiveTripEditSession({ tripId: secondTrip.id, userId: owner.id })).resolves.toBe(false);
 	});

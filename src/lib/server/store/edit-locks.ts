@@ -111,6 +111,12 @@ export async function hasActiveTripEditSession(input: { tripId: string; userId: 
 	return data.editLocks.some((lock) => lock.tripId === trip.id && !isExpired(lock.expiresAt));
 }
 
+export async function hasActiveEditSessions(userId: string): Promise<boolean> {
+	const data = await readData();
+	assertAccountManager(data, userId);
+	return data.editLocks.some((lock) => !isExpired(lock.expiresAt));
+}
+
 export async function forceReleaseTripEditLocks(input: {
 	tripId: string;
 	userId: string;

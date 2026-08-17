@@ -14,6 +14,7 @@ export {
 	acquireTripStructureLock,
 	forceReleaseAllEditLocks,
 	forceReleaseTripEditLocks,
+	hasActiveEditSessions,
 	hasActiveTripEditSession,
 	releaseItemLock,
 	releaseTripStructureLock,
@@ -38,7 +39,7 @@ export {
 	setTripMemberAccess,
 	setTripPublic
 } from './members';
-export { createSession, destroySession, listActiveSessionUsers, refreshSession } from './sessions';
+export { createSession, destroySession, forceLogoutAllUsers, listActiveSessionUsers, refreshSession } from './sessions';
 export {
 	assertTripOwnerAccess,
 	createTrip,
