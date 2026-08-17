@@ -19,8 +19,12 @@ if [[ ! -d .git ]]; then
 	exit 1
 fi
 
-git fetch --no-tags origin "+refs/heads/$branch_name:refs/remotes/origin/$branch_name"
-origin_commit_sha="$(git rev-parse "refs/remotes/origin/$branch_name")"
+function fetch_origin_commit_sha() {
+	git fetch --no-tags origin "+refs/heads/$branch_name:refs/remotes/origin/$branch_name"
+	git rev-parse "refs/remotes/origin/$branch_name"
+}
+
+origin_commit_sha="$(fetch_origin_commit_sha)"
 if [[ "$commit_sha" != "$origin_commit_sha" ]]; then
 	echo "Skipping stale deployment for $commit_sha; origin/$branch_name is now $origin_commit_sha."
 	exit 0
@@ -29,6 +33,13 @@ fi
 git reset --hard "$commit_sha"
 npm ci
 npm run build
+
+origin_commit_sha="$(fetch_origin_commit_sha)"
+if [[ "$commit_sha" != "$origin_commit_sha" ]]; then
+	echo "Not restarting Shiori for stale deployment $commit_sha; origin/$branch_name is now $origin_commit_sha."
+	exit 0
+fi
+
 sudo -n /usr/bin/systemctl restart shiori
 
 for ((attempt = 1; attempt <= health_attempts; attempt += 1)); do
