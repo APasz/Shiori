@@ -13,6 +13,7 @@ const applicationCacheName = 'shiori:application';
 const offlineViewerCacheName = 'shiori:offline:viewer';
 const legacyCacheNamePrefix = 'shiori:offline:';
 const applicationAssets = new Set([...build, ...files]);
+const immutableAssetPathPrefix = `${base}/_app/immutable/`;
 const tripPathPrefix = `${base}/trips/`;
 const tripDataPathSuffix = '/__data.json';
 const logoutPath = `${base}/logout`;
@@ -57,6 +58,10 @@ function isOfflineViewerDataRequest(url: URL): boolean {
 
 function isOfflineViewerResource(url: URL): boolean {
 	return isHomePage(url) || isTripPage(url) || isOfflineViewerDataRequest(url);
+}
+
+function isApplicationAsset(url: URL): boolean {
+	return applicationAssets.has(url.pathname) || url.pathname.startsWith(immutableAssetPathPrefix);
 }
 
 function tripRootUrl(url: URL): URL | null {
@@ -356,7 +361,7 @@ worker.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	if (applicationAssets.has(url.pathname)) {
+	if (isApplicationAsset(url)) {
 		event.respondWith(respondToApplicationAsset(event.request));
 		return;
 	}
