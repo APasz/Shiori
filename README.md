@@ -49,11 +49,17 @@ creating an empty private trip. New trips receive a readable URL at `/trips/<tri
 can use an itinerary page’s top-right overflow menu to edit their name and default time zone. The
 homepage shows empty trips first, then planned trips ordered by their latest item start.
 
-Previously opened trip pages are available read-only while offline. Shiori saves the app shell and
-the latest successful version of each opened trip on that browser profile; it refreshes that copy
-after an edit, and clears all offline itinerary copies when the user signs out. First open each trip
-while connected before relying on it offline. Offline copies may contain the details visible to the
-signed-in user, so sign out when using a shared device.
+Shiori can be installed as a read-only offline viewer on Android. Deploy it over HTTPS, open Shiori
+in Chrome, then choose **Install app** from Chrome's menu. While connected, open a trip and select
+**Save for offline**. Shiori saves the home page, itinerary, notes, and any permitted costs page to
+that browser profile; the same control reports when the copy is ready and can update it before travel. Edits,
+sign-in, imports, backups, exchange rates, and Google enrichments still require a connection.
+
+Offline copies may contain the details visible to the signed-in user, so sign out when using a shared
+device. Shiori clears saved itineraries when the user signs out. Browser storage can also be cleared
+by the user or, when persistent storage is not granted, under device storage pressure. A saved trip
+retains the application files it needs when Shiori is updated, but it should still be opened and
+updated before travelling.
 
 Each item has one canonical `timing` value: `exact`, `approximate`, or `window`. Every timing uses
 Unix-millisecond timestamps; transport stops can use `scheduledAt` in the same format. Each trip
@@ -89,6 +95,17 @@ timestamps). A trip's filename is its URL slug: for example, `trips/your-trip.js
 
 Run a single Shiori server process against a durable filesystem volume. The JSON store and its
 edit locks are intentionally designed for this small, single-instance deployment model.
+
+For a simple production deployment, provide the values in `.env.example` as process environment
+variables, then run `npm ci`, `npm run build`, and `npm start`. Set `NODE_ENV=production`,
+`HOST=127.0.0.1`, `PORT=5173`, `ORIGIN=https://shiori.apasz.com`, and a durable absolute
+`SHIORI_DATA_DIRECTORY`. Put Caddy in front of the app for HTTPS:
+
+```caddyfile
+shiori.apasz.com {
+	reverse_proxy 127.0.0.1:5173
+}
+```
 
 On the first local development run, visit `/setup` to create the one sudo account. In a
 production environment, set a random `SHIORI_SETUP_TOKEN` of at least 32 bytes before visiting

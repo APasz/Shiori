@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -39,7 +40,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin · Shiori</title>
+	<title>{browserTitle(browserPages.admin)}</title>
 </svelte:head>
 
 <TripTopbar activePage="admin" canManageAccounts currentUser={data.currentUser} />

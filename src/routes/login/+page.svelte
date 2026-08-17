@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import type { ActionData, PageData } from './$types';
 
@@ -7,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign in · Shiori</title>
+	<title>{browserTitle(browserPages.login)}</title>
 </svelte:head>
 
 <main>

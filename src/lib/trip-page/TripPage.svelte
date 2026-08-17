@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import ItineraryExporter from '$lib/components/ItineraryExporter.svelte';
 	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
 	import ItineraryItemDetails from '$lib/components/ItineraryItemDetails.svelte';
@@ -9,7 +10,7 @@
 	import TripEditor from '$lib/components/TripEditor.svelte';
 	import type { ItineraryItem, ItineraryNoteTarget } from '$lib/itinerary/schema';
 	import { onMount } from 'svelte';
-	import { ConnectivityMonitor } from './connectivity.svelte';
+	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
 	import ItinerarySchedule from './ItinerarySchedule.svelte';
 	import { ItineraryWorkflow } from './itinerary-workflow.svelte';
 	import { refreshTripPage } from './refresh';
@@ -76,7 +77,7 @@
 </script>
 
 <svelte:head>
-	<title>Shiori · Travel itineraries</title>
+	<title>{browserTitle(browserPages.itinerary, data.trip.itinerary.title)}</title>
 	<meta name="description" content="A server-authoritative travel itinerary, validated by Shiori." />
 </svelte:head>
 

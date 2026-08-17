@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import type { ActionData, PageData } from './$types';
@@ -30,7 +31,7 @@
 </script>
 
 <svelte:head>
-	<title>Access · Shiori</title>
+	<title>{browserTitle(browserPages.access)}</title>
 </svelte:head>
 
 <TripTopbar activePage="access" canManageAccounts currentUser={data.currentUser} trip={data.trip} />

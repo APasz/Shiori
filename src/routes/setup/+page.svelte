@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import type { ActionData, PageData } from './$types';
 
@@ -7,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Set up Shiori</title>
+	<title>{browserTitle(browserPages.setup)}</title>
 </svelte:head>
 
 <main>

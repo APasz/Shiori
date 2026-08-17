@@ -1,10 +1,14 @@
 import type { Handle } from '@sveltejs/kit';
+import { assertProductionConfiguration } from '$lib/server/production-config';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
 import { refreshSession } from '$lib/server/store/sessions';
+
+assertProductionConfiguration(process.env);
 
 const securityHeaders = {
 	'cache-control': 'no-store',
 	'cross-origin-opener-policy': 'same-origin',
+	'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
 	'referrer-policy': 'same-origin',
 	'x-content-type-options': 'nosniff',
 	'x-frame-options': 'DENY'

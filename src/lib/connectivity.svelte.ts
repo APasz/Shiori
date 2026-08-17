@@ -1,11 +1,12 @@
 import { resolve } from '$app/paths';
-import type { ConnectivityStatus } from './types';
+
+export type ConnectivityStatus = 'checking' | 'reachable' | 'unreachable';
 
 const probeIntervalMilliseconds = 30_000;
 const probeTimeoutMilliseconds = 5_000;
 const probeEndpoint = resolve('/api/health');
 
-/** Maintains the current server reachability state for an itinerary page. */
+/** Maintains the current server reachability state for a page. */
 export class ConnectivityMonitor {
 	status = $state<ConnectivityStatus>('checking');
 	#probeController: AbortController | null = null;

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
 	import ItineraryNoteView from '$lib/components/ItineraryNoteView.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
@@ -8,6 +10,7 @@
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { ItineraryNote, ItineraryNoteTarget } from '$lib/itinerary/schema';
 	import { refreshOfflineTripPage } from '$lib/offline';
+	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
 	import type { PageData } from './$types';
 
 	type EditingNote = {
@@ -17,6 +20,8 @@
 
 	let { data }: { data: PageData } = $props();
 	let editingNote = $state<EditingNote | null>(null);
+	const connectivity = new ConnectivityMonitor();
+	const canModifyNotes = $derived(data.trip.canEdit && connectivity.status === 'reachable');
 
 	const notesEndpoint = $derived(resolve('/api/trips/[tripId]/notes', { tripId: data.trip.id }));
 	const tripNote = $derived(data.trip.itinerary.notes.find((note) => note.kind === 'trip'));
@@ -27,7 +32,7 @@
 	);
 
 	function beginEditing(target: ItineraryNoteTarget, note: ItineraryNote | undefined): void {
-		if (!data.trip.canEdit) {
+		if (!canModifyNotes) {
 			return;
 		}
 		editingNote = { note, target };
@@ -38,10 +43,18 @@
 		await invalidateAll();
 		refreshOfflineTripPage();
 	}
+
+	$effect(() => {
+		if (connectivity.status !== 'reachable') {
+			editingNote = null;
+		}
+	});
+
+	onMount(() => connectivity.start());
 </script>
 
 <svelte:head>
-	<title>Notes · {data.trip.itinerary.title} · Shiori</title>
+	<title>{browserTitle(browserPages.notes, data.trip.itinerary.title)}</title>
 	<meta name="description" content={`Planning notes for ${data.trip.itinerary.title}.`} />
 </svelte:head>
 
@@ -49,6 +62,7 @@
 	activePage="notes"
 	canManageAccounts={data.canManageAccounts}
 	currentUser={data.currentUser}
+	isOffline={connectivity.status === 'unreachable'}
 	trip={data.trip}
 />
 
@@ -64,7 +78,7 @@
 					<p class="eyebrow">Trip-wide</p>
 					<h2 id="trip-notes-heading">Trip notepad</h2>
 				</div>
-				{#if data.trip.canEdit}
+				{#if canModifyNotes}
 					<button onclick={() => beginEditing({ kind: 'trip' }, tripNote)} type="button">
 						{tripNote ? 'Edit trip note' : 'Add trip note'}
 					</button>
@@ -75,7 +89,7 @@
 					defaultTimeZone={data.trip.itinerary.timeZone}
 					heading="Trip note"
 					note={tripNote}
-					onEdit={data.trip.canEdit ? () => beginEditing({ kind: 'trip' }, tripNote) : undefined}
+					onEdit={canModifyNotes ? () => beginEditing({ kind: 'trip' }, tripNote) : undefined}
 				/>
 			{:else}
 				<p class="empty-note">No trip-wide note yet.</p>
@@ -98,7 +112,7 @@
 							defaultTimeZone={data.trip.itinerary.timeZone}
 							heading={formatCalendarDate(note.date) ?? note.date}
 							{note}
-							onEdit={data.trip.canEdit ? () => beginEditing({ date: note.date, kind: 'day' }, note) : undefined}
+							onEdit={canModifyNotes ? () => beginEditing({ date: note.date, kind: 'day' }, note) : undefined}
 						/>
 					{/each}
 				</div>

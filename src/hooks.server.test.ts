@@ -78,4 +78,20 @@ describe('server hook', () => {
 		expect(cookies.set).not.toHaveBeenCalled();
 		expect(cookies.delete).toHaveBeenCalledWith(sessionCookieName, { path: '/' });
 	});
+
+	it('applies the browser security policies to responses', async () => {
+		const cookies: TestCookies = {
+			delete: vi.fn(),
+			get: vi.fn(),
+			set: vi.fn()
+		};
+		refreshSession.mockResolvedValue(null);
+
+		const response = await handle(handleInput(cookies));
+
+		expect(response.headers.get('permissions-policy')).toBe(
+			'camera=(), geolocation=(), microphone=(), payment=(), usb=()'
+		);
+		expect(response.headers.get('x-frame-options')).toBe('DENY');
+	});
 });

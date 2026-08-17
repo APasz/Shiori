@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { dev } from '$app/environment';
-	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount, type Component } from 'svelte';
 	import appIcon from '$lib/assets/icon.svg';
@@ -12,7 +11,7 @@
 	import { themeStyleTag } from '$lib/theme/palette';
 	import { themeInitializationScript } from '$lib/theme/theme';
 	import BrandFeedbackMonitor from '$lib/visuals/BrandFeedbackMonitor.svelte';
-	import { refreshOfflineTripPage, registerOfflineSupport } from '$lib/offline';
+	import { registerOfflineSupport } from '$lib/offline';
 
 	let { children } = $props();
 	let DevelopmentViewerControls = $state<Component | null>(null);
@@ -25,12 +24,6 @@
 		'/trips/[slug]/costs'
 	]);
 	const hasInlineThemeToggle = $derived(inlineThemeToggleRoutes.has(page.route.id ?? ''));
-
-	if (!dev) {
-		afterNavigate(() => {
-			refreshOfflineTripPage();
-		});
-	}
 
 	onMount(() => {
 		viewerContext.initialize();

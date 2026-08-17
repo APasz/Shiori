@@ -7,6 +7,7 @@
 	import Icon from '$lib/visuals/Icon.svelte';
 	import ShioriIcon from '$lib/visuals/ShioriIcon.svelte';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
+	import OfflineTripControl from './OfflineTripControl.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
 	type TopbarPage = 'access' | 'accounts' | 'admin' | 'costs' | 'itinerary' | 'notes' | 'trips';
@@ -46,6 +47,7 @@
 	const accessHref = $derived(trip ? resolve(`/settings/access?trip=${encodeURIComponent(trip.slug)}`) : null);
 	const canViewCosts = $derived(trip?.access === 'admin' || trip?.access === 'sudo');
 	const canViewNotes = $derived(trip !== undefined && trip.access !== 'visitor');
+	const canSaveOffline = $derived(activePage === 'itinerary' || activePage === 'notes' || activePage === 'costs');
 
 	function runTripAction(action: (() => void) | undefined): void {
 		tripMenuOpen = false;
@@ -131,10 +133,13 @@
 			{#if isOffline}
 				<span class="connection-status" role="status">Offline</span>
 			{/if}
-			{#if trip && (backupTripId || onExport || (canModifyItinerary && onEditTrip))}
+			{#if trip}
 				<details bind:this={tripMenuElement} bind:open={tripMenuOpen} class="trip-menu" ontoggle={synchronizeTripMenu}>
 					<summary aria-label="Trip options" title="Trip options"><Icon name="more" /></summary>
 					<div class="topbar-menu">
+						{#if canSaveOffline}
+							<OfflineTripControl {isOffline} />
+						{/if}
 						{#if canModifyItinerary && onEditTrip}
 							<button onclick={() => runTripAction(onEditTrip)} type="button">Edit trip</button>
 						{/if}

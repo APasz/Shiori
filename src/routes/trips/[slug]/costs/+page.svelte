@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import {
 		apiErrorSchema,
 		currencyConversionRatesResponseSchema,
@@ -26,6 +28,7 @@
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { amountInputValue, amountMinorFromInput, convertAmountMinor, formatMonetaryAmount } from '$lib/money';
 	import { refreshOfflineTripPage } from '$lib/offline';
+	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageData } from './$types';
@@ -56,14 +59,16 @@
 	let conversionStatus = $state<ConversionStatus>('loading');
 	let conversionError = $state<string | null>(null);
 	let conversionEffectiveDate = $state<string | null>(null);
+	const connectivity = new ConnectivityMonitor();
 
 	const overview = $derived(summarizeExpenses(data.trip.itinerary));
 	const expenses = $derived([...data.trip.itinerary.expenses].sort(compareExpenses));
 	const conversionEndpoint = $derived(resolve('/api/exchange-rates'));
 	const expensesEndpoint = $derived(resolve('/api/trips/[tripId]/expenses', { tripId: data.trip.id }));
 	const sourceCurrencies = $derived(sourceCurrenciesFor(overview));
+	const canModifyExpenses = $derived(data.trip.canEdit && connectivity.status === 'reachable');
 	const canStartExpenseAction = $derived(
-		data.trip.canEdit && !expenseSaving && deletingExpenseId === null && expenseEditorMode === null
+		canModifyExpenses && !expenseSaving && deletingExpenseId === null && expenseEditorMode === null
 	);
 	const currencyOptions = currencyCodeSchema.options;
 	const categoryOptions = expenseCategorySchema.options;
@@ -205,7 +210,7 @@
 	async function saveExpense(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
 		const editorMode = expenseEditorMode;
-		if (!editingExpense || !editorMode || expenseSaving || deletingExpenseId !== null) {
+		if (!canModifyExpenses || !editingExpense || !editorMode || expenseSaving || deletingExpenseId !== null) {
 			return;
 		}
 		const expense = expenseCandidate(editingExpense);
@@ -329,6 +334,16 @@
 		void loadConversionRates(controller, sourceCurrencies, summaryCurrency);
 		return () => controller.abort();
 	});
+
+	$effect(() => {
+		if (connectivity.status !== 'reachable') {
+			expenseEditorMode = null;
+			editingExpense = null;
+			expenseError = null;
+		}
+	});
+
+	onMount(() => connectivity.start());
 </script>
 
 {#snippet expenseEditor()}
@@ -410,7 +425,7 @@
 {/snippet}
 
 <svelte:head>
-	<title>Costs · {data.trip.itinerary.title} · Shiori</title>
+	<title>{browserTitle(browserPages.costs, data.trip.itinerary.title)}</title>
 	<meta name="description" content={`Costs for ${data.trip.itinerary.title}.`} />
 </svelte:head>
 
@@ -418,6 +433,7 @@
 	activePage="costs"
 	canManageAccounts={data.canManageAccounts}
 	currentUser={data.currentUser}
+	isOffline={connectivity.status === 'unreachable'}
 	trip={data.trip}
 />
 
@@ -491,7 +507,7 @@
 					<p class="eyebrow">Daily spending</p>
 					<h2 id="expenses-heading">Expenses</h2>
 				</div>
-				{#if data.trip.canEdit}<button
+				{#if canModifyExpenses}<button
 						class="primary-button"
 						disabled={!canStartExpenseAction}
 						onclick={beginCreatingExpense}
@@ -508,17 +524,17 @@
 						<tr
 							><th scope="col">Expense</th><th scope="col">Category</th><th scope="col">Amount</th><th scope="col"
 								>Use date</th
-							><th scope="col">Status</th>{#if data.trip.canEdit}<th scope="col"
+							><th scope="col">Status</th>{#if canModifyExpenses}<th scope="col"
 									><span class="visually-hidden">Actions</span></th
 								>{/if}</tr
 						>
 					</thead>
 					<tbody>
 						{#if expenses.length === 0 && expenseEditorMode !== 'create'}
-							<tr><td class="empty-cell" colspan={data.trip.canEdit ? 6 : 5}>No expenses recorded yet.</td></tr>
+							<tr><td class="empty-cell" colspan={canModifyExpenses ? 6 : 5}>No expenses recorded yet.</td></tr>
 						{/if}
 						{#if expenseEditorMode === 'create'}
-							<tr class="expense-editor-row"><td colspan={data.trip.canEdit ? 6 : 5}>{@render expenseEditor()}</td></tr>
+							<tr class="expense-editor-row"><td colspan={canModifyExpenses ? 6 : 5}>{@render expenseEditor()}</td></tr>
 						{/if}
 						{#each expenses as expense (expense.id)}
 							<tr>
@@ -536,7 +552,7 @@
 										: 'Unpaid'}
 									{#if expense.availableForItemCosts}<span class="expense-availability">Available to items</span>{/if}
 								</td>
-								{#if data.trip.canEdit}
+								{#if canModifyExpenses}
 									<td class="expense-actions">
 										<button
 											aria-expanded={editingExpense?.id === expense.id}
@@ -552,7 +568,7 @@
 							</tr>
 							{#if expenseEditorMode === 'edit' && editingExpense?.id === expense.id}
 								<tr class="expense-editor-row"
-									><td colspan={data.trip.canEdit ? 6 : 5}>{@render expenseEditor()}</td></tr
+									><td colspan={canModifyExpenses ? 6 : 5}>{@render expenseEditor()}</td></tr
 								>
 							{/if}
 						{/each}

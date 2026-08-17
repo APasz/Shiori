@@ -1,25 +1,49 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import TripEditor from '$lib/components/TripEditor.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
+	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let creatingTrip = $state(false);
+	const connectivity = new ConnectivityMonitor();
+	const canCreateTrip = $derived(connectivity.status === 'reachable');
+
+	function beginTripCreation(): void {
+		if (canCreateTrip) {
+			creatingTrip = true;
+		}
+	}
 
 	async function finishTripCreation(completion: { readonly kind: 'created'; readonly slug: string }): Promise<void> {
 		creatingTrip = false;
 		await goto(resolve('/trips/[slug]', { slug: completion.slug }));
 	}
+
+	$effect(() => {
+		if (connectivity.status !== 'reachable') {
+			creatingTrip = false;
+		}
+	});
+
+	onMount(() => connectivity.start());
 </script>
 
 <svelte:head>
-	<title>Trips · Shiori</title>
+	<title>{browserTitle(browserPages.trips)}</title>
 	<meta name="description" content="Your available Shiori travel itineraries." />
 </svelte:head>
 
-<TripTopbar activePage="trips" canManageAccounts={data.canManageAccounts} currentUser={data.currentUser} />
+<TripTopbar
+	activePage="trips"
+	canManageAccounts={data.canManageAccounts}
+	currentUser={data.currentUser}
+	isOffline={connectivity.status === 'unreachable'}
+/>
 
 <main>
 	<ul class="trip-list">
@@ -31,12 +55,14 @@
 				</a>
 			</li>
 		{/each}
-		<li>
-			<button class="new-trip-button" onclick={() => (creatingTrip = true)} type="button">
-				<strong>New trip</strong>
-				<small>Create a private trip</small>
-			</button>
-		</li>
+		{#if canCreateTrip}
+			<li>
+				<button class="new-trip-button" onclick={beginTripCreation} type="button">
+					<strong>New trip</strong>
+					<small>Create a private trip</small>
+				</button>
+			</li>
+		{/if}
 	</ul>
 </main>
 

@@ -4,24 +4,13 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
+import { setupTokenConfigurationError as configuredSetupTokenError } from '$lib/server/production-config';
 import { createInitialSudo, needsInitialSetup } from '$lib/server/store/auth';
 import { StoreError } from '$lib/server/store/error';
 import { createSession } from '$lib/server/store/sessions';
 
-const minimumSetupTokenLength = 32;
-
 function setupTokenConfigurationError(): string | null {
-	const configuredToken = process.env.SHIORI_SETUP_TOKEN;
-	if (dev && !configuredToken) {
-		return null;
-	}
-	if (!configuredToken) {
-		return 'SHIORI_SETUP_TOKEN must be configured before production setup.';
-	}
-	if (Buffer.byteLength(configuredToken) < minimumSetupTokenLength) {
-		return `SHIORI_SETUP_TOKEN must contain at least ${minimumSetupTokenLength} bytes.`;
-	}
-	return null;
+	return configuredSetupTokenError(process.env, !dev);
 }
 
 function setupTokenIsValid(token: string): boolean {

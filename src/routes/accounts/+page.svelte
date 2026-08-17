@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browserPages, browserTitle } from '$lib/browser-title';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
 	import PageTitle from '$lib/components/PageTitle.svelte';
@@ -35,7 +36,7 @@
 </script>
 
 <svelte:head>
-	<title>Accounts · Shiori</title>
+	<title>{browserTitle(browserPages.accounts)}</title>
 </svelte:head>
 
 <TripTopbar activePage="accounts" canManageAccounts currentUser={data.currentUser} />

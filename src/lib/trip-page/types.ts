@@ -3,14 +3,14 @@ import type { PublicItineraryItem } from '$lib/itinerary/access';
 import type { AuthenticatedUser } from '$lib/server/store/model';
 import type { TripView } from '$lib/server/store/views';
 
+export type { ConnectivityStatus } from '$lib/connectivity.svelte';
+
 export type TripPageData = Readonly<{
 	canManageAccounts: boolean;
 	currentUser: AuthenticatedUser | null;
 	setupRequired: boolean;
 	trip: TripView;
 }>;
-
-export type ConnectivityStatus = 'checking' | 'reachable' | 'unreachable';
 
 export type EditingItem = Readonly<{
 	item: ItineraryItem;

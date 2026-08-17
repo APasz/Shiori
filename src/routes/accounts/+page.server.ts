@@ -5,7 +5,7 @@ import { formDataText } from '$lib/server/form-data';
 import { createAccount, deleteAccount, listAccountsForManagement, resetAccountPassword } from '$lib/server/store/auth';
 import { StoreError } from '$lib/server/store/error';
 import { listTripMembers, setTripMemberAccess } from '$lib/server/store/members';
-import type { AuthenticatedUser, ShareRole, TripMemberRole } from '$lib/server/store/model';
+import type { AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
 import { listOwnedTripOptions, ownsAnyTrip } from '$lib/server/store/trips';
 
 function validationMessage(error: ZodError): string {
