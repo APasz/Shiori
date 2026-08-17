@@ -40,6 +40,12 @@ To enforce this on GitHub, create a branch ruleset for `main` that requires a pu
 up to date, and do not grant a bypass for routine contributors. The local hook provides quick
 feedback; the GitHub ruleset is the authoritative protection.
 
+Every push to a non-`main` branch made by the repository owner automatically creates or updates a
+pull request to `main` and enables its automatic merge. The merge waits for `Verify application` to
+pass. Enable **Allow auto-merge** in GitHub’s repository **Settings → General → Pull Requests**.
+Also, in **Settings → Actions → General**, allow GitHub Actions to create and approve pull requests.
+Pushes by other contributors never enter this automatic path.
+
 ## Visual assets
 
 Interface icons and decorative artwork are selected by intent, rather than by a provider-specific
