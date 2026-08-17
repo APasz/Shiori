@@ -27,7 +27,18 @@ npm run format
 npm run test
 npm run build
 npm run preview
+npm run verify
 ```
+
+`npm run verify` runs the complete required suite: type and Svelte checks, formatting and linting,
+tests, and a production build. Installing dependencies configures a repository-local pre-push hook
+that runs this suite before a normal `git push`. Git hooks can be bypassed, so GitHub Actions also
+runs the same command for every pull request and `main` push.
+
+To enforce this on GitHub, create a branch ruleset for `main` that requires a pull request and the
+`Verify application` status check to pass before merging. Enable the requirement that the branch is
+up to date, and do not grant a bypass for routine contributors. The local hook provides quick
+feedback; the GitHub ruleset is the authoritative protection.
 
 ## Visual assets
 
@@ -195,8 +206,9 @@ the configuration reference; never commit the real environment file.
 
 ### GitHub deployments
 
-Pushing a commit to `main` runs `.github/workflows/deploy-production.yml`. The workflow uses native
-OpenSSH rather than a third-party deployment action. It serializes deployments, connects as the
+After the `Verify` workflow succeeds for a commit on `main`, it runs
+`.github/workflows/deploy-production.yml`. The workflow uses native OpenSSH rather than a
+third-party deployment action. It serializes deployments, connects as the
 unprivileged `shiori-deploy` user, and skips stale runs so only the current `main` tip is deployed.
 The selected commit runs `npm ci` and the production build, restarts only the `shiori` service, then
 checks the loopback health endpoint. The deploy user cannot access `/srv/shiori/data`.

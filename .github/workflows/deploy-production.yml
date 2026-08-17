@@ -1,7 +1,9 @@
 name: Deploy production
 
 on:
-  push:
+  workflow_run:
+    workflows: [Verify]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -14,7 +16,10 @@ concurrency:
 jobs:
   deploy:
     environment: production
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -23,7 +28,7 @@ jobs:
       SHIORI_DEPLOY_PRIVATE_KEY: ${{ secrets.SHIORI_DEPLOY_PRIVATE_KEY }}
       SHIORI_DEPLOY_KNOWN_HOSTS: ${{ secrets.SHIORI_DEPLOY_KNOWN_HOSTS }}
       SHIORI_DEPLOY_USER: shiori-deploy
-      SHIORI_COMMIT_SHA: ${{ github.sha }}
+      SHIORI_COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Configure SSH
         shell: bash

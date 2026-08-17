@@ -8,12 +8,13 @@
 		"build": "vite build",
 		"start": "node build",
 		"preview": "node build",
-		"prepare": "svelte-kit sync || echo ''",
+		"prepare": "svelte-kit sync || echo ''; node scripts/configure-git-hooks.mjs",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "prettier --check . && eslint .",
+		"verify": "npm run check && npm run lint && npm run test && npm run build",
 		"format": "prettier --write ."
 	},
 	"devDependencies": {
