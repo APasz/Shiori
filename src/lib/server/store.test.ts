@@ -1023,6 +1023,26 @@ describe('JSON store', () => {
 		});
 	});
 
+	it('preserves username capitalization while matching account identities case-insensitively', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('Owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const person = await store.createAccount({
+			actorId: owner.id,
+			password: 'a second strong test password',
+			username: 'User'
+		});
+
+		expect(person).toEqual({ id: expect.any(String), username: 'User' });
+		await expect(store.authenticate('uSeR', 'a second strong test password')).resolves.toEqual(person);
+		await expect(
+			store.createAccount({ actorId: owner.id, password: 'another strong password', username: 'USER' })
+		).rejects.toMatchObject({ status: 409 });
+		await expect(
+			store.grantTripAccess({ actorId: owner.id, role: 'user', tripId: trip.id, username: 'UsEr' })
+		).resolves.toEqual({ id: person.id, role: 'user', username: 'User' });
+	});
+
 	it('blocks an attached account from a public trip and can later detach it', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');

@@ -2,6 +2,7 @@ import { StoreError } from './error';
 import {
 	shareRoleSchema,
 	tripMemberRoleSchema,
+	usernameIdentityKey,
 	usernameSchema,
 	type AuthenticatedUser,
 	type ShareRole,
@@ -72,7 +73,9 @@ export async function grantTripAccess(input: {
 
 	return transaction((data) => {
 		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
-		const user = data.users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
+		const user = data.users.find(
+			(candidate) => usernameIdentityKey(candidate.username) === usernameIdentityKey(username)
+		);
 		if (!user) {
 			throw new StoreError(404, 'No account was found for that username.');
 		}

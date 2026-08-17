@@ -1,3 +1,5 @@
+import { usernameIdentityKey } from './store/model';
+
 export type LoginRateLimitPolicy = Readonly<{
 	blockWindowMilliseconds: number;
 	initialBlockMilliseconds: number;
@@ -32,7 +34,7 @@ export const loginRateLimitPolicy: LoginRateLimitPolicy = {
 
 function identifierKeys(attempt: LoginAttempt): readonly [string, string] {
 	const address = attempt.clientAddress.trim() || 'unknown';
-	const username = attempt.username.trim().toLowerCase() || 'unknown';
+	const username = usernameIdentityKey(attempt.username) || 'unknown';
 	return [`address:${address}`, `username:${username}`];
 }
 

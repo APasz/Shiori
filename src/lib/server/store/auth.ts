@@ -3,6 +3,7 @@ import { StoreError } from './error';
 import {
 	passwordSchema,
 	storedUserSchema,
+	usernameIdentityKey,
 	usernameSchema,
 	type AccountManagementEntry,
 	type AuthenticatedUser,
@@ -106,7 +107,7 @@ export async function createAccount(input: {
 
 	return transaction((data) => {
 		assertAccountManager(data, input.actorId);
-		if (data.users.some((user) => user.username.toLowerCase() === account.username.toLowerCase())) {
+		if (data.users.some((user) => usernameIdentityKey(user.username) === usernameIdentityKey(account.username))) {
 			throw new StoreError(409, 'That username is already in use.');
 		}
 
@@ -176,7 +177,9 @@ export async function authenticate(usernameInput: string, passwordInput: string)
 	}
 
 	const data = await readData();
-	const user = data.users.find((candidate) => candidate.username.toLowerCase() === username.data.toLowerCase());
+	const user = data.users.find(
+		(candidate) => usernameIdentityKey(candidate.username) === usernameIdentityKey(username.data)
+	);
 	if (!user || !(await verifyPassword(passwordInput, user.passwordHash))) {
 		return null;
 	}

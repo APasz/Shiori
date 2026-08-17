@@ -8,7 +8,7 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	function actionUrl(action: 'deleteAccount' | 'resetPassword' | 'setTripAccess'): string {
+	function actionUrl(action: 'createAccount' | 'deleteAccount' | 'resetPassword' | 'setTripAccess'): string {
 		return `?trip=${encodeURIComponent(data.selectedTrip.slug)}&/${action}`;
 	}
 
@@ -147,7 +147,7 @@
 
 	<section aria-labelledby="create-account-heading">
 		<h2 id="create-account-heading">Create account</h2>
-		<form class="shiori-form" method="POST">
+		<form action={actionUrl('createAccount')} class="shiori-form" method="POST">
 			<label class="shiori-form-label">
 				Username <input class="shiori-form-control" autocomplete="username" name="username" required />
 			</label>

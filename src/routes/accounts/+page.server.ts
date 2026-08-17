@@ -69,7 +69,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ locals, request }) => {
+	createAccount: async ({ locals, request }) => {
 		const manager = await requireAccountManager(locals.user);
 		const formData = await request.formData();
 

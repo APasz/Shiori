@@ -16,6 +16,12 @@ export const usernameSchema = z
 	.string()
 	.trim()
 	.regex(/^[a-z0-9][a-z0-9_-]{2,31}$/i, 'Use 3–32 letters, numbers, underscores, or hyphens.');
+
+/** Creates a username identity key without changing the capitalization stored for display. */
+export function usernameIdentityKey(username: string): string {
+	return username.trim().toLowerCase();
+}
+
 export const passwordSchema = z
 	.string()
 	.min(minimumPasswordLength, passwordMinimumMessage())
@@ -117,7 +123,7 @@ export const storedDataSchema = z
 			}
 			userIds.add(user.id);
 
-			const username = user.username.toLowerCase();
+			const username = usernameIdentityKey(user.username);
 			if (usernames.has(username)) {
 				context.addIssue({
 					code: 'custom',

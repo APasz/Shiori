@@ -22,6 +22,7 @@ describe('LoginRateLimiter', () => {
 
 		limiter.recordFailure(attempt);
 		expect(limiter.check(attempt)).toEqual({ allowed: false, retryAfterSeconds: 1 });
+		expect(limiter.check({ ...attempt, username: 'ShIoRi' })).toEqual({ allowed: false, retryAfterSeconds: 1 });
 		expect(limiter.check({ ...attempt, username: 'another-account' })).toEqual({
 			allowed: false,
 			retryAfterSeconds: 1
