@@ -1,4 +1,5 @@
 import { isAbsolute } from 'node:path';
+import { maximumTripBackupBytes, maximumTripBackupSizeLabel } from '$lib/trip-backup';
 
 export const minimumSetupTokenBytes = 32;
 
@@ -35,6 +36,37 @@ function originConfigurationError(origin: string | undefined): string | null {
 	}
 }
 
+function configuredByteSize(value: string | undefined): number | null {
+	if (!value) {
+		return null;
+	}
+
+	const match = /^(?<amount>\d+(?:\.\d+)?)(?<unit>[KMG])?$/i.exec(value.trim());
+	if (!match?.groups) {
+		return null;
+	}
+
+	const amount = Number(match.groups.amount);
+	const multiplier =
+		match.groups.unit?.toUpperCase() === 'G'
+			? 1024 * 1024 * 1024
+			: match.groups.unit?.toUpperCase() === 'M'
+				? 1024 * 1024
+				: match.groups.unit?.toUpperCase() === 'K'
+					? 1024
+					: 1;
+	const bytes = amount * multiplier;
+	return Number.isSafeInteger(bytes) && bytes > 0 ? bytes : null;
+}
+
+function bodySizeLimitConfigurationError(bodySizeLimit: string | undefined): string | null {
+	const configuredLimit = configuredByteSize(bodySizeLimit);
+	if (configuredLimit === null || configuredLimit < maximumTripBackupBytes) {
+		return `BODY_SIZE_LIMIT must be a valid size of at least ${maximumTripBackupSizeLabel}.`;
+	}
+	return null;
+}
+
 /** Lists invalid settings that would otherwise make a production server unsafe or non-durable. */
 export function productionConfigurationErrors(environment: EnvironmentVariables): readonly string[] {
 	if (environment.NODE_ENV !== 'production') {
@@ -57,6 +89,11 @@ export function productionConfigurationErrors(environment: EnvironmentVariables)
 	const setupTokenError = setupTokenConfigurationError(environment, true);
 	if (setupTokenError) {
 		errors.push(setupTokenError);
+	}
+
+	const bodySizeLimitError = bodySizeLimitConfigurationError(environment.BODY_SIZE_LIMIT);
+	if (bodySizeLimitError) {
+		errors.push(bodySizeLimitError);
 	}
 	return errors;
 }

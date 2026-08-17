@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly application_directory='/srv/shiori'
+readonly branch_name='main'
+readonly health_endpoint='http://127.0.0.1:5173/api/health'
+readonly health_attempts=10
+readonly health_retry_delay_seconds=1
+
+commit_sha="${1:-}"
+if [[ ! "$commit_sha" =~ ^[0-9a-f]{40}$ ]]; then
+	echo 'A 40-character lowercase commit SHA is required.' >&2
+	exit 64
+fi
+
+cd "$application_directory"
+if [[ ! -d .git ]]; then
+	echo "Expected a Git checkout at $application_directory." >&2
+	exit 1
+fi
+
+git fetch --no-tags origin "+refs/heads/$branch_name:refs/remotes/origin/$branch_name"
+origin_commit_sha="$(git rev-parse "refs/remotes/origin/$branch_name")"
+if [[ "$commit_sha" != "$origin_commit_sha" ]]; then
+	echo "Skipping stale deployment for $commit_sha; origin/$branch_name is now $origin_commit_sha."
+	exit 0
+fi
+
+git reset --hard "$commit_sha"
+npm ci
+npm run build
+sudo -n /usr/bin/systemctl restart shiori
+
+for ((attempt = 1; attempt <= health_attempts; attempt += 1)); do
+	if curl --fail --silent --show-error --output /dev/null "$health_endpoint"; then
+		echo "Shiori is serving $commit_sha."
+		exit 0
+	fi
+	sleep "$health_retry_delay_seconds"
+done
+
+echo 'Shiori did not pass its health check after deployment.' >&2
+exit 1

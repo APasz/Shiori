@@ -1,0 +1,2 @@
+# Allow the deployment account to restart only the Shiori service.
+shiori-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart shiori

@@ -11,6 +11,7 @@ function productionEnvironment(overrides: EnvironmentVariables = {}): Environmen
 	return {
 		NODE_ENV: 'production',
 		ORIGIN: 'https://shiori.apasz.com',
+		BODY_SIZE_LIMIT: '20M',
 		SHIORI_DATA_DIRECTORY: '/var/lib/shiori',
 		SHIORI_SETUP_TOKEN: 'a'.repeat(minimumSetupTokenBytes),
 		...overrides
@@ -18,7 +19,7 @@ function productionEnvironment(overrides: EnvironmentVariables = {}): Environmen
 }
 
 describe('production configuration', () => {
-	it('accepts an explicit HTTPS origin, durable data directory, and strong setup token', () => {
+	it('accepts an explicit HTTPS origin, durable data directory, strong setup token, and backup body limit', () => {
 		expect(productionConfigurationErrors(productionEnvironment())).toEqual([]);
 		expect(() => assertProductionConfiguration(productionEnvironment())).not.toThrow();
 	});
@@ -31,7 +32,8 @@ describe('production configuration', () => {
 		expect(productionConfigurationErrors({ NODE_ENV: 'production' })).toEqual([
 			'ORIGIN must be set to Shiori’s public HTTPS origin.',
 			'SHIORI_DATA_DIRECTORY must point to a durable absolute directory.',
-			'SHIORI_SETUP_TOKEN must be configured before production setup.'
+			'SHIORI_SETUP_TOKEN must be configured before production setup.',
+			'BODY_SIZE_LIMIT must be a valid size of at least 20 MB.'
 		]);
 	});
 
@@ -41,6 +43,15 @@ describe('production configuration', () => {
 				productionEnvironment({ ORIGIN: 'http://shiori.apasz.com', SHIORI_DATA_DIRECTORY: 'data' })
 			)
 		).toEqual(['ORIGIN must use HTTPS.', 'SHIORI_DATA_DIRECTORY must be an absolute directory path.']);
+	});
+
+	it('rejects an invalid or undersized body limit for trip backup imports', () => {
+		expect(productionConfigurationErrors(productionEnvironment({ BODY_SIZE_LIMIT: '512K' }))).toEqual([
+			'BODY_SIZE_LIMIT must be a valid size of at least 20 MB.'
+		]);
+		expect(productionConfigurationErrors(productionEnvironment({ BODY_SIZE_LIMIT: 'twenty megabytes' }))).toEqual([
+			'BODY_SIZE_LIMIT must be a valid size of at least 20 MB.'
+		]);
 	});
 
 	it('uses the same minimum token policy during development setup', () => {

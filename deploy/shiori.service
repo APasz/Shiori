@@ -1,0 +1,30 @@
+[Unit]
+Description=Shiori itinerary service
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=/srv/shiori/data
+ConditionPathIsDirectory=/srv/shiori/data
+
+[Service]
+Type=simple
+User=shiori
+Group=shiori
+WorkingDirectory=/srv/shiori
+EnvironmentFile=/etc/shiori/shiori.env
+ExecStartPre=/usr/bin/test -w /srv/shiori/data
+ExecStart=/usr/bin/node build
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=45s
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/shiori/data
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

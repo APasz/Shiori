@@ -96,23 +96,143 @@ timestamps). A trip's filename is its URL slug: for example, `trips/your-trip.js
 Run a single Shiori server process against a durable filesystem volume. The JSON store and its
 edit locks are intentionally designed for this small, single-instance deployment model.
 
-For a simple production deployment, provide the values in `.env.example` as process environment
-variables, then run `npm ci`, `npm run build`, and `npm start`. Set `NODE_ENV=production`,
-`HOST=127.0.0.1`, `PORT=5173`, `ORIGIN=https://shiori.apasz.com`, and a durable absolute
-`SHIORI_DATA_DIRECTORY`. Put Caddy in front of the app for HTTPS:
+For a single-server production deployment, use the supplied Caddy and systemd configuration as a
+baseline. It assumes the app lives in `/srv/shiori`, has dedicated runtime and deployment accounts,
+and stores its persistent data in `/srv/shiori/data`. Create the accounts and private data directory
+first:
+
+```bash
+sudo useradd --system --user-group --home-dir /srv/shiori --shell /usr/sbin/nologin shiori
+sudo useradd --system --create-home --user-group --shell /bin/bash shiori-deploy
+sudo install --directory --owner shiori-deploy --group shiori --mode 0750 /srv/shiori
+sudo install --directory --owner shiori --group shiori --mode 0700 /srv/shiori/data
+sudo install --directory --owner shiori --group shiori --mode 0755 /etc/shiori
+sudo install --owner root --group root --mode 0600 .env.example /etc/shiori/shiori.env
+sudoedit /etc/shiori/shiori.env
+```
+
+Set the production values in `/etc/shiori/shiori.env`, including a random
+`SHIORI_SETUP_TOKEN` of at least 32 bytes. `BODY_SIZE_LIMIT=20M` is required: Shiori allows trip
+backup imports up to 20 MB, while the Node adapter otherwise defaults to 512 KiB. Bind Node to
+loopback and trust the one local Caddy proxy with `ADDRESS_HEADER=x-forwarded-for` and
+`XFF_DEPTH=1`; Caddy clears any client-provided forwarded headers and sets its own value.
+Copy the application source into `/srv/shiori` with `shiori-deploy:shiori` ownership before building.
+The `data/` directory is part of the application tree but is persistent state: every release copy,
+cleanup, rollback, and source-control operation must preserve it.
+
+Install dependencies, build as the `shiori-deploy` account, and install the provided unit. Adjust only
+the paths in `deploy/shiori.service` if this host uses different application or data directories:
+
+```bash
+cd /srv/shiori
+sudo -u shiori-deploy npm ci
+sudo -u shiori-deploy npm run build
+sudo install --owner root --group root --mode 0644 deploy/shiori.service /etc/systemd/system/shiori.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now shiori
+```
+
+Replace the current Shiori site block in Caddy with `deploy/Caddyfile`, then validate and reload
+Caddy:
 
 ```caddyfile
 shiori.apasz.com {
-	reverse_proxy 127.0.0.1:5173
+	encode zstd gzip
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+	}
+
+	request_body {
+		max_size 20MB
+	}
+
+	reverse_proxy 127.0.0.1:5173 {
+		health_uri /api/health
+		health_status 204
+		health_interval 30s
+		health_timeout 5s
+		health_headers {
+			X-Forwarded-For 127.0.0.1
+		}
+		transport http {
+			keepalive 4s
+		}
+	}
 }
 ```
 
-On the first local development run, visit `/setup` to create the one sudo account. In a
-production environment, set a random `SHIORI_SETUP_TOKEN` of at least 32 bytes before visiting
-`/setup`; the token is required once to prevent an unauthorised first account from being created.
-Configure `ORIGIN`
-to the public application URL in production so SvelteKit can apply its request-origin protections.
-Use `.env.example` as the configuration reference; never commit the real environment file.
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
+curl --fail --show-error --head https://shiori.apasz.com/api/health
+```
+
+`deploy/Caddyfile` retains the existing TLS and response-header protections, rejects request bodies
+over 20 MB at the edge, adds an active 204 health check, and matches Caddy's upstream connection
+reuse to Node's five-second default. It requires Caddy 2.10 or later.
+
+The service unit requires the data path to be mounted and writable, restricts the process to that
+path, and makes newly created directories private. Run a single Shiori process only: its JSON store
+and edit locks are deliberately single-instance. The health endpoint is a process liveness check;
+monitor it and the systemd unit, but also monitor the data volume itself.
+
+Each managed JSON file has one neighbouring `.backup` copy, which protects against an interrupted
+write but is not a disaster-recovery plan. Configure encrypted, off-host backups of the entire data
+directory (including every `.backup` file), set a retention policy, and perform a restore drill before
+putting real trip data on the server. Stop `shiori`, restore the whole directory with its original
+owner and permissions, start the service, and sign in to verify the restored itinerary.
+
+On the first production run, visit `/setup` to create the one sudo account. The setup token is
+required once to prevent an unauthorised first account from being created. Configure `ORIGIN` to the
+public application URL so SvelteKit can apply its request-origin protections. Use `.env.example` as
+the configuration reference; never commit the real environment file.
+
+### GitHub deployments
+
+Pushing a commit to `main` runs `.github/workflows/deploy-production.yml`. The workflow uses native
+OpenSSH rather than a third-party deployment action. It serializes deployments, connects as the
+unprivileged `shiori-deploy` user, and skips stale runs so only the current `main` tip is deployed.
+The selected commit runs `npm ci` and the production build, restarts only the `shiori` service, then
+checks the loopback health endpoint. The deploy user cannot access `/srv/shiori/data`.
+
+Install the narrowly scoped sudo rule and validate it before enabling the workflow:
+
+```bash
+sudo install --owner root --group root --mode 0440 deploy/shiori-deploy.sudoers /etc/sudoers.d/shiori-deploy
+sudo visudo --check --file /etc/sudoers.d/shiori-deploy
+```
+
+Create an Ed25519 key pair on a trusted administrator computer. Add its public key to
+`/home/shiori-deploy/.ssh/authorized_keys`, prefixed with `restrict`, and store the private key only
+as the GitHub Actions `SHIORI_DEPLOY_PRIVATE_KEY` environment secret. Lock the deployment account's
+password and protect its SSH directory:
+
+```bash
+ssh-keygen -t ed25519 -a 100 -f ./shiori-github-deploy -C shiori-github-deploy
+sudo passwd --lock shiori-deploy
+sudo install --directory --owner shiori-deploy --group shiori-deploy --mode 0700 /home/shiori-deploy/.ssh
+sudoedit /home/shiori-deploy/.ssh/authorized_keys
+sudo chmod 0600 /home/shiori-deploy/.ssh/authorized_keys
+```
+
+Create a GitHub `production` environment and configure these values there:
+
+| Name                        | Type     | Value                                     |
+| --------------------------- | -------- | ----------------------------------------- |
+| `SHIORI_DEPLOY_HOST`        | Variable | Server host name or IP address            |
+| `SHIORI_DEPLOY_PORT`        | Variable | SSH port; `22` when omitted               |
+| `SHIORI_DEPLOY_PRIVATE_KEY` | Secret   | The complete private Ed25519 key          |
+| `SHIORI_DEPLOY_KNOWN_HOSTS` | Secret   | Pinned `known_hosts` entry for the server |
+
+Collect and independently verify the server host key before saving `SHIORI_DEPLOY_KNOWN_HOSTS`; do
+not have the workflow fetch it during deployment. If the repository becomes private, configure a
+read-only GitHub deploy key on the server so `shiori-deploy` can fetch `origin/main`.
 
 To enrich selected Google Flights links with verified airport names, scheduled departure and arrival
 times, and their source time zones, configure `AERODATABOX_API_KEY` with an AeroDataBox RapidAPI key.

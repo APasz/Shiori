@@ -1,0 +1,51 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: shiori-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SHIORI_DEPLOY_HOST: ${{ vars.SHIORI_DEPLOY_HOST }}
+      SHIORI_DEPLOY_PORT: ${{ vars.SHIORI_DEPLOY_PORT || '22' }}
+      SHIORI_DEPLOY_PRIVATE_KEY: ${{ secrets.SHIORI_DEPLOY_PRIVATE_KEY }}
+      SHIORI_DEPLOY_KNOWN_HOSTS: ${{ secrets.SHIORI_DEPLOY_KNOWN_HOSTS }}
+      SHIORI_DEPLOY_USER: shiori-deploy
+      SHIORI_COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${SHIORI_DEPLOY_HOST:?Configure the SHIORI_DEPLOY_HOST production variable.}"
+          : "${SHIORI_DEPLOY_PRIVATE_KEY:?Configure the SHIORI_DEPLOY_PRIVATE_KEY production secret.}"
+          : "${SHIORI_DEPLOY_KNOWN_HOSTS:?Configure the SHIORI_DEPLOY_KNOWN_HOSTS production secret.}"
+          install --directory --mode 0700 "$HOME/.ssh"
+          printf '%s\n' "$SHIORI_DEPLOY_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SHIORI_DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy the pushed commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SHIORI_DEPLOY_PORT" \
+            "$SHIORI_DEPLOY_USER@$SHIORI_DEPLOY_HOST" \
+            "bash /srv/shiori/deploy/deploy-main '$SHIORI_COMMIT_SHA'"
