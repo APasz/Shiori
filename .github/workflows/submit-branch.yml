@@ -8,6 +8,10 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: shiori-submit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   submit:
     if: github.actor == github.repository_owner
