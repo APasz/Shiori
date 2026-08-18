@@ -31,20 +31,9 @@ npm run verify
 ```
 
 `npm run verify` runs the complete required suite: type and Svelte checks, formatting and linting,
-tests, and a production build. Installing dependencies configures a repository-local pre-push hook
-that runs this suite before a normal `git push`. Git hooks can be bypassed, so GitHub Actions also
-runs the same command for every pull request and `main` push.
-
-To enforce this on GitHub, create a branch ruleset for `main` that requires a pull request and the
-`Verify application` status check to pass before merging. Enable the requirement that the branch is
-up to date, and do not grant a bypass for routine contributors. The local hook provides quick
-feedback; the GitHub ruleset is the authoritative protection.
-
-Every push to a non-`main` branch made by the repository owner automatically creates or updates a
-pull request to `main` and enables its automatic merge. The merge waits for `Verify application` to
-pass. Enable **Allow auto-merge** in GitHub’s repository **Settings → General → Pull Requests**.
-Also, in **Settings → Actions → General**, allow GitHub Actions to create and approve pull requests.
-Pushes by other contributors never enter this automatic path.
+tests, and a production build. GitHub Actions runs the same command for every push to `main`.
+Production deployment runs only after that verification succeeds, so a failing commit remains in
+source control but does not replace the running application.
 
 ## Visual assets
 
