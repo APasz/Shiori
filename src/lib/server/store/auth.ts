@@ -81,21 +81,24 @@ export async function createInitialSudo(usernameInput: string, passwordInput: st
 	const password = passwordSchema.parse(passwordInput);
 	const passwordHash = await hashPassword(password);
 
-	return transaction((data) => {
-		if (data.users.length > 0) {
-			throw new StoreError(409, 'Initial setup has already been completed.');
-		}
-
-		const user = newStoredUser({ passwordHash, username });
-		data.users.push(user);
-		for (const trip of data.trips) {
-			if (trip.ownerId === null) {
-				trip.ownerId = user.id;
-				trip.updatedAt = user.createdAt;
+	return transaction(
+		(data) => {
+			if (data.users.length > 0) {
+				throw new StoreError(409, 'Initial setup has already been completed.');
 			}
-		}
-		return { id: user.id, username: user.username };
-	});
+
+			const user = newStoredUser({ passwordHash, username });
+			data.users.push(user);
+			for (const trip of data.trips) {
+				if (trip.ownerId === null) {
+					trip.ownerId = user.id;
+					trip.updatedAt = user.createdAt;
+				}
+			}
+			return { id: user.id, username: user.username };
+		},
+		{ global: ['users'], tripIds: 'all' }
+	);
 }
 
 export async function createAccount(input: {
@@ -105,16 +108,19 @@ export async function createAccount(input: {
 }): Promise<AuthenticatedUser> {
 	const account = await prepareNewAccount(input);
 
-	return transaction((data) => {
-		assertAccountManager(data, input.actorId);
-		if (data.users.some((user) => usernameIdentityKey(user.username) === usernameIdentityKey(account.username))) {
-			throw new StoreError(409, 'That username is already in use.');
-		}
+	return transaction(
+		(data) => {
+			assertAccountManager(data, input.actorId);
+			if (data.users.some((user) => usernameIdentityKey(user.username) === usernameIdentityKey(account.username))) {
+				throw new StoreError(409, 'That username is already in use.');
+			}
 
-		const user = newStoredUser(account);
-		data.users.push(user);
-		return { id: user.id, username: user.username };
-	});
+			const user = newStoredUser(account);
+			data.users.push(user);
+			return { id: user.id, username: user.username };
+		},
+		{ global: ['users'], tripIds: [] }
+	);
 }
 
 export async function listAccounts(actorId: string): Promise<AuthenticatedUser[]> {
@@ -141,33 +147,39 @@ export async function resetAccountPassword(input: {
 }): Promise<void> {
 	const passwordHash = await preparePasswordHash(input.password);
 
-	return transaction((data) => {
-		assertAccountManager(data, input.actorId);
-		const user = data.users.find((candidate) => candidate.id === input.userId);
-		if (!user) {
-			throw new StoreError(404, 'Account not found.');
-		}
-		user.passwordHash = passwordHash;
-		data.sessions = data.sessions.filter((session) => session.userId !== user.id);
-	});
+	return transaction(
+		(data) => {
+			assertAccountManager(data, input.actorId);
+			const user = data.users.find((candidate) => candidate.id === input.userId);
+			if (!user) {
+				throw new StoreError(404, 'Account not found.');
+			}
+			user.passwordHash = passwordHash;
+			data.sessions = data.sessions.filter((session) => session.userId !== user.id);
+		},
+		{ global: ['users', 'sessions'], tripIds: [] }
+	);
 }
 
 export async function deleteAccount(input: { actorId: string; userId: string }): Promise<void> {
-	return transaction((data) => {
-		assertAccountManager(data, input.actorId);
-		const user = data.users.find((candidate) => candidate.id === input.userId);
-		if (!user) {
-			throw new StoreError(404, 'Account not found.');
-		}
-		if (data.trips.some((trip) => trip.ownerId === user.id)) {
-			throw new StoreError(409, 'Trip owners cannot be deleted.');
-		}
+	return transaction(
+		(data) => {
+			assertAccountManager(data, input.actorId);
+			const user = data.users.find((candidate) => candidate.id === input.userId);
+			if (!user) {
+				throw new StoreError(404, 'Account not found.');
+			}
+			if (data.trips.some((trip) => trip.ownerId === user.id)) {
+				throw new StoreError(409, 'Trip owners cannot be deleted.');
+			}
 
-		data.users = data.users.filter((candidate) => candidate.id !== user.id);
-		data.shares = data.shares.filter((share) => share.userId !== user.id);
-		data.sessions = data.sessions.filter((session) => session.userId !== user.id);
-		data.editLocks = data.editLocks.filter((lock) => lock.ownerId !== user.id);
-	});
+			data.users = data.users.filter((candidate) => candidate.id !== user.id);
+			data.shares = data.shares.filter((share) => share.userId !== user.id);
+			data.sessions = data.sessions.filter((session) => session.userId !== user.id);
+			data.editLocks = data.editLocks.filter((lock) => lock.ownerId !== user.id);
+		},
+		{ global: ['users', 'shares', 'sessions', 'editLocks'], tripIds: [] }
+	);
 }
 
 export async function authenticate(usernameInput: string, passwordInput: string): Promise<AuthenticatedUser | null> {

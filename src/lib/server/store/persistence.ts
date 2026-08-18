@@ -26,7 +26,32 @@ const usersDataPath = join(dataDirectory, 'users.json');
 const sharesDataPath = join(dataDirectory, 'shares.json');
 const sessionsDataPath = join(dataDirectory, 'sessions.json');
 const editLocksDataPath = join(dataDirectory, 'edit-locks.json');
-const globalDataPaths = [usersDataPath, sharesDataPath, sessionsDataPath, editLocksDataPath];
+
+type GlobalDataDomain = 'users' | 'shares' | 'sessions' | 'editLocks';
+type GlobalDataFile = {
+	content: (data: StoredData) => unknown;
+	path: string;
+};
+
+const globalDataFiles = {
+	users: {
+		content: (data) => ({ version: storedDataVersion, users: data.users }),
+		path: usersDataPath
+	},
+	shares: {
+		content: (data) => ({ version: storedDataVersion, shares: data.shares }),
+		path: sharesDataPath
+	},
+	sessions: {
+		content: (data) => ({ version: storedDataVersion, sessions: data.sessions }),
+		path: sessionsDataPath
+	},
+	editLocks: {
+		content: (data) => ({ version: storedDataVersion, editLocks: data.editLocks }),
+		path: editLocksDataPath
+	}
+} satisfies Record<GlobalDataDomain, GlobalDataFile>;
+const globalDataPaths = Object.values(globalDataFiles).map((file) => file.path);
 
 type ManagedTripDataFile = {
 	path: string;
@@ -41,9 +66,27 @@ type SessionTransactionResult<Result> = {
 	changed: boolean;
 	value: Result;
 };
+type DataWriteScope<Result> = {
+	global: readonly GlobalDataDomain[];
+	tripIds: 'all' | readonly string[] | ((result: Result) => readonly string[]);
+};
+type ResolvedDataWriteScope = {
+	global: readonly GlobalDataDomain[];
+	tripIds: 'all' | readonly string[];
+};
 
 let transactionTail: Promise<void> = Promise.resolve();
 let startupLockCleanup: Promise<void> | undefined;
+let cachedData: StoredData | undefined;
+let pendingDataRead: Promise<StoredData> | undefined;
+
+const allGlobalDataDomains = [
+	'users',
+	'shares',
+	'sessions',
+	'editLocks'
+] as const satisfies readonly GlobalDataDomain[];
+const allDataWriteScope: ResolvedDataWriteScope = { global: allGlobalDataDomains, tripIds: 'all' };
 
 function defaultData(): StoredData {
 	return {
@@ -141,6 +184,37 @@ async function readStoredData(): Promise<ReadStoredDataResult> {
 	return { data: defaultData(), migrationRequired: false };
 }
 
+async function readCachedData(): Promise<StoredData> {
+	if (cachedData) {
+		return structuredClone(cachedData);
+	}
+
+	pendingDataRead ??= readStoredData()
+		.then(({ data }) => {
+			cachedData = data;
+			return data;
+		})
+		.finally(() => {
+			pendingDataRead = undefined;
+		});
+	return structuredClone(await pendingDataRead);
+}
+
+function replaceCachedData(data: StoredData): void {
+	cachedData = data;
+}
+
+function invalidateCachedData(): void {
+	cachedData = undefined;
+}
+
+function replaceCachedSessionData(data: SessionData): void {
+	if (!cachedData) {
+		return;
+	}
+	cachedData = { ...cachedData, sessions: data.sessions, users: data.users };
+}
+
 async function readSessionData(): Promise<SessionData> {
 	if (!hasSplitData()) {
 		return { sessions: [], users: [] };
@@ -205,32 +279,40 @@ async function writeManagedJsonFile(filePath: string, data: unknown): Promise<vo
 	await writeDurableFile(filePath, `${JSON.stringify(data, null, jsonIndentation)}\n`);
 }
 
-async function writeData(data: StoredData): Promise<void> {
+function tripForWrite(data: StoredData, tripId: string): StoredTrip {
+	const trip = data.trips.find((candidate) => candidate.id === tripId);
+	if (!trip) {
+		throw new Error(`Cannot persist missing trip ${tripId}.`);
+	}
+	return trip;
+}
+
+async function writeData(data: StoredData, scope: ResolvedDataWriteScope = allDataWriteScope): Promise<StoredData> {
 	const validated = storedDataSchema.parse(data);
-	await Promise.all([
-		writeManagedJsonFile(usersDataPath, {
-			version: storedDataVersion,
-			users: validated.users
+	const requestedGlobalDomains = new Set(scope.global);
+	const globalDomains = globalDataPaths.some((filePath) => !existsSync(filePath))
+		? allGlobalDataDomains
+		: [...requestedGlobalDomains];
+	const trips =
+		scope.tripIds === 'all' ? validated.trips : scope.tripIds.map((tripId) => tripForWrite(validated, tripId));
+	const writeResults = await Promise.allSettled([
+		...globalDomains.map((domain) => {
+			const file = globalDataFiles[domain];
+			return writeManagedJsonFile(file.path, file.content(validated));
 		}),
-		writeManagedJsonFile(sharesDataPath, {
-			version: storedDataVersion,
-			shares: validated.shares
-		}),
-		writeManagedJsonFile(sessionsDataPath, {
-			version: storedDataVersion,
-			sessions: validated.sessions
-		}),
-		writeManagedJsonFile(editLocksDataPath, {
-			version: storedDataVersion,
-			editLocks: validated.editLocks
-		}),
-		...validated.trips.map((trip) =>
+		...trips.map((trip) =>
 			writeManagedJsonFile(managedTripDataPath(trip.slug), {
 				version: storedDataVersion,
 				trip: persistTrip(trip)
 			})
 		)
 	]);
+	for (const result of writeResults) {
+		if (result.status === 'rejected') {
+			throw result.reason;
+		}
+	}
+	return validated;
 }
 
 async function writeSessions(data: SessionData): Promise<void> {
@@ -246,11 +328,14 @@ function purgeExpiredRecords(data: StoredData): void {
 async function clearPersistedEditLocksAtStartup(): Promise<void> {
 	const { data, migrationRequired } = await readStoredData();
 	if (data.editLocks.length === 0 && !migrationRequired) {
+		replaceCachedData(data);
 		return;
 	}
 
 	data.editLocks = [];
-	await writeData(data);
+	replaceCachedData(
+		await writeData(data, migrationRequired ? allDataWriteScope : { global: ['editLocks'], tripIds: [] })
+	);
 }
 
 async function completeStartupLockCleanup(): Promise<void> {
@@ -260,7 +345,7 @@ async function completeStartupLockCleanup(): Promise<void> {
 
 export async function readData(): Promise<StoredData> {
 	await completeStartupLockCleanup();
-	return (await readStoredData()).data;
+	return readCachedData();
 }
 
 async function runSerializedTransaction<Result>(operation: () => Promise<Result>): Promise<Result> {
@@ -279,12 +364,33 @@ async function runSerializedTransaction<Result>(operation: () => Promise<Result>
 	}
 }
 
-export async function transaction<Result>(operation: (data: StoredData) => Promise<Result> | Result): Promise<Result> {
+export async function transaction<Result>(
+	operation: (data: StoredData) => Promise<Result> | Result,
+	scope: DataWriteScope<Result> = allDataWriteScope
+): Promise<Result> {
 	return runSerializedTransaction(async () => {
 		const data = await readData();
+		const initialSessionCount = data.sessions.length;
+		const initialEditLockCount = data.editLocks.length;
 		purgeExpiredRecords(data);
 		const result = await operation(data);
-		await writeData(data);
+		const globalDomains = new Set(scope.global);
+		if (data.sessions.length !== initialSessionCount) {
+			globalDomains.add('sessions');
+		}
+		if (data.editLocks.length !== initialEditLockCount) {
+			globalDomains.add('editLocks');
+		}
+		try {
+			const validated = await writeData(data, {
+				global: [...globalDomains],
+				tripIds: typeof scope.tripIds === 'function' ? scope.tripIds(result) : scope.tripIds
+			});
+			replaceCachedData(validated);
+		} catch (error: unknown) {
+			invalidateCachedData();
+			throw error;
+		}
 		return result;
 	});
 }
@@ -299,7 +405,13 @@ export async function sessionTransaction<Result>(
 		data.sessions = data.sessions.filter((session) => !isExpired(session.expiresAt));
 		const result = await operation(data);
 		if (result.changed || data.sessions.length !== sessionCount) {
-			await writeSessions(data);
+			try {
+				await writeSessions(data);
+				replaceCachedSessionData(data);
+			} catch (error: unknown) {
+				invalidateCachedData();
+				throw error;
+			}
 		}
 		return result.value;
 	});

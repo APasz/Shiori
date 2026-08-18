@@ -16,19 +16,22 @@ export type ActiveSessionUser = AuthenticatedUser & {
 };
 
 export async function createSession(userId: string): Promise<string> {
-	return transaction((data) => {
-		if (!data.users.some((user) => user.id === userId)) {
-			throw new StoreError(401, 'The user account no longer exists.');
-		}
+	return transaction(
+		(data) => {
+			if (!data.users.some((user) => user.id === userId)) {
+				throw new StoreError(401, 'The user account no longer exists.');
+			}
 
-		const session = {
-			id: randomUUID(),
-			userId,
-			expiresAt: futureTimestamp(sessionLifetimeMilliseconds)
-		};
-		data.sessions.push(session);
-		return session.id;
-	});
+			const session = {
+				id: randomUUID(),
+				userId,
+				expiresAt: futureTimestamp(sessionLifetimeMilliseconds)
+			};
+			data.sessions.push(session);
+			return session.id;
+		},
+		{ global: ['sessions'], tripIds: [] }
+	);
 }
 
 /** Validates an active session and renews its idle timeout at the configured cadence. */
@@ -62,18 +65,24 @@ export async function destroySession(sessionId: string | undefined): Promise<voi
 		return;
 	}
 
-	await transaction((data) => {
-		data.sessions = data.sessions.filter((session) => session.id !== sessionId);
-	});
+	await transaction(
+		(data) => {
+			data.sessions = data.sessions.filter((session) => session.id !== sessionId);
+		},
+		{ global: ['sessions'], tripIds: [] }
+	);
 }
 
 export async function forceLogoutAllUsers(userId: string): Promise<{ loggedOut: number }> {
-	return transaction((data) => {
-		assertAccountManager(data, userId);
-		const loggedOut = new Set(data.sessions.map((session) => session.userId)).size;
-		data.sessions = [];
-		return { loggedOut };
-	});
+	return transaction(
+		(data) => {
+			assertAccountManager(data, userId);
+			const loggedOut = new Set(data.sessions.map((session) => session.userId)).size;
+			data.sessions = [];
+			return { loggedOut };
+		},
+		{ global: ['sessions'], tripIds: [] }
+	);
 }
 
 /** Lists signed-in users with the timestamp from their most recently renewed session. */

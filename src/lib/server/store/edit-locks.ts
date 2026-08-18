@@ -44,40 +44,49 @@ async function acquireTripLock(input: {
 	tripId: string;
 	userId: string;
 }): Promise<EditLock> {
-	return transaction((data) => {
-		const trip = getTripForMutation(data, input.tripId, input.userId);
-		if (input.itemId && findItemIndex(trip.itinerary, input.itemId) < 0) {
-			throw new StoreError(404, 'Itinerary item not found.');
-		}
-		assertNoActiveEditLock(data, trip);
+	return transaction(
+		(data) => {
+			const trip = getTripForMutation(data, input.tripId, input.userId);
+			if (input.itemId && findItemIndex(trip.itinerary, input.itemId) < 0) {
+				throw new StoreError(404, 'Itinerary item not found.');
+			}
+			assertNoActiveEditLock(data, trip);
 
-		const lock: StoredEditLock = {
-			tripId: trip.id,
-			targetId: input.targetId,
-			ownerId: input.userId,
-			token: randomUUID(),
-			acquiredAt: timestamp(),
-			expiresAt: futureTimestamp(editLockLifetimeMilliseconds),
-			revisionAtStart: trip.revision
-		};
-		data.editLocks.push(lock);
-		return editLockView(lock);
-	});
+			const lock: StoredEditLock = {
+				tripId: trip.id,
+				targetId: input.targetId,
+				ownerId: input.userId,
+				token: randomUUID(),
+				acquiredAt: timestamp(),
+				expiresAt: futureTimestamp(editLockLifetimeMilliseconds),
+				revisionAtStart: trip.revision
+			};
+			data.editLocks.push(lock);
+			return editLockView(lock);
+		},
+		{ global: ['editLocks'], tripIds: [] }
+	);
 }
 
 async function releaseTripLock(input: LockIdentity): Promise<void> {
-	await transaction((data) => {
-		const lock = assertActiveLock(data, input);
-		data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
-	});
+	await transaction(
+		(data) => {
+			const lock = assertActiveLock(data, input);
+			data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
+		},
+		{ global: ['editLocks'], tripIds: [] }
+	);
 }
 
 async function renewTripLock(input: LockIdentity): Promise<EditLock> {
-	return transaction((data) => {
-		const lock = assertActiveLock(data, input);
-		lock.expiresAt = futureTimestamp(editLockLifetimeMilliseconds);
-		return editLockView(lock);
-	});
+	return transaction(
+		(data) => {
+			const lock = assertActiveLock(data, input);
+			lock.expiresAt = futureTimestamp(editLockLifetimeMilliseconds);
+			return editLockView(lock);
+		},
+		{ global: ['editLocks'], tripIds: [] }
+	);
 }
 
 export async function acquireItemLock(input: { itemId: string; tripId: string; userId: string }): Promise<EditLock> {
@@ -121,19 +130,25 @@ export async function forceReleaseTripEditLocks(input: {
 	tripId: string;
 	userId: string;
 }): Promise<{ released: number }> {
-	return transaction((data) => {
-		const trip = getTripForMutation(data, input.tripId, input.userId);
-		const released = data.editLocks.filter((lock) => lock.tripId === trip.id).length;
-		data.editLocks = data.editLocks.filter((lock) => lock.tripId !== trip.id);
-		return { released };
-	});
+	return transaction(
+		(data) => {
+			const trip = getTripForMutation(data, input.tripId, input.userId);
+			const released = data.editLocks.filter((lock) => lock.tripId === trip.id).length;
+			data.editLocks = data.editLocks.filter((lock) => lock.tripId !== trip.id);
+			return { released };
+		},
+		{ global: ['editLocks'], tripIds: [] }
+	);
 }
 
 export async function forceReleaseAllEditLocks(userId: string): Promise<{ released: number }> {
-	return transaction((data) => {
-		assertAccountManager(data, userId);
-		const released = data.editLocks.length;
-		data.editLocks = [];
-		return { released };
-	});
+	return transaction(
+		(data) => {
+			assertAccountManager(data, userId);
+			const released = data.editLocks.length;
+			data.editLocks = [];
+			return { released };
+		},
+		{ global: ['editLocks'], tripIds: [] }
+	);
 }

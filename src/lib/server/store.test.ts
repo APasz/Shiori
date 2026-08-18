@@ -205,6 +205,32 @@ describe('JSON store', () => {
 		expect(JSON.parse(trip)).not.toHaveProperty('trip.slug');
 	});
 
+	it('writes backups only for the data changed by a transaction', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const firstTrip = await createTestTrip(store, owner.id);
+		const secondTrip = await store.createTrip({
+			details: { title: 'Second trip', timeZone: 'UTC' },
+			ownerId: owner.id
+		});
+		const untouchedBackupPaths = [
+			...['users.json', 'shares.json', 'sessions.json', 'edit-locks.json'].map(
+				(filename) => `${managedDataPath(filename)}.backup`
+			),
+			`${managedTripPath(firstTrip.slug)}.backup`
+		];
+		await Promise.all(untouchedBackupPaths.map((filePath) => rm(filePath, { force: true })));
+
+		await store.setTripPublic({ actorId: owner.id, isPublic: true, tripId: secondTrip.id });
+
+		await expect(readFile(`${managedTripPath(secondTrip.slug)}.backup`, 'utf8')).resolves.toContain(
+			'"isPublic": false'
+		);
+		for (const filePath of untouchedBackupPaths) {
+			await expect(readFile(filePath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+		}
+	});
+
 	it('uses the trip filename as its slug', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
@@ -215,6 +241,27 @@ describe('JSON store', () => {
 		const restartedStore = await import('./store');
 		await expect(restartedStore.getTripView('renamed-trip', owner)).resolves.toMatchObject({
 			slug: 'renamed-trip'
+		});
+	});
+
+	it('uses cached validated data until the server process restarts', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const persistedTrip: { trip: { itinerary: { title: string } } } = JSON.parse(
+			await readFile(managedTripPath(trip.slug), 'utf8')
+		);
+		persistedTrip.trip.itinerary.title = 'Changed directly on disk';
+		await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		await expect(store.getTripView(trip.slug, owner)).resolves.toMatchObject({
+			itinerary: { title: 'Test trip' }
+		});
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		await expect(restartedStore.getTripView(trip.slug, owner)).resolves.toMatchObject({
+			itinerary: { title: 'Changed directly on disk' }
 		});
 	});
 

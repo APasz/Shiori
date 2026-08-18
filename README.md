@@ -102,6 +102,13 @@ timestamps). A trip's filename is its URL slug: for example, `trips/your-trip.js
 Run a single Shiori server process against a durable filesystem volume. The JSON store and its
 edit locks are intentionally designed for this small, single-instance deployment model.
 
+Shiori keeps a validated copy of the store in process memory. Changes made through Shiori are
+available immediately; if you edit a managed JSON file directly, restart the server before relying
+on the change.
+
+Anonymous public itinerary pages may be cached for one minute and served stale while revalidating
+for up to five additional minutes. Signed-in views and every other response remain uncached.
+
 For a single-server production deployment, use the supplied Caddy and systemd configuration as a
 baseline. It assumes the app lives in `/srv/shiori`, has dedicated runtime and deployment accounts,
 and stores its persistent data in `/srv/shiori/data`. Create the accounts and private data directory

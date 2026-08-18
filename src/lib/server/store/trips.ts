@@ -5,7 +5,7 @@ import { createTripBackup, tripBackupSchema, type TripBackup } from '$lib/trip-b
 import { timingStartTimestamp } from '$lib/itinerary/timing';
 import { isAccountManager } from './auth';
 import { StoreError } from './error';
-import type { AuthenticatedUser, StoredData, StoredTrip } from './model';
+import type { AuthenticatedUser, StoredData, StoredTrip, TripMemberRole } from './model';
 import { readData, transaction } from './persistence';
 import { timestamp } from './time';
 import type { OwnedTripOption, TripReference, TripSwitchOption, TripView } from './views';
@@ -37,16 +37,22 @@ export function getTripForMutation(data: StoredData, tripId: string, userId: str
 export function getTripAccess(
 	data: StoredData,
 	trip: StoredTrip,
-	user: AuthenticatedUser | null
+	user: AuthenticatedUser | null,
+	sharedRolesByTripId?: ReadonlyMap<string, TripMemberRole>
 ): TripAccessRole | null {
 	if (user?.id === trip.ownerId) {
 		return 'sudo';
 	}
 
 	if (user) {
-		const share = data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === user.id);
-		if (share) {
-			return share.role === 'none' ? null : share.role;
+		const sharedRole = sharedRolesByTripId?.get(trip.id);
+		const role =
+			sharedRole ??
+			(sharedRolesByTripId === undefined
+				? data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === user.id)?.role
+				: undefined);
+		if (role !== undefined) {
+			return role === 'none' ? null : role;
 		}
 	}
 
@@ -128,7 +134,11 @@ function latestItemStartAt(itinerary: Itinerary): number | null {
 	if (itinerary.items.length === 0) {
 		return null;
 	}
-	return Math.max(...itinerary.items.map((item) => timingStartTimestamp(item.timing)));
+	let latestStartAt = timingStartTimestamp(itinerary.items[0]!.timing);
+	for (let index = 1; index < itinerary.items.length; index += 1) {
+		latestStartAt = Math.max(latestStartAt, timingStartTimestamp(itinerary.items[index]!.timing));
+	}
+	return latestStartAt;
 }
 
 function compareTripSwitchOptions(left: TripSwitchOption, right: TripSwitchOption): number {
@@ -191,7 +201,10 @@ export async function getTripView(slug: string, user: AuthenticatedUser | null):
 export async function createTrip(input: { details: unknown; ownerId: string }): Promise<TripReference> {
 	const details = tripDetailsSchema.parse(input.details);
 
-	return transaction((data) => addTrip(data, input.ownerId, { ...details, expenses: [], items: [], notes: [] }));
+	return transaction((data) => addTrip(data, input.ownerId, { ...details, expenses: [], items: [], notes: [] }), {
+		global: [],
+		tripIds: (trip) => [trip.id]
+	});
 }
 
 /** Returns a complete backup only to the trip owner, never to shared users or visitors. */
@@ -204,7 +217,10 @@ export async function exportTripBackup(input: { tripId: string; userId: string }
 /** Restores an itinerary as a new private trip owned by the importing account. */
 export async function importTripBackup(input: { backup: TripBackup; ownerId: string }): Promise<TripReference> {
 	const backup = tripBackupSchema.parse(input.backup);
-	return transaction((data) => addTrip(data, input.ownerId, backup.itinerary));
+	return transaction((data) => addTrip(data, input.ownerId, backup.itinerary), {
+		global: [],
+		tripIds: (trip) => [trip.id]
+	});
 }
 
 export async function listTripSwitchOptions(userId: string): Promise<TripSwitchOption[]> {
@@ -213,9 +229,15 @@ export async function listTripSwitchOptions(userId: string): Promise<TripSwitchO
 	if (!user) {
 		return [];
 	}
+	const sharedRolesByTripId = new Map<string, TripMemberRole>();
+	for (const share of data.shares) {
+		if (share.userId === user.id) {
+			sharedRolesByTripId.set(share.tripId, share.role);
+		}
+	}
 
 	return data.trips
-		.filter((trip) => getTripAccess(data, trip, user) !== null)
+		.filter((trip) => getTripAccess(data, trip, user, sharedRolesByTripId) !== null)
 		.map((trip) => ({
 			latestItemStartAt: latestItemStartAt(trip.itinerary),
 			slug: trip.slug,

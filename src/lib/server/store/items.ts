@@ -63,21 +63,24 @@ export async function saveItem(
 	assertNewLinkedExpensesAreSelectable(preflightTrip.itinerary, item, existingItem);
 	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, existingItem);
 
-	return transaction((data) => {
-		const trip = getTripForMutation(data, input.tripId, input.userId);
-		assertExpectedRevision(trip, input.revision);
-		const lock = assertActiveLock(data, { ...input, targetId: input.itemId });
-		const itemIndex = findItemIndex(trip.itinerary, input.itemId);
-		if (itemIndex < 0) {
-			throw new StoreError(404, 'Itinerary item not found.');
-		}
-		const items = trip.itinerary.items.map((existingItem, index) =>
-			index === itemIndex ? persistedItem : existingItem
-		);
-		const result = commitItineraryChange(trip, { ...trip.itinerary, items });
-		data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
-		return result;
-	});
+	return transaction(
+		(data) => {
+			const trip = getTripForMutation(data, input.tripId, input.userId);
+			assertExpectedRevision(trip, input.revision);
+			const lock = assertActiveLock(data, { ...input, targetId: input.itemId });
+			const itemIndex = findItemIndex(trip.itinerary, input.itemId);
+			if (itemIndex < 0) {
+				throw new StoreError(404, 'Itinerary item not found.');
+			}
+			const items = trip.itinerary.items.map((existingItem, index) =>
+				index === itemIndex ? persistedItem : existingItem
+			);
+			const result = commitItineraryChange(trip, { ...trip.itinerary, items });
+			data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
+			return result;
+		},
+		{ global: ['editLocks'], tripIds: [input.tripId] }
+	);
 }
 
 export async function createItem(
@@ -94,34 +97,40 @@ export async function createItem(
 	assertNewLinkedExpensesAreSelectable(preflightTrip.itinerary, item);
 	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, undefined);
 
-	return transaction((data) => {
-		const trip = getTripForMutation(data, input.tripId, input.userId);
-		assertExpectedRevision(trip, input.revision);
-		const lock = assertActiveLock(data, { ...input, targetId: tripStructureLockTargetId });
-		if (findItemIndex(trip.itinerary, persistedItem.id) >= 0) {
-			throw new StoreError(409, 'An itinerary item already uses this ID.');
-		}
-		const result = commitItineraryChange(trip, {
-			...trip.itinerary,
-			items: [...trip.itinerary.items, persistedItem]
-		});
-		data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
-		return result;
-	});
+	return transaction(
+		(data) => {
+			const trip = getTripForMutation(data, input.tripId, input.userId);
+			assertExpectedRevision(trip, input.revision);
+			const lock = assertActiveLock(data, { ...input, targetId: tripStructureLockTargetId });
+			if (findItemIndex(trip.itinerary, persistedItem.id) >= 0) {
+				throw new StoreError(409, 'An itinerary item already uses this ID.');
+			}
+			const result = commitItineraryChange(trip, {
+				...trip.itinerary,
+				items: [...trip.itinerary.items, persistedItem]
+			});
+			data.editLocks = data.editLocks.filter((candidate) => candidate.token !== lock.token);
+			return result;
+		},
+		{ global: ['editLocks'], tripIds: [input.tripId] }
+	);
 }
 
 export async function deleteItem(input: VersionedTripMutation & { itemId: string }): Promise<{ revision: number }> {
-	return transaction((data) => {
-		const trip = getTripForMutation(data, input.tripId, input.userId);
-		assertExpectedRevision(trip, input.revision);
-		assertNoActiveEditLock(data, trip);
-		const itemIndex = findItemIndex(trip.itinerary, input.itemId);
-		if (itemIndex < 0) {
-			throw new StoreError(404, 'Itinerary item not found.');
-		}
-		return commitItineraryChange(trip, {
-			...trip.itinerary,
-			items: trip.itinerary.items.filter((_, index) => index !== itemIndex)
-		});
-	});
+	return transaction(
+		(data) => {
+			const trip = getTripForMutation(data, input.tripId, input.userId);
+			assertExpectedRevision(trip, input.revision);
+			assertNoActiveEditLock(data, trip);
+			const itemIndex = findItemIndex(trip.itinerary, input.itemId);
+			if (itemIndex < 0) {
+				throw new StoreError(404, 'Itinerary item not found.');
+			}
+			return commitItineraryChange(trip, {
+				...trip.itinerary,
+				items: trip.itinerary.items.filter((_, index) => index !== itemIndex)
+			});
+		},
+		{ global: [], tripIds: [input.tripId] }
+	);
 }

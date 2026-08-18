@@ -14,14 +14,14 @@ type TestCookies = {
 	set: ReturnType<typeof vi.fn>;
 };
 
-function handleInput(cookies: TestCookies): HandleInput {
+function handleInput(cookies: TestCookies, response = new Response()): HandleInput {
 	return {
 		event: {
 			cookies,
 			locals: {},
 			url: new URL('https://shiori.example/')
 		} as unknown as HandleInput['event'],
-		resolve: async () => new Response()
+		resolve: async () => response
 	};
 }
 
@@ -38,7 +38,7 @@ describe('server hook', () => {
 		};
 		refreshSession.mockResolvedValue({ renewed: true, user: { id: 'user-1', username: 'owner' } });
 
-		await handle(handleInput(cookies));
+		const response = await handle(handleInput(cookies));
 
 		expect(refreshSession).toHaveBeenCalledWith('active-session');
 		expect(cookies.set).toHaveBeenCalledWith(sessionCookieName, 'active-session', {
@@ -49,6 +49,7 @@ describe('server hook', () => {
 			secure: true
 		});
 		expect(cookies.delete).not.toHaveBeenCalled();
+		expect(response.headers.get('cache-control')).toBe('no-store');
 	});
 
 	it('does not refresh the browser cookie before session renewal is due', async () => {
@@ -93,5 +94,35 @@ describe('server hook', () => {
 			'camera=(), geolocation=(), microphone=(), payment=(), usb=()'
 		);
 		expect(response.headers.get('x-frame-options')).toBe('DENY');
+	});
+
+	it('preserves an explicitly cacheable response when no session cookie changes', async () => {
+		const cookies: TestCookies = {
+			delete: vi.fn(),
+			get: vi.fn(),
+			set: vi.fn()
+		};
+		refreshSession.mockResolvedValue(null);
+
+		const response = await handle(
+			handleInput(cookies, new Response(null, { headers: { 'cache-control': 'public, max-age=60' } }))
+		);
+
+		expect(response.headers.get('cache-control')).toBe('public, max-age=60');
+	});
+
+	it('prevents caching a response that clears an invalid session cookie', async () => {
+		const cookies: TestCookies = {
+			delete: vi.fn(),
+			get: vi.fn(() => 'expired-session'),
+			set: vi.fn()
+		};
+		refreshSession.mockResolvedValue(null);
+
+		const response = await handle(
+			handleInput(cookies, new Response(null, { headers: { 'cache-control': 'public, max-age=60' } }))
+		);
+
+		expect(response.headers.get('cache-control')).toBe('no-store');
 	});
 });

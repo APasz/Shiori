@@ -71,24 +71,27 @@ export async function grantTripAccess(input: {
 	const username = usernameSchema.parse(input.username);
 	const role = shareRoleSchema.parse(input.role);
 
-	return transaction((data) => {
-		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
-		const user = data.users.find(
-			(candidate) => usernameIdentityKey(candidate.username) === usernameIdentityKey(username)
-		);
-		if (!user) {
-			throw new StoreError(404, 'No account was found for that username.');
-		}
-		if (user.id === trip.ownerId) {
-			throw new StoreError(409, 'The trip owner already has access.');
-		}
-		if (data.shares.some((share) => share.tripId === trip.id && share.userId === user.id)) {
-			throw new StoreError(409, 'That person already has access to this trip.');
-		}
+	return transaction(
+		(data) => {
+			const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+			const user = data.users.find(
+				(candidate) => usernameIdentityKey(candidate.username) === usernameIdentityKey(username)
+			);
+			if (!user) {
+				throw new StoreError(404, 'No account was found for that username.');
+			}
+			if (user.id === trip.ownerId) {
+				throw new StoreError(409, 'The trip owner already has access.');
+			}
+			if (data.shares.some((share) => share.tripId === trip.id && share.userId === user.id)) {
+				throw new StoreError(409, 'That person already has access to this trip.');
+			}
 
-		data.shares.push({ tripId: trip.id, userId: user.id, role });
-		return { id: user.id, username: user.username, role };
-	});
+			data.shares.push({ tripId: trip.id, userId: user.id, role });
+			return { id: user.id, username: user.username, role };
+		},
+		{ global: ['shares'], tripIds: [] }
+	);
 }
 
 export async function setSharedUserRole(input: {
@@ -99,15 +102,18 @@ export async function setSharedUserRole(input: {
 }): Promise<void> {
 	const role = shareRoleSchema.parse(input.role);
 
-	return transaction((data) => {
-		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
-		requireSharedMember(data, trip, input.userId);
-		const share = data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === input.userId);
-		if (!share) {
-			throw new Error('A shared member disappeared before their role could be updated.');
-		}
-		share.role = role;
-	});
+	return transaction(
+		(data) => {
+			const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+			requireSharedMember(data, trip, input.userId);
+			const share = data.shares.find((candidate) => candidate.tripId === trip.id && candidate.userId === input.userId);
+			if (!share) {
+				throw new Error('A shared member disappeared before their role could be updated.');
+			}
+			share.role = role;
+		},
+		{ global: ['shares'], tripIds: [] }
+	);
 }
 
 export async function setTripMemberAccess(input: {
@@ -116,47 +122,56 @@ export async function setTripMemberAccess(input: {
 	tripId: string;
 	userId: string;
 }): Promise<void> {
-	return transaction((data) => {
-		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
-		const user = data.users.find((candidate) => candidate.id === input.userId);
-		if (!user) {
-			throw new StoreError(404, 'Account not found.');
-		}
-		if (user.id === trip.ownerId) {
-			throw new StoreError(403, 'The trip owner’s access cannot be changed.');
-		}
+	return transaction(
+		(data) => {
+			const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+			const user = data.users.find((candidate) => candidate.id === input.userId);
+			if (!user) {
+				throw new StoreError(404, 'Account not found.');
+			}
+			if (user.id === trip.ownerId) {
+				throw new StoreError(403, 'The trip owner’s access cannot be changed.');
+			}
 
-		const shareIndex = data.shares.findIndex((share) => share.tripId === trip.id && share.userId === input.userId);
-		if (input.role === null) {
-			if (shareIndex === -1) {
+			const shareIndex = data.shares.findIndex((share) => share.tripId === trip.id && share.userId === input.userId);
+			if (input.role === null) {
+				if (shareIndex === -1) {
+					return;
+				}
+				data.shares.splice(shareIndex, 1);
 				return;
 			}
-			data.shares.splice(shareIndex, 1);
-			return;
-		}
 
-		const role = tripMemberRoleSchema.parse(input.role);
-		const share = data.shares[shareIndex];
-		if (share) {
-			share.role = role;
-			return;
-		}
-		data.shares.push({ role, tripId: trip.id, userId: user.id });
-	});
+			const role = tripMemberRoleSchema.parse(input.role);
+			const share = data.shares[shareIndex];
+			if (share) {
+				share.role = role;
+				return;
+			}
+			data.shares.push({ role, tripId: trip.id, userId: user.id });
+		},
+		{ global: ['shares'], tripIds: [] }
+	);
 }
 
 export async function removeTripAccess(input: { actorId: string; tripId: string; userId: string }): Promise<void> {
-	return transaction((data) => {
-		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
-		requireSharedMember(data, trip, input.userId);
-		data.shares = data.shares.filter((share) => share.tripId !== trip.id || share.userId !== input.userId);
-	});
+	return transaction(
+		(data) => {
+			const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+			requireSharedMember(data, trip, input.userId);
+			data.shares = data.shares.filter((share) => share.tripId !== trip.id || share.userId !== input.userId);
+		},
+		{ global: ['shares'], tripIds: [] }
+	);
 }
 
 export async function setTripPublic(input: { actorId: string; isPublic: boolean; tripId: string }): Promise<void> {
-	await transaction((data) => {
-		const trip = requireOwnerTrip(data, input.tripId, input.actorId);
-		trip.isPublic = input.isPublic;
-		trip.updatedAt = timestamp();
-	});
+	await transaction(
+		(data) => {
+			const trip = requireOwnerTrip(data, input.tripId, input.actorId);
+			trip.isPublic = input.isPublic;
+			trip.updatedAt = timestamp();
+		},
+		{ global: [], tripIds: [input.tripId] }
+	);
 }

@@ -1,9 +1,10 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { needsInitialSetup } from '$lib/server/store/auth';
+import { publicTripCacheControl } from '$lib/server/public-cache';
 import { getTripView, ownsAnyTrip } from '$lib/server/store/trips';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, setHeaders }) => {
 	const setupRequired = await needsInitialSetup();
 	const trip = await getTripView(params.slug, locals.user);
 	if (!trip) {
@@ -14,6 +15,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			redirect(303, '/login');
 		}
 		error(404, 'The requested trip is unavailable.');
+	}
+	if (trip.access === 'visitor' && !locals.user) {
+		setHeaders({
+			'cache-control': publicTripCacheControl,
+			vary: 'Cookie'
+		});
 	}
 
 	const canManageAccounts = locals.user ? await ownsAnyTrip(locals.user.id) : false;

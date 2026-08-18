@@ -6,7 +6,6 @@ import { refreshSession } from '$lib/server/store/sessions';
 assertProductionConfiguration(process.env);
 
 const securityHeaders = {
-	'cache-control': 'no-store',
 	'cross-origin-opener-policy': 'same-origin',
 	'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
 	'referrer-policy': 'same-origin',
@@ -18,16 +17,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(sessionCookieName);
 	const session = await refreshSession(sessionId);
 	event.locals.user = session?.user ?? null;
+	let sessionCookieChanged = false;
 
 	if (session && sessionId) {
 		if (session.renewed) {
 			event.cookies.set(sessionCookieName, sessionId, sessionCookieOptions(event.url));
+			sessionCookieChanged = true;
 		}
 	} else if (sessionId) {
 		event.cookies.delete(sessionCookieName, { path: '/' });
+		sessionCookieChanged = true;
 	}
 
 	const response = await resolve(event);
+	if (sessionCookieChanged || !response.headers.has('cache-control')) {
+		response.headers.set('cache-control', 'no-store');
+	}
 	for (const [name, value] of Object.entries(securityHeaders)) {
 		response.headers.set(name, value);
 	}
