@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ItineraryItemType, ReservationStatus } from '$lib/itinerary/schema';
-import paletteSource from './palette.json';
+import paletteSource from './palette.json' with { type: 'json' };
 
 const hexColorSchema = z.string().regex(/^#[\da-f]{6}$/i, 'Use a six-digit hexadecimal colour.');
 

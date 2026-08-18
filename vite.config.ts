@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
+import { themeCss } from './src/lib/theme/palette.ts';
 import { themeInitializationScriptContent } from './src/lib/theme/theme.ts';
 
 const themeInitializationScriptHash: `sha256-${string}` = `sha256-${createHash('sha256')
 	.update(themeInitializationScriptContent)
 	.digest('base64')}`;
+const themeStyleHash: `sha256-${string}` = `sha256-${createHash('sha256').update(themeCss).digest('base64')}`;
 
 export default defineConfig({
 	plugins: [
@@ -15,15 +17,21 @@ export default defineConfig({
 				mode: 'auto',
 				directives: {
 					'base-uri': ['self'],
+					'connect-src': ['self'],
 					'default-src': ['self'],
+					'font-src': ['self'],
 					'form-action': ['self'],
 					'frame-ancestors': ['none'],
+					'frame-src': ['none'],
 					'img-src': ['self', 'data:'],
 					'manifest-src': ['self'],
+					'media-src': ['none'],
 					'object-src': ['none'],
 					'script-src': ['self', themeInitializationScriptHash],
-					// Svelte transitions and the validated palette use inline styles.
-					'style-src': ['self', 'unsafe-inline'],
+					'script-src-attr': ['none'],
+					// Dynamic layout values use style attributes; SvelteKit protects style elements with nonces or hashes.
+					'style-src': ['self', themeStyleHash],
+					'style-src-attr': ['unsafe-inline'],
 					'worker-src': ['self']
 				}
 			},

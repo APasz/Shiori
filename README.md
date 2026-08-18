@@ -215,6 +215,10 @@ curl --fail --show-error --head https://shiori.apasz.com/api/health
 over 20 MB at the edge, adds an active 204 health check, and matches Caddy's upstream connection
 reuse to Node's five-second default. It requires Caddy 2.10 or later.
 
+Shiori emits its Content-Security-Policy itself, so SvelteKit can include a unique nonce on each
+dynamic HTML response. Do not configure a `Content-Security-Policy` header in Caddy: a proxy policy
+would overwrite the response-specific nonce.
+
 The service unit resolves its working directory and release identifier through the `current` symlink,
 requires the data path to be mounted and writable, restricts the process to that path, and makes newly
 created directories private. Run a single Shiori process only: its JSON store and edit locks are
