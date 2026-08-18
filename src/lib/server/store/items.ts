@@ -134,3 +134,53 @@ export async function deleteItem(input: VersionedTripMutation & { itemId: string
 		{ global: [], tripIds: [input.tripId] }
 	);
 }
+
+/** Marks one existing item cost paid while recording its payment-time conversion snapshot. */
+export async function markItemCostPaid(
+	input: VersionedTripMutation & { itemId: string }
+): Promise<{ revision: number }> {
+	const preflightData = await readData();
+	const preflightTrip = getTripForMutation(preflightData, input.tripId, input.userId);
+	assertExpectedRevision(preflightTrip, input.revision);
+	assertNoActiveEditLock(preflightData, preflightTrip);
+	const existingItem = preflightTrip.itinerary.items.find((candidate) => candidate.id === input.itemId);
+	if (!existingItem) {
+		throw new StoreError(404, 'Itinerary item not found.');
+	}
+	if (!existingItem.cost) {
+		throw new StoreError(400, 'This itinerary item has no cost to mark paid.');
+	}
+	if (existingItem.cost.status === 'paid') {
+		throw new StoreError(400, 'This itinerary item cost is already paid.');
+	}
+
+	const item = itineraryItemDraftSchema.parse({
+		...existingItem,
+		cost: {
+			amountMinor: existingItem.cost.amountMinor,
+			currency: existingItem.cost.currency,
+			...(existingItem.cost.scheduledPaymentDate
+				? { scheduledPaymentDate: existingItem.cost.scheduledPaymentDate }
+				: {}),
+			status: 'paid'
+		}
+	});
+	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, existingItem);
+
+	return transaction(
+		(data) => {
+			const trip = getTripForMutation(data, input.tripId, input.userId);
+			assertExpectedRevision(trip, input.revision);
+			assertNoActiveEditLock(data, trip);
+			const itemIndex = findItemIndex(trip.itinerary, input.itemId);
+			if (itemIndex < 0) {
+				throw new StoreError(404, 'Itinerary item not found.');
+			}
+			const items = trip.itinerary.items.map((existingItem, index) =>
+				index === itemIndex ? persistedItem : existingItem
+			);
+			return commitItineraryChange(trip, { ...trip.itinerary, items });
+		},
+		{ global: [], tripIds: [input.tripId] }
+	);
+}

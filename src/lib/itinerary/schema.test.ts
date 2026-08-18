@@ -81,6 +81,30 @@ describe('transport stop schema', () => {
 			}).success
 		).toBe(false);
 	});
+
+	it('requires explicitly scheduled stops to be chronological', () => {
+		const result = itineraryItemSchema.safeParse({
+			...transportItem,
+			transport: {
+				...transportItem.transport,
+				stops: [
+					{ locationId: 'departure', scheduledAt: Date.UTC(2026, 9, 27, 12) },
+					{ locationId: 'arrival', scheduledAt: Date.UTC(2026, 9, 27, 10) }
+				]
+			}
+		});
+
+		expect(result.success).toBe(false);
+		if (result.success) {
+			throw new Error('Transport stops out of chronological order must be rejected.');
+		}
+		expect(result.error.issues).toContainEqual(
+			expect.objectContaining({
+				message: 'Scheduled stops must be in chronological order.',
+				path: ['transport', 'stops', 1, 'scheduledAt']
+			})
+		);
+	});
 });
 
 describe('cost schemas', () => {

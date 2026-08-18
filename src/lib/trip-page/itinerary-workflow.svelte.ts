@@ -15,6 +15,13 @@ type ItineraryWorkflowOptions = Readonly<{
 	detailedTrip: () => DetailedTripView | null;
 }>;
 
+type ItemMutationAction = 'delete' | 'mark-cost-paid';
+
+type PendingItemMutation = Readonly<{
+	action: ItemMutationAction;
+	itemId: string;
+}>;
+
 /** Owns selection and mutation state for itinerary items. */
 export class ItineraryWorkflow {
 	selectedItemId = $state<string | null>(null);
@@ -22,7 +29,7 @@ export class ItineraryWorkflow {
 	creatingItem = $state(false);
 	itemCreationLocalDay = $state<string | undefined>(undefined);
 	mutationError = $state<string | null>(null);
-	pendingMutationItemId = $state<string | null>(null);
+	pendingMutation = $state<PendingItemMutation | null>(null);
 	readonly #options: ItineraryWorkflowOptions;
 
 	constructor(options: ItineraryWorkflowOptions) {
@@ -118,33 +125,53 @@ export class ItineraryWorkflow {
 	}
 
 	async delete(item: ItineraryItem): Promise<void> {
-		const trip = this.#options.detailedTrip();
-		if (!this.#options.canModify() || !trip || !window.confirm(`Delete “${item.title}”?`)) {
+		if (!this.#options.canModify() || !window.confirm(`Delete “${item.title}”?`)) {
 			return;
 		}
+		if (await this.mutateItem(item, 'delete', 'The itinerary item could not be deleted.')) {
+			if (this.selectedItemId === item.id) {
+				this.selectedItemId = null;
+			}
+		}
+	}
 
-		this.pendingMutationItemId = item.id;
+	async markCostPaid(item: ItineraryItem): Promise<void> {
+		if (!item.cost || item.cost.status === 'paid') {
+			return;
+		}
+		await this.mutateItem(item, 'mark-cost-paid', 'The itinerary item cost could not be marked paid.');
+	}
+
+	private async mutateItem(item: ItineraryItem, action: ItemMutationAction, failureMessage: string): Promise<boolean> {
+		const trip = this.#options.detailedTrip();
+		if (!this.#options.canModify() || !trip) {
+			return false;
+		}
+
+		this.pendingMutation = { action, itemId: item.id };
 		this.mutationError = null;
 		try {
 			const response = await fetch(itemMutationEndpoint(trip), {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ action: 'delete', itemId: item.id, revision: trip.revision })
+				body: JSON.stringify({ action, itemId: item.id, revision: trip.revision })
 			});
 			const responseData: unknown = await response.json().catch(() => null);
 			if (!response.ok || !editSaveResponseSchema.safeParse(responseData).success) {
-				this.mutationError = this.errorMessage(responseData, 'The itinerary item could not be deleted.');
-				return;
+				this.mutationError = this.errorMessage(responseData, failureMessage);
+				return false;
 			}
 			brandIconFeedback.publish('success');
-			if (this.selectedItemId === item.id) {
-				this.selectedItemId = null;
-			}
 			await this.refreshPage();
+			return true;
 		} catch {
-			this.mutationError = 'The itinerary item could not be deleted because the server is unavailable.';
+			this.mutationError =
+				action === 'delete'
+					? 'The itinerary item could not be deleted because the server is unavailable.'
+					: 'The itinerary item cost could not be marked paid because the server is unavailable.';
+			return false;
 		} finally {
-			this.pendingMutationItemId = null;
+			this.pendingMutation = null;
 		}
 	}
 

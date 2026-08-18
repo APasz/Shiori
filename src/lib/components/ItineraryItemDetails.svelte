@@ -1,15 +1,19 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
-	import type { CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
-	import { resolveTransportStopSchedule } from '$lib/itinerary/transport-stop-schedule';
-	import { formatMonetaryAmount } from '$lib/money';
+	import {
+		itemLocationFlow,
+		shouldShowTransportStopSchedule,
+		transportTravelDuration
+	} from '$lib/itinerary/item-location-flow';
+	import type { Cost, CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
+	import { formatMonetaryAmount } from '$lib/money';
 	import { itemTypeAccentStyle, reservationStatusStyle } from '$lib/theme/palette';
+	import { onMount } from 'svelte';
 
 	let {
 		item,
@@ -17,10 +21,12 @@
 		localCurrency,
 		tripTimeZone,
 		canEdit,
-		deleteError,
+		mutationError,
 		isDeleting,
+		isMarkingCostPaid,
 		onDismiss,
 		onDelete,
+		onMarkCostPaid,
 		onEdit
 	}: {
 		item: ItineraryItem;
@@ -28,15 +34,21 @@
 		localCurrency: CurrencyCode;
 		tripTimeZone: string;
 		canEdit: boolean;
-		deleteError: string | null;
+		mutationError: string | null;
 		isDeleting: boolean;
+		isMarkingCostPaid: boolean;
 		onDismiss: () => void;
 		onDelete: () => void;
+		onMarkCostPaid: () => void;
 		onEdit: () => void;
 	} = $props();
 	let dialogElement: HTMLDialogElement;
 	const timingTimeZone = $derived(resolveTimingTimeZone(item.timing, tripTimeZone));
 	const linkedExpenses = $derived(resolveLinkedExpenses(expenses, item.linkedExpenseIds));
+	const locationFlow = $derived(itemLocationFlow(item, tripTimeZone));
+	const hasEndTime = $derived(item.timing.kind === 'exact' && item.timing.endAt !== undefined);
+	const startLabel = $derived(item.type === 'accommodation' ? 'Check-in' : 'Start');
+	const endLabel = $derived(item.type === 'accommodation' ? 'Check-out' : 'End');
 
 	onMount(() => {
 		dialogElement.showModal();
@@ -47,17 +59,12 @@
 		onEdit();
 	}
 
-	function findLocation(locationId: string): ItineraryLocation | undefined {
-		return item.locations.find((location) => location.id === locationId);
-	}
-
-	function transportStopLabel(locationId: string): string {
-		const location = findLocation(locationId);
-		return location ? locationLabel(location) : locationId;
-	}
-
 	function locationLabel(location: ItineraryLocation): string {
 		return location.code ? `${location.name} (${location.code})` : location.name;
+	}
+
+	function locationMapUrl(location: ItineraryLocation): string | undefined {
+		return location.googleMapsUrl ?? location.openRailwayMapUrl;
 	}
 
 	function paidAtLabel(paidAt: number): string {
@@ -66,6 +73,13 @@
 
 	function exchangeRateLabel(exchangeRate: number): string {
 		return new Intl.NumberFormat(undefined, { maximumSignificantDigits: 8 }).format(exchangeRate);
+	}
+
+	function costStatusLabel(cost: Cost): 'Paid' | 'Scheduled' | 'Unpaid' {
+		if (cost.status === 'paid') {
+			return 'Paid';
+		}
+		return cost.scheduledPaymentDate ? 'Scheduled' : 'Unpaid';
 	}
 </script>
 
@@ -84,7 +98,6 @@
 				<h2 id="item-details-heading">{item.title}</h2>
 			</div>
 			<div class="heading-actions">
-				<ItineraryTiming includeDate itemType={item.type} timing={item.timing} timeZone={timingTimeZone} />
 				{#if canEdit}
 					<button class="edit-button" onclick={startEditing} type="button">Edit</button>
 				{/if}
@@ -94,38 +107,75 @@
 			</div>
 		</div>
 
-		{#if item.locations.length > 0}
-			<section aria-labelledby="locations-heading">
-				<h3 id="locations-heading">Locations</h3>
-				<ul>
-					{#each item.locations as location (location.id)}
-						<li>
-							{#if location.googleMapsUrl}
-								<strong>
-									<a href={location.googleMapsUrl} rel="external noopener noreferrer" target="_blank">
-										{locationLabel(location)}
+		<section aria-label={item.type === 'transport' ? 'Journey' : 'Schedule'}>
+			{#if item.type !== 'transport'}<h3>Schedule</h3>{/if}
+			<div class="item-flow">
+				<div class="timing-boundary">
+					{#if item.type !== 'transport'}<span class="timing-boundary-label">{startLabel}</span>{/if}
+					<ItineraryTiming display="start" includeDate timing={item.timing} timeZone={timingTimeZone} />
+				</div>
+
+				{#if locationFlow.length > 0}
+					<ol aria-label="Locations and travel times" class="location-flow">
+						{#each locationFlow as entry, locationIndex (entry.location.id)}
+							{@const mapUrl = locationMapUrl(entry.location)}
+							{@const travelDuration = transportTravelDuration(locationFlow[locationIndex - 1], entry)}
+							{#if travelDuration}
+								<li class="travel-duration">Travel time: {travelDuration}</li>
+							{/if}
+							<li>
+								{#if mapUrl}
+									<strong>
+										<a href={mapUrl} rel="external noopener noreferrer" target="_blank">
+											{locationLabel(entry.location)}
+										</a>
+									</strong>
+								{:else}
+									<strong>{locationLabel(entry.location)}</strong>
+								{/if}
+
+								{#if entry.kind === 'transport-stop'}
+									{#if entry.schedule && shouldShowTransportStopSchedule(entry, locationIndex, item.timing)}
+										<span class="location-time">
+											<ItineraryTime
+												includeDate
+												startAt={entry.schedule.scheduledAt}
+												timeZone={entry.schedule.timeZone}
+											/>
+										</span>
+									{/if}
+									{#if entry.platform}<span>Platform {entry.platform}</span>{/if}
+								{:else if item.type !== 'accommodation'}
+									<span class="location-time">
+										<span class="location-time-label">At</span>
+										<ItineraryTiming display="start" includeDate timing={item.timing} timeZone={timingTimeZone} />
+									</span>
+								{/if}
+
+								{#if entry.location.address}<span>{entry.location.address}</span>{/if}
+								{#if entry.location.googleMapsUrl && entry.location.openRailwayMapUrl}
+									<a
+										class="location-map-link"
+										href={entry.location.openRailwayMapUrl}
+										rel="external noopener noreferrer"
+										target="_blank"
+									>
+										OpenRailwayMap
 									</a>
-								</strong>
-							{:else}
-								<strong>{locationLabel(location)}</strong>
-							{/if}
-							{#if location.openRailwayMapUrl}
-								<a
-									class="location-map-link"
-									href={location.openRailwayMapUrl}
-									rel="external noopener noreferrer"
-									target="_blank"
-								>
-									OpenRailwayMap
-								</a>
-							{/if}
-							<span class="location-role">{location.role.replace('-', ' ')}</span>
-							{#if location.address}<span>{location.address}</span>{/if}
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{/if}
+								{/if}
+							</li>
+						{/each}
+					</ol>
+				{/if}
+
+				{#if hasEndTime}
+					<div class="timing-boundary">
+						<span class="timing-boundary-label">{endLabel}</span>
+						<ItineraryTiming display="end" includeDate timing={item.timing} timeZone={timingTimeZone} />
+					</div>
+				{/if}
+			</div>
+		</section>
 
 		{#if item.type === 'transport'}
 			<section aria-labelledby="transport-heading">
@@ -146,18 +196,6 @@
 						<dd>{item.transport.seat}</dd>
 					{/if}
 				</dl>
-				<ul class="stops">
-					{#each item.transport.stops as stop, stopIndex (stop.locationId)}
-						{@const schedule = resolveTransportStopSchedule(item.timing, stop, stopIndex, tripTimeZone)}
-						<li>
-							<strong>{transportStopLabel(stop.locationId)}</strong>
-							{#if schedule}
-								<ItineraryTime startAt={schedule.scheduledAt} timeZone={schedule.timeZone} />
-							{/if}
-							{#if stop.platform}<span>Platform {stop.platform}</span>{/if}
-						</li>
-					{/each}
-				</ul>
 			</section>
 		{/if}
 
@@ -184,34 +222,36 @@
 		{#if item.cost}
 			<section aria-labelledby="cost-heading">
 				<h3 id="cost-heading">Cost</h3>
-				<dl>
-					<dt>Charged</dt>
-					<dd>{formatMonetaryAmount(item.cost.amountMinor, item.cost.currency)}</dd>
-					<dt>Status</dt>
-					<dd>{item.cost.status === 'paid' ? 'Paid' : 'Unpaid'}</dd>
-					{#if item.cost.scheduledPaymentDate}
-						<dt>Scheduled payment</dt>
-						<dd>{formatCalendarDate(item.cost.scheduledPaymentDate)}</dd>
-					{/if}
+				<div class="cost-summary">
+					<div class="cost-primary">
+						<strong class="cost-amount">{formatMonetaryAmount(item.cost.amountMinor, item.cost.currency)}</strong>
+						<span class:paid={item.cost.status === 'paid'} class="cost-status">
+							{costStatusLabel(item.cost)}
+						</span>
+					</div>
+
 					{#if item.cost.status === 'paid'}
-						<dt>Local equivalent</dt>
-						<dd>
-							{formatMonetaryAmount(item.cost.payment.localAmountMinor, item.cost.payment.localCurrency)}
-							{#if item.cost.payment.localCurrency !== localCurrency}
-								<span class="cost-note">Saved before the trip currency changed to {localCurrency}.</span>
-							{/if}
-						</dd>
-						<dt>Rate</dt>
-						<dd>
-							1 {item.cost.currency} = {exchangeRateLabel(item.cost.payment.exchangeRate)}
-							{item.cost.payment.localCurrency}
-						</dd>
-						<dt>Reference rate date</dt>
-						<dd>{item.cost.payment.rateDate}</dd>
-						<dt>Marked paid</dt>
-						<dd>{paidAtLabel(item.cost.payment.paidAt)}</dd>
+						{#if item.cost.payment.localCurrency !== item.cost.currency}
+							<p class="cost-local-equivalent">
+								≈ {formatMonetaryAmount(item.cost.payment.localAmountMinor, item.cost.payment.localCurrency)}
+							</p>
+							<p class="cost-payment-detail">
+								Paid {paidAtLabel(item.cost.payment.paidAt)} · Rate on {formatCalendarDate(item.cost.payment.rateDate)}
+							</p>
+							<p class="cost-rate">
+								1 {item.cost.currency} = {exchangeRateLabel(item.cost.payment.exchangeRate)}
+								{item.cost.payment.localCurrency}
+							</p>
+						{:else}
+							<p class="cost-payment-detail">Paid {paidAtLabel(item.cost.payment.paidAt)}</p>
+						{/if}
+						{#if item.cost.payment.localCurrency !== localCurrency}
+							<p class="cost-note">Trip currency is now {localCurrency}.</p>
+						{/if}
+					{:else if item.cost.scheduledPaymentDate}
+						<p class="cost-payment-detail">Due {formatCalendarDate(item.cost.scheduledPaymentDate)}</p>
 					{/if}
-				</dl>
+				</div>
 			</section>
 		{/if}
 
@@ -275,10 +315,22 @@
 
 		{#if canEdit}
 			<div class="details-actions">
-				{#if deleteError}<p class="delete-error" role="alert">{deleteError}</p>{/if}
-				<button class="delete-button" disabled={isDeleting} onclick={onDelete} type="button">
-					{isDeleting ? 'Deleting item…' : 'Delete item'}
-				</button>
+				{#if mutationError}<p class="mutation-error" role="alert">{mutationError}</p>{/if}
+				<div class="details-action-buttons">
+					{#if item.cost?.status === 'unpaid' && item.cost.scheduledPaymentDate}
+						<button
+							class="mark-cost-paid-button"
+							disabled={isDeleting || isMarkingCostPaid}
+							onclick={onMarkCostPaid}
+							type="button"
+						>
+							{isMarkingCostPaid ? 'Marking cost paid…' : 'Mark cost paid'}
+						</button>
+					{/if}
+					<button class="delete-button" disabled={isDeleting || isMarkingCostPaid} onclick={onDelete} type="button">
+						{isDeleting ? 'Deleting item…' : 'Delete item'}
+					</button>
+				</div>
 			</div>
 		{/if}
 	</div>
@@ -347,10 +399,11 @@
 		text-transform: uppercase;
 	}
 
-	.location-role,
 	.document-kind,
 	.location-map-link,
-	.cost-note {
+	.cost-note,
+	.location-time-label,
+	.timing-boundary-label {
 		color: var(--color-text-muted);
 		font-size: 0.75rem;
 		font-weight: 700;
@@ -363,10 +416,9 @@
 	}
 
 	.cost-note {
-		display: block;
 		font-size: 0.625rem;
 		letter-spacing: 0.04em;
-		margin-top: 0.25rem;
+		margin: 0.125rem 0 0;
 	}
 
 	.eyebrow {
@@ -390,7 +442,8 @@
 
 	.close-button,
 	.edit-button,
-	.delete-button {
+	.delete-button,
+	.mark-cost-paid-button {
 		background: transparent;
 		border: 1px solid currentColor;
 		color: inherit;
@@ -406,13 +459,88 @@
 
 	.close-button:focus-visible,
 	.edit-button:focus-visible,
-	.delete-button:focus-visible {
+	.delete-button:focus-visible,
+	.mark-cost-paid-button:focus-visible {
 		outline: 3px solid var(--color-state-focus);
 		outline-offset: 0.25rem;
 	}
 
 	section {
 		margin-top: 1.5rem;
+	}
+
+	.item-flow,
+	.timing-boundary,
+	.location-time {
+		display: grid;
+		gap: 0.25rem;
+	}
+
+	.cost-summary {
+		display: grid;
+		gap: 0.375rem;
+	}
+
+	.cost-primary {
+		align-items: center;
+		display: flex;
+		gap: 0.75rem;
+		justify-content: space-between;
+	}
+
+	.cost-amount {
+		font-size: 1.25rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.cost-status {
+		border: 1px solid var(--color-state-warning);
+		color: var(--color-state-warning);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		padding: 0.25rem 0.375rem;
+		text-transform: uppercase;
+	}
+
+	.cost-status.paid {
+		border-color: var(--color-state-success);
+		color: var(--color-state-success);
+	}
+
+	.cost-local-equivalent,
+	.cost-payment-detail,
+	.cost-rate {
+		margin: 0;
+	}
+
+	.cost-local-equivalent {
+		font-size: 1rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+	}
+
+	.cost-payment-detail,
+	.cost-rate {
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+	}
+
+	.location-flow {
+		border-left: 1px solid var(--color-border-default);
+		display: grid;
+		gap: 1rem;
+		list-style: none;
+		margin: 0;
+		padding: 0 0 0 1rem;
+	}
+
+	.travel-duration {
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 	}
 
 	ul {
@@ -441,12 +569,6 @@
 
 	dd {
 		margin: 0;
-	}
-
-	.stops {
-		border-top: 1px solid var(--color-border-default);
-		margin-top: 1rem;
-		padding-top: 1rem;
 	}
 
 	a {
@@ -478,9 +600,24 @@
 		padding-top: 1rem;
 	}
 
-	.delete-error {
+	.mutation-error {
 		color: var(--color-state-error);
 		margin: 0 0 0.75rem;
+	}
+
+	.details-action-buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+
+	.mark-cost-paid-button {
+		border-color: var(--color-state-success);
+		color: var(--color-state-success);
+	}
+
+	.mark-cost-paid-button:hover {
+		background: color-mix(in srgb, var(--color-state-success) 11%, transparent);
 	}
 
 	.delete-button {
@@ -492,7 +629,8 @@
 		background: color-mix(in srgb, var(--color-state-error) 11%, transparent);
 	}
 
-	.delete-button:disabled {
+	.delete-button:disabled,
+	.mark-cost-paid-button:disabled {
 		cursor: wait;
 		opacity: 0.7;
 	}

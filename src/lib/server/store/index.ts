@@ -30,7 +30,7 @@ export {
 	saveNote,
 	saveTripDetails
 } from './itinerary-mutations';
-export { createItem, deleteItem, saveItem } from './items';
+export { createItem, deleteItem, markItemCostPaid, saveItem } from './items';
 export {
 	grantTripAccess,
 	listAvailableTripAccounts,

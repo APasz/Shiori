@@ -6,8 +6,11 @@
 		formatAccommodationTimingForDayParts,
 		formatAccommodationTimingParts,
 		formatItineraryTiming,
+		formatItineraryTimingBoundary,
 		formatItineraryTimingForDay,
+		timingEndTimestamp,
 		timingStartTimestamp,
+		type TimingBoundary,
 		type TimingDisplayPart
 	} from '$lib/itinerary/timing';
 	import type { ItineraryItem, ItineraryTiming } from '$lib/itinerary/schema';
@@ -19,17 +22,22 @@
 		timeZone,
 		day,
 		includeDate = false,
-		itemType
+		itemType,
+		display = 'full'
 	}: {
 		timing: ItineraryTiming;
 		timeZone: string;
 		day?: string;
 		includeDate?: boolean;
 		itemType?: ItineraryItem['type'];
+		display?: 'full' | TimingBoundary;
 	} = $props();
 	let browserReady = $state(false);
 
 	function formatTiming(displayTimeZone: string, dayTimeZone?: string): string | null {
+		if (display !== 'full') {
+			return formatItineraryTimingBoundary(timing, display, includeDate, displayTimeZone);
+		}
 		if (day) {
 			return itemType === 'accommodation'
 				? formatAccommodationTimingForDay(timing, day, displayTimeZone, dayTimeZone)
@@ -41,7 +49,7 @@
 	}
 
 	function formatTimingParts(displayTimeZone: string, dayTimeZone?: string): readonly TimingDisplayPart[] | null {
-		if (itemType !== 'accommodation') {
+		if (display !== 'full' || itemType !== 'accommodation') {
 			return null;
 		}
 		return day
@@ -56,7 +64,8 @@
 	);
 	const localLabel = $derived(browserReady && !localParts ? formatTiming(timeZone, viewerContext.timeZone) : null);
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
-	const localTimeZoneOffset = $derived(timeZoneOffsetLabel(timeZone, timingStartTimestamp(timing)));
+	const displayTimestamp = $derived(display === 'end' ? timingEndTimestamp(timing) : timingStartTimestamp(timing));
+	const localTimeZoneOffset = $derived(timeZoneOffsetLabel(timeZone, displayTimestamp));
 
 	onMount(() => {
 		browserReady = true;
@@ -89,7 +98,7 @@
 		{:else}
 			<span class="local-time" title={localTimeZoneOffset ?? undefined}>
 				{localLabel}
-				{timeZoneShortLabel(timeZone, timingStartTimestamp(timing))}
+				{timeZoneShortLabel(timeZone, displayTimestamp)}
 			</span>
 		{/if}
 	{/if}

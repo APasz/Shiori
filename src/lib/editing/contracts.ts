@@ -101,11 +101,18 @@ export const itemCreateRequestSchema = z.strictObject({
 	revision: z.number().int().nonnegative()
 });
 
-export const itemMutationRequestSchema = z.strictObject({
-	action: z.literal('delete'),
-	itemId: itineraryIdentifierSchema,
-	revision: z.number().int().nonnegative()
-});
+export const itemMutationRequestSchema = z.discriminatedUnion('action', [
+	z.strictObject({
+		action: z.literal('delete'),
+		itemId: itineraryIdentifierSchema,
+		revision: z.number().int().nonnegative()
+	}),
+	z.strictObject({
+		action: z.literal('mark-cost-paid'),
+		itemId: itineraryIdentifierSchema,
+		revision: z.number().int().nonnegative()
+	})
+]);
 
 export const editLockTokenRequestSchema = z.strictObject({
 	lockToken: z.string().uuid()

@@ -1048,6 +1048,73 @@ describe('JSON store', () => {
 		});
 	});
 
+	it('marks a scheduled item cost paid without opening the item editor', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-02T12:00:00.000Z'));
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(
+						[
+							'KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE',
+							'EXR.D.AUD.EUR.SP00.A,D,AUD,EUR,SP00,A,2026-01-02,1.5',
+							'EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2026-01-02,1.25'
+						].join('\n')
+					)
+			)
+		);
+
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const lock = await store.acquireTripStructureLock({ tripId: trip.id, userId: owner.id });
+		const item = {
+			...createEmptyItineraryItem('activity', 'scheduled-item', Date.UTC(2026, 0, 3)),
+			cost: {
+				amountMinor: 10_000,
+				currency: 'USD' as const,
+				scheduledPaymentDate: '2026-01-03',
+				status: 'unpaid' as const
+			},
+			title: 'scheduled-item'
+		};
+		const created = await store.createItem({
+			item,
+			lockToken: lock.token,
+			revision: trip.revision,
+			tripId: trip.id,
+			userId: owner.id
+		});
+
+		await expect(
+			store.markItemCostPaid({
+				itemId: item.id,
+				revision: created.revision,
+				tripId: trip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: created.revision + 1 });
+
+		const savedTrip = await store.getTripView(trip.slug, owner);
+		if (!savedTrip || savedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the saved trip.');
+		}
+		expect(savedTrip.itinerary.items.find((candidate) => candidate.id === item.id)?.cost).toEqual({
+			amountMinor: 10_000,
+			currency: 'USD',
+			scheduledPaymentDate: '2026-01-03',
+			payment: {
+				exchangeRate: 1.2,
+				localAmountMinor: 12_000,
+				localCurrency: 'AUD',
+				paidAt: Date.UTC(2026, 0, 2, 12),
+				rateDate: '2026-01-02'
+			},
+			status: 'paid'
+		});
+	});
+
 	it('lists empty trips before planned trips ordered by their latest item start', async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2027-01-01T00:00:00.000Z'));

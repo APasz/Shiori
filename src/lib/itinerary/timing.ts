@@ -24,6 +24,8 @@ export function timingEndTimestamp(timing: ItineraryTiming): number {
 	}
 }
 
+export type TimingBoundary = 'end' | 'start';
+
 function toleranceLabel(minutes: number): string {
 	const hours = Math.floor(minutes / 60);
 	const remainingMinutes = minutes % 60;
@@ -173,6 +175,32 @@ export function formatItineraryTiming(timing: ItineraryTiming, includeDate = fal
 			const window = timestampRangeLabel(timing.earliestAt, timing.latestAt, includeDate, timeZone);
 			return window ? `~${window}` : null;
 		}
+	}
+}
+
+/** Formats one known item boundary without treating an uncertain time range as an item end. */
+export function formatItineraryTimingBoundary(
+	timing: ItineraryTiming,
+	boundary: TimingBoundary,
+	includeDate = false,
+	timeZone?: string
+): string | null {
+	switch (timing.kind) {
+		case 'exact': {
+			const timestamp = boundary === 'start' ? timing.startAt : timing.endAt;
+			if (timestamp === undefined) {
+				return null;
+			}
+			if (timing.timePrecision === 'date') {
+				const formatted = formatTimestamp(timestamp, timeZone);
+				const date = formatted ? formatCalendarDate(formatted.date) : null;
+				return date ? `${date} · time unknown` : null;
+			}
+			return timestampLabel(timestamp, includeDate, timeZone);
+		}
+		case 'approximate':
+		case 'window':
+			return boundary === 'start' ? formatItineraryTiming(timing, includeDate, timeZone) : null;
 	}
 }
 

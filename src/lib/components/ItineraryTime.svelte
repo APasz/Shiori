@@ -1,16 +1,31 @@
 <script lang="ts">
 	import { formatTimestampInTimeZone, type FormattedLocalTimestamp } from '$lib/itinerary/time';
+	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { onMount } from 'svelte';
 
-	let { startAt, timeZone }: { startAt: number; timeZone: string } = $props();
+	let {
+		startAt,
+		timeZone,
+		includeDate = false
+	}: { startAt: number; timeZone: string; includeDate?: boolean } = $props();
 	let viewerTime = $state<FormattedLocalTimestamp | null>(null);
 	let localTime = $state<FormattedLocalTimestamp | null>(null);
 	let browserReady = $state(false);
 	const machineDateTime = $derived(new Date(startAt).toISOString());
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
 	const localTimeZoneOffset = $derived(timeZoneOffsetLabel(timeZone, startAt));
+	const viewerLabel = $derived(viewerTime ? timestampLabel(viewerTime) : 'Localizing…');
+	const localLabel = $derived(localTime ? timestampLabel(localTime) : null);
+
+	function timestampLabel(timestamp: FormattedLocalTimestamp): string {
+		if (!includeDate) {
+			return timestamp.time;
+		}
+		const date = formatCalendarDate(timestamp.date);
+		return date ? `${date}, ${timestamp.time}` : timestamp.time;
+	}
 
 	onMount(() => {
 		browserReady = true;
@@ -25,10 +40,10 @@
 </script>
 
 <span class="itinerary-time">
-	<time datetime={machineDateTime}>{viewerTime?.time ?? 'Localizing…'}</time>
-	{#if showLocalTime && localTime}
+	<time datetime={machineDateTime}>{viewerLabel}</time>
+	{#if showLocalTime && localLabel}
 		<span class="local-time" title={localTimeZoneOffset ?? undefined}>
-			{localTime.time}
+			{localLabel}
 			{timeZoneShortLabel(timeZone, startAt)}
 		</span>
 	{/if}

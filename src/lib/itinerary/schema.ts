@@ -334,6 +334,7 @@ export const transportDetailsSchema = z
 	})
 	.superRefine((transport, context) => {
 		const stopLocationIds = new Set<string>();
+		let previousScheduledAt: number | undefined;
 		for (const [stopIndex, stop] of transport.stops.entries()) {
 			if (stopLocationIds.has(stop.locationId)) {
 				context.addIssue({
@@ -343,6 +344,17 @@ export const transportDetailsSchema = z
 				});
 			}
 			stopLocationIds.add(stop.locationId);
+
+			if (stop.scheduledAt !== undefined) {
+				if (previousScheduledAt !== undefined && stop.scheduledAt < previousScheduledAt) {
+					context.addIssue({
+						code: 'custom',
+						path: ['stops', stopIndex, 'scheduledAt'],
+						message: 'Scheduled stops must be in chronological order.'
+					});
+				}
+				previousScheduledAt = stop.scheduledAt;
+			}
 		}
 	});
 

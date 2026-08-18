@@ -116,9 +116,13 @@
 				localCurrency={detailedTrip.itinerary.localCurrency}
 				tripTimeZone={itinerary.timeZone}
 				canEdit={canModifyItinerary}
-				deleteError={itemWorkflow.mutationError}
-				isDeleting={itemWorkflow.pendingMutationItemId === selectedItem.id}
+				mutationError={itemWorkflow.mutationError}
+				isDeleting={itemWorkflow.pendingMutation?.action === 'delete' &&
+					itemWorkflow.pendingMutation.itemId === selectedItem.id}
+				isMarkingCostPaid={itemWorkflow.pendingMutation?.action === 'mark-cost-paid' &&
+					itemWorkflow.pendingMutation.itemId === selectedItem.id}
 				onDelete={() => void itemWorkflow.delete(selectedItem)}
+				onMarkCostPaid={() => void itemWorkflow.markCostPaid(selectedItem)}
 				onDismiss={() => itemWorkflow.dismissDetails()}
 				onEdit={() => editSelectedItem(selectedItem)}
 			/>
