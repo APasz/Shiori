@@ -3,7 +3,6 @@ import { projectDetailedItinerary, projectPublicItinerary, type TripAccessRole }
 import { itinerarySchema, tripDetailsSchema, type Itinerary } from '$lib/itinerary/schema';
 import { createTripBackup, tripBackupSchema, type TripBackup } from '$lib/trip-backup';
 import { timingStartTimestamp } from '$lib/itinerary/timing';
-import { isAccountManager } from './auth';
 import { StoreError } from './error';
 import type { AuthenticatedUser, StoredData, StoredTrip, TripMemberRole } from './model';
 import { readData, transaction } from './persistence';
@@ -245,11 +244,6 @@ export async function listTripSwitchOptions(userId: string): Promise<TripSwitchO
 			updatedAt: trip.updatedAt
 		}))
 		.sort(compareTripSwitchOptions);
-}
-
-export async function ownsAnyTrip(userId: string): Promise<boolean> {
-	const data = await readData();
-	return isAccountManager(data, userId);
 }
 
 export async function listOwnedTripOptions(userId: string): Promise<OwnedTripOption[]> {

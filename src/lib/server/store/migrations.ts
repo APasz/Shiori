@@ -13,8 +13,10 @@ import {
 	legacyStoredDataVersion,
 	preAccessBlockStoredDataVersion,
 	preNotesStoredDataVersion,
+	preSudoStoredDataVersion,
 	previousStoredDataVersion,
 	priorStoredDataVersion,
+	migratableStoredUserSchema,
 	storedDataVersion
 } from './model';
 
@@ -68,7 +70,8 @@ const migratableStoredTripFileEnvelopeSchema = z
 			z.literal(dailyExpenseStoredDataVersion),
 			z.literal(freeformExpenseStoredDataVersion),
 			z.literal(preNotesStoredDataVersion),
-			z.literal(preAccessBlockStoredDataVersion)
+			z.literal(preAccessBlockStoredDataVersion),
+			z.literal(preSudoStoredDataVersion)
 		]),
 		trip: z
 			.object({
@@ -84,8 +87,53 @@ const migratableStoredTripFileEnvelopeSchema = z
 
 type MigratableItinerary = Record<string, unknown> & { items: unknown[] };
 
+const migratableStoredUsersFileSchema = z.strictObject({
+	version: z.union([
+		z.literal(legacyStoredDataVersion),
+		z.literal(previousStoredDataVersion),
+		z.literal(priorStoredDataVersion),
+		z.literal(dailyExpenseStoredDataVersion),
+		z.literal(freeformExpenseStoredDataVersion),
+		z.literal(preNotesStoredDataVersion),
+		z.literal(preAccessBlockStoredDataVersion),
+		z.literal(preSudoStoredDataVersion)
+	]),
+	users: z.array(migratableStoredUserSchema)
+});
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function earliestLegacyUserId(users: readonly { createdAt: number; id: string }[]): string | undefined {
+	let earliestUser: (typeof users)[number] | undefined;
+	for (const user of users) {
+		if (
+			!earliestUser ||
+			user.createdAt < earliestUser.createdAt ||
+			(user.createdAt === earliestUser.createdAt && user.id < earliestUser.id)
+		) {
+			earliestUser = user;
+		}
+	}
+	return earliestUser?.id;
+}
+
+/** Promotes the earliest legacy account to the sole global sudo account. */
+export function migrateStoredUsersFile(file: unknown): { file: unknown; migrationRequired: boolean } {
+	const parsedFile = migratableStoredUsersFileSchema.safeParse(file);
+	if (!parsedFile.success) {
+		return { file, migrationRequired: false };
+	}
+
+	const firstUserId = earliestLegacyUserId(parsedFile.data.users);
+	return {
+		file: {
+			version: storedDataVersion,
+			users: parsedFile.data.users.map((user) => ({ ...user, isSudo: user.id === firstUserId }))
+		},
+		migrationRequired: true
+	};
 }
 
 function migrateLegacyCost(cost: unknown): unknown {

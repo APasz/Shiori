@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { assertAccountManager } from './auth';
+import { assertSudo } from './auth';
 import { StoreError } from './error';
 import { tripStructureLockTargetId, type StoredData, type StoredEditLock } from './model';
 import { readData, transaction } from './persistence';
@@ -122,7 +122,7 @@ export async function hasActiveTripEditSession(input: { tripId: string; userId: 
 
 export async function hasActiveEditSessions(userId: string): Promise<boolean> {
 	const data = await readData();
-	assertAccountManager(data, userId);
+	assertSudo(data, userId);
 	return data.editLocks.some((lock) => !isExpired(lock.expiresAt));
 }
 
@@ -144,7 +144,7 @@ export async function forceReleaseTripEditLocks(input: {
 export async function forceReleaseAllEditLocks(userId: string): Promise<{ released: number }> {
 	return transaction(
 		(data) => {
-			assertAccountManager(data, userId);
+			assertSudo(data, userId);
 			const released = data.editLocks.length;
 			data.editLocks = [];
 			return { released };

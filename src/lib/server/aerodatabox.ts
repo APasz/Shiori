@@ -8,6 +8,7 @@ import {
 } from '$lib/server/external-api';
 import { ianaTimeZoneSchema } from '$lib/itinerary/schema';
 import { transportJourneyScheduleSchema, type TransportJourneySchedule } from '$lib/itinerary/transport-schedule';
+import { isExampleEnvironmentValue } from './example-environment';
 
 const directApiBaseUrl = 'https://api.aerodatabox.com/';
 const rapidApiBaseUrl = 'https://aerodatabox.p.rapidapi.com/';
@@ -86,12 +87,14 @@ const providerRequests = new ProviderRequestCoordinator<AeroDataBoxFlightSchedul
 
 function configuredProvider(): AeroDataBoxProvider | undefined {
 	const directApiKey = env.AERODATABOX_DIRECT_API_KEY?.trim();
-	if (directApiKey) {
+	if (directApiKey && !isExampleEnvironmentValue('AERODATABOX_DIRECT_API_KEY', directApiKey)) {
 		return { apiKey: directApiKey, gateway: 'direct' };
 	}
 
 	const rapidApiKey = env.AERODATABOX_API_KEY?.trim();
-	return rapidApiKey ? { apiKey: rapidApiKey, gateway: 'rapidapi' } : undefined;
+	return rapidApiKey && !isExampleEnvironmentValue('AERODATABOX_API_KEY', rapidApiKey)
+		? { apiKey: rapidApiKey, gateway: 'rapidapi' }
+		: undefined;
 }
 
 function normalizedFlightNumber(value: string): string {

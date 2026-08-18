@@ -6,6 +6,7 @@ import {
 	setupTokenConfigurationError,
 	type EnvironmentVariables
 } from './production-config';
+import { exampleEnvironmentValues } from './example-environment';
 
 function productionEnvironment(overrides: EnvironmentVariables = {}): EnvironmentVariables {
 	return {
@@ -59,5 +60,25 @@ describe('production configuration', () => {
 		expect(setupTokenConfigurationError({ SHIORI_SETUP_TOKEN: 'short' }, false)).toBe(
 			`SHIORI_SETUP_TOKEN must contain at least ${minimumSetupTokenBytes} bytes.`
 		);
+	});
+
+	it('rejects the public setup-token placeholder from the environment example', () => {
+		expect(
+			setupTokenConfigurationError({ SHIORI_SETUP_TOKEN: exampleEnvironmentValues.SHIORI_SETUP_TOKEN }, true)
+		).toBe('SHIORI_SETUP_TOKEN must be replaced with a unique random secret.');
+	});
+
+	it('rejects public API-key placeholders from the environment example', () => {
+		expect(
+			productionConfigurationErrors(
+				productionEnvironment({
+					AERODATABOX_API_KEY: exampleEnvironmentValues.AERODATABOX_API_KEY,
+					GOOGLE_API_KEY: exampleEnvironmentValues.GOOGLE_API_KEY
+				})
+			)
+		).toEqual([
+			'AERODATABOX_API_KEY must be replaced with a real key or removed.',
+			'GOOGLE_API_KEY must be replaced with a real key or removed.'
+		]);
 	});
 });

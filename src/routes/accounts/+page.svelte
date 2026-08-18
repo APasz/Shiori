@@ -9,7 +9,7 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	function actionUrl(action: 'createAccount' | 'deleteAccount' | 'resetPassword' | 'setTripAccess'): string {
-		return `?trip=${encodeURIComponent(data.selectedTrip.slug)}&/${action}`;
+		return data.selectedTrip ? `?trip=${encodeURIComponent(data.selectedTrip.slug)}&/${action}` : `?/${action}`;
 	}
 
 	function autoSubmit(event: Event): void {
@@ -58,18 +58,24 @@
 		<div class="section-heading">
 			<div>
 				<h2 id="users-heading">Users <span>{data.accounts.length}</span></h2>
-				<p>Access levels apply to the selected trip only.</p>
+				<p>
+					{data.selectedTrip
+						? 'Access levels apply to the selected trip only.'
+						: 'You can manage global accounts, but trip access is managed by each trip owner.'}
+				</p>
 			</div>
-			<form class="trip-selector" method="GET">
-				<label>
-					<span class="visually-hidden">Trip for access management</span>
-					<select name="trip" onchange={autoSubmit} value={data.selectedTrip.slug}>
-						{#each data.trips as trip (trip.id)}
-							<option value={trip.slug}>{trip.title}</option>
-						{/each}
-					</select>
-				</label>
-			</form>
+			{#if data.selectedTrip}
+				<form class="trip-selector" method="GET">
+					<label>
+						<span class="visually-hidden">Trip for access management</span>
+						<select name="trip" onchange={autoSubmit} value={data.selectedTrip.slug}>
+							{#each data.trips as trip (trip.id)}
+								<option value={trip.slug}>{trip.title}</option>
+							{/each}
+						</select>
+					</label>
+				</form>
+			{/if}
 		</div>
 
 		<ul class="account-list">
@@ -79,20 +85,24 @@
 					<div class="account-controls">
 						{#if account.role === 'sudo'}
 							<span class="owner-badge">Owner</span>
+						{:else if account.id === data.currentUser.id}
+							<span class="owner-badge">Global sudo</span>
 						{:else}
-							<form action={actionUrl('setTripAccess')} method="POST">
-								<input name="userId" type="hidden" value={account.id} />
-								<label class="role-control">
-									<span class="visually-hidden">Access level for {account.username}</span>
-									<select name="role" onchange={autoSubmit} value={account.role}>
-										<option value="none">No access</option>
-										<option value="user">Standard</option>
-										<option value="admin">Admin</option>
-										<option class="remove-access-option" value="remove">Remove access</option>
-									</select>
-								</label>
-								<noscript><button class="shiori-form-button" type="submit">Save</button></noscript>
-							</form>
+							{#if data.selectedTrip}
+								<form action={actionUrl('setTripAccess')} method="POST">
+									<input name="userId" type="hidden" value={account.id} />
+									<label class="role-control">
+										<span class="visually-hidden">Access level for {account.username}</span>
+										<select name="role" onchange={autoSubmit} value={account.role}>
+											<option value="none">No access</option>
+											<option value="user">Standard</option>
+											<option value="admin">Admin</option>
+											<option class="remove-access-option" value="remove">Remove access</option>
+										</select>
+									</label>
+									<noscript><button class="shiori-form-button" type="submit">Save</button></noscript>
+								</form>
+							{/if}
 							<details class="account-actions">
 								<summary aria-label={`Actions for ${account.username}`} title={`Actions for ${account.username}`}>
 									<Icon name="more" />
@@ -166,7 +176,11 @@
 			{#if form?.createdAccount}<p class="success" role="status">{form.createdAccount} can now sign in.</p>{/if}
 			<button class="shiori-form-button" type="submit">Create account</button>
 		</form>
-		<p class="access-note">New accounts have no private-trip access until you assign it using the list above.</p>
+		<p class="access-note">
+			{data.selectedTrip
+				? 'New accounts have no private-trip access until you assign it using the list above.'
+				: 'New accounts have no private-trip access until a trip owner grants it.'}
+		</p>
 	</section>
 </main>
 

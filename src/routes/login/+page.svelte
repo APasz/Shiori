@@ -35,6 +35,9 @@
 					Too many sign-in attempts. Try again in {form.retryAfterSeconds} seconds.
 				</p>
 			{/if}
+			{#if form?.requestTooLarge}
+				<p class="error" role="alert">The sign-in request is too large.</p>
+			{/if}
 			<button class="shiori-form-button" type="submit">Sign in</button>
 		</form>
 	{/if}

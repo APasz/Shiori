@@ -11,6 +11,7 @@ const privateEnvironment = vi.hoisted(() => ({
 vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
 
 import { configuredGoogleApiKey, type GoogleApiDomain } from './google-api-key';
+import { exampleEnvironmentValues } from './example-environment';
 
 const domains: readonly GoogleApiDomain[] = ['places', 'knowledgeGraph', 'routes', 'timeZone'];
 
@@ -50,5 +51,14 @@ describe('Google API key configuration', () => {
 
 		expect(configuredGoogleApiKey('knowledgeGraph')).toBeUndefined();
 		expect(configuredGoogleApiKey('timeZone')).toBeUndefined();
+	});
+
+	it('ignores the public API-key placeholders from the environment example', () => {
+		privateEnvironment.GOOGLE_API_KEY = exampleEnvironmentValues.GOOGLE_API_KEY;
+		privateEnvironment.GOOGLE_PLACES_API_KEY = exampleEnvironmentValues.GOOGLE_PLACES_API_KEY;
+
+		for (const domain of domains) {
+			expect(configuredGoogleApiKey(domain)).toBeUndefined();
+		}
 	});
 });

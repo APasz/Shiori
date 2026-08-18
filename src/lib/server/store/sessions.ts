@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { isSessionRefreshDue, sessionLifetimeMilliseconds } from '../session';
-import { assertAccountManager } from './auth';
+import { assertSudo } from './auth';
 import { StoreError } from './error';
 import type { AuthenticatedUser } from './model';
 import { readData, sessionTransaction, transaction } from './persistence';
@@ -76,7 +76,7 @@ export async function destroySession(sessionId: string | undefined): Promise<voi
 export async function forceLogoutAllUsers(userId: string): Promise<{ loggedOut: number }> {
 	return transaction(
 		(data) => {
-			assertAccountManager(data, userId);
+			assertSudo(data, userId);
 			const loggedOut = new Set(data.sessions.map((session) => session.userId)).size;
 			data.sessions = [];
 			return { loggedOut };
@@ -88,7 +88,7 @@ export async function forceLogoutAllUsers(userId: string): Promise<{ loggedOut: 
 /** Lists signed-in users with the timestamp from their most recently renewed session. */
 export async function listActiveSessionUsers(actorId: string): Promise<ActiveSessionUser[]> {
 	const data = await readData();
-	assertAccountManager(data, actorId);
+	assertSudo(data, actorId);
 	const lastSeenByUserId = new Map<string, number>();
 	for (const session of data.sessions) {
 		if (isExpired(session.expiresAt)) {

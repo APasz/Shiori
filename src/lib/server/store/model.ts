@@ -9,7 +9,8 @@ export const dailyExpenseStoredDataVersion = 9;
 export const freeformExpenseStoredDataVersion = 10;
 export const preNotesStoredDataVersion = 11;
 export const preAccessBlockStoredDataVersion = 12;
-export const storedDataVersion = 13;
+export const preSudoStoredDataVersion = 13;
+export const storedDataVersion = 14;
 export const tripStructureLockTargetId = 'trip-structure';
 
 export const usernameSchema = z
@@ -37,15 +38,18 @@ const supportedStoredDataVersionSchema = z.union([
 	z.literal(freeformExpenseStoredDataVersion),
 	z.literal(preNotesStoredDataVersion),
 	z.literal(preAccessBlockStoredDataVersion),
+	z.literal(preSudoStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 
-export const storedUserSchema = z.strictObject({
+const storedUserBaseSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
 	username: usernameSchema,
 	passwordHash: z.string().min(1),
 	createdAt: unixTimestampSchema
 });
+export const storedUserSchema = storedUserBaseSchema.extend({ isSudo: z.boolean() });
+export const migratableStoredUserSchema = storedUserBaseSchema.extend({ isSudo: z.boolean().optional() });
 
 const persistedTripSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
@@ -81,7 +85,7 @@ export const storedEditLockSchema = z.strictObject({
 });
 
 export const storedUsersFileSchema = z.strictObject({
-	version: supportedStoredDataVersionSchema,
+	version: z.literal(storedDataVersion),
 	users: z.array(storedUserSchema)
 });
 export const storedSharesFileSchema = z.strictObject({
@@ -113,6 +117,7 @@ export const storedDataSchema = z
 	.superRefine((data, context) => {
 		const userIds = new Set<string>();
 		const usernames = new Set<string>();
+		let sudoCount = 0;
 		for (const [index, user] of data.users.entries()) {
 			if (userIds.has(user.id)) {
 				context.addIssue({
@@ -132,6 +137,16 @@ export const storedDataSchema = z
 				});
 			}
 			usernames.add(username);
+			if (user.isSudo) {
+				sudoCount += 1;
+			}
+		}
+		if (data.users.length > 0 && sudoCount !== 1) {
+			context.addIssue({
+				code: 'custom',
+				path: ['users'],
+				message: 'Exactly one account must be the sudo user.'
+			});
 		}
 
 		const tripIds = new Set<string>();

@@ -8,6 +8,7 @@ const privateEnvironment = vi.hoisted(() => ({
 vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
 
 import { lookupAeroDataBoxFlightSchedule } from './aerodatabox';
+import { exampleEnvironmentValues } from './example-environment';
 
 afterEach(() => {
 	privateEnvironment.AERODATABOX_API_KEY = undefined;
@@ -17,6 +18,24 @@ afterEach(() => {
 
 describe('AeroDataBox flight schedule lookup', () => {
 	it('does not make a provider request until an API key is configured', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			lookupAeroDataBoxFlightSchedule({
+				arrivalIata: 'SYD',
+				departureIata: 'KIX',
+				flightNumber: 'JQ14',
+				localDate: '2026-11-04'
+			})
+		).resolves.toBeNull();
+
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('does not make a provider request with a public environment-example key', async () => {
+		privateEnvironment.AERODATABOX_API_KEY = exampleEnvironmentValues.AERODATABOX_API_KEY;
+		privateEnvironment.AERODATABOX_DIRECT_API_KEY = exampleEnvironmentValues.AERODATABOX_DIRECT_API_KEY;
 		const fetchMock = vi.fn();
 		vi.stubGlobal('fetch', fetchMock);
 

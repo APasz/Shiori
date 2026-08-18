@@ -31,23 +31,28 @@ async function hashPassword(password: string): Promise<string> {
 	return `${salt.toString('hex')}.${key.toString('hex')}`;
 }
 
-function newStoredUser(account: { passwordHash: string; username: string }): StoredUser {
+function newStoredUser(account: { isSudo: boolean; passwordHash: string; username: string }): StoredUser {
 	return storedUserSchema.parse({
 		id: randomUUID(),
+		isSudo: account.isSudo,
 		username: account.username,
 		passwordHash: account.passwordHash,
 		createdAt: timestamp()
 	});
 }
 
-export function isAccountManager(data: StoredData, userId: string): boolean {
-	return data.trips.some((trip) => trip.ownerId === userId);
+export function isSudo(data: StoredData, userId: string): boolean {
+	return data.users.some((user) => user.id === userId && user.isSudo);
 }
 
-export function assertAccountManager(data: StoredData, actorId: string): void {
-	if (!isAccountManager(data, actorId)) {
-		throw new StoreError(403, 'Only a sudo owner can manage accounts.');
+export function assertSudo(data: StoredData, actorId: string): void {
+	if (!isSudo(data, actorId)) {
+		throw new StoreError(403, 'Only the sudo user can perform this action.');
 	}
+}
+
+export async function isSudoUser(userId: string): Promise<boolean> {
+	return isSudo(await readData(), userId);
 }
 
 export async function preparePasswordHash(passwordInput: string): Promise<string> {
@@ -87,7 +92,7 @@ export async function createInitialSudo(usernameInput: string, passwordInput: st
 				throw new StoreError(409, 'Initial setup has already been completed.');
 			}
 
-			const user = newStoredUser({ passwordHash, username });
+			const user = newStoredUser({ isSudo: true, passwordHash, username });
 			data.users.push(user);
 			for (const trip of data.trips) {
 				if (trip.ownerId === null) {
@@ -110,12 +115,12 @@ export async function createAccount(input: {
 
 	return transaction(
 		(data) => {
-			assertAccountManager(data, input.actorId);
+			assertSudo(data, input.actorId);
 			if (data.users.some((user) => usernameIdentityKey(user.username) === usernameIdentityKey(account.username))) {
 				throw new StoreError(409, 'That username is already in use.');
 			}
 
-			const user = newStoredUser(account);
+			const user = newStoredUser({ ...account, isSudo: false });
 			data.users.push(user);
 			return { id: user.id, username: user.username };
 		},
@@ -125,7 +130,7 @@ export async function createAccount(input: {
 
 export async function listAccounts(actorId: string): Promise<AuthenticatedUser[]> {
 	const data = await readData();
-	assertAccountManager(data, actorId);
+	assertSudo(data, actorId);
 	return data.users
 		.map(({ id, username }) => ({ id, username }))
 		.sort((left, right) => left.username.localeCompare(right.username));
@@ -133,7 +138,7 @@ export async function listAccounts(actorId: string): Promise<AuthenticatedUser[]
 
 export async function listAccountsForManagement(actorId: string): Promise<AccountManagementEntry[]> {
 	const data = await readData();
-	assertAccountManager(data, actorId);
+	assertSudo(data, actorId);
 	const ownerIds = new Set(data.trips.map((trip) => trip.ownerId));
 	return data.users
 		.map(({ id, username }) => ({ id, ownsTrip: ownerIds.has(id), username }))
@@ -149,7 +154,7 @@ export async function resetAccountPassword(input: {
 
 	return transaction(
 		(data) => {
-			assertAccountManager(data, input.actorId);
+			assertSudo(data, input.actorId);
 			const user = data.users.find((candidate) => candidate.id === input.userId);
 			if (!user) {
 				throw new StoreError(404, 'Account not found.');
@@ -164,10 +169,13 @@ export async function resetAccountPassword(input: {
 export async function deleteAccount(input: { actorId: string; userId: string }): Promise<void> {
 	return transaction(
 		(data) => {
-			assertAccountManager(data, input.actorId);
+			assertSudo(data, input.actorId);
 			const user = data.users.find((candidate) => candidate.id === input.userId);
 			if (!user) {
 				throw new StoreError(404, 'Account not found.');
+			}
+			if (user.isSudo) {
+				throw new StoreError(409, 'The sudo account cannot be deleted.');
 			}
 			if (data.trips.some((trip) => trip.ownerId === user.id)) {
 				throw new StoreError(409, 'Trip owners cannot be deleted.');

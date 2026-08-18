@@ -38,4 +38,18 @@ describe('account actions', () => {
 			username: 'member'
 		});
 	});
+
+	it('allows the sudo user to manage global accounts without owning a trip', async () => {
+		const store = await import('$lib/server/store');
+		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
+		const { load } = await import('../../routes/accounts/+page.server');
+
+		await expect(
+			load({ locals: { user: sudo }, url: new URL('http://localhost/accounts') } as never)
+		).resolves.toMatchObject({
+			accounts: [{ id: sudo.id, role: 'none', username: sudo.username }],
+			selectedTrip: null,
+			trips: []
+		});
+	});
 });

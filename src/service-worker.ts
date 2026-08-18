@@ -10,19 +10,17 @@ import {
 const worker = self as unknown as ServiceWorkerGlobalScope;
 // Keep hashed application assets with their saved trip pages so an app update does not break offline hydration.
 const applicationCacheName = 'shiori:application';
-const offlineViewerCacheName = 'shiori:offline:viewer';
+const offlineViewerCacheNamePrefix = 'shiori:offline:viewer:';
 const legacyCacheNamePrefix = 'shiori:offline:';
 const applicationAssets = new Set([...build, ...files]);
 const immutableAssetPathPrefix = `${base}/_app/immutable/`;
 const tripPathPrefix = `${base}/trips/`;
 const tripDataPathSuffix = '/__data.json';
+const loginPath = `${base}/login`;
 const logoutPath = `${base}/logout`;
+const offlineViewerPath = `${base}/api/offline/viewer`;
 const tripCacheStatusPathPrefix = `${base}/__offline-trip-cache-status/`;
-
-type LegacyCacheTripPageMessage = {
-	readonly type: 'cache-trip-page';
-	readonly url: string;
-};
+const maximumTrackedViewerClients = 1_000;
 
 type CachedTripPagesRequest = {
 	readonly homeUrl: string | null;
@@ -30,6 +28,16 @@ type CachedTripPagesRequest = {
 };
 
 type OfflinePageCacheResult = 'cached' | 'not-authorized' | 'failed';
+
+const viewerIdsByClientId = new Map<string, string>();
+
+function isViewerId(value: unknown): value is string {
+	return typeof value === 'string' && value.length > 0 && value.length <= 128;
+}
+
+function offlineViewerCacheName(viewerId: string): string {
+	return `${offlineViewerCacheNamePrefix}${encodeURIComponent(viewerId)}`;
+}
 
 function isTripPage(url: URL): boolean {
 	return url.pathname.startsWith(tripPathPrefix) && url.pathname.length > tripPathPrefix.length;
@@ -73,25 +81,16 @@ function tripRootUrl(url: URL): URL | null {
 	return tripSlug ? new URL(`${tripPathPrefix}${tripSlug}`, url.origin) : null;
 }
 
-function isLegacyCacheTripPageMessage(value: unknown): value is LegacyCacheTripPageMessage {
-	if (typeof value !== 'object' || value === null) {
-		return false;
-	}
-
-	const message = value as { readonly type?: unknown; readonly url?: unknown };
-	return message.type === 'cache-trip-page' && typeof message.url === 'string';
-}
-
 function cachedTripPagesRequest(value: unknown): CachedTripPagesRequest | null {
-	if (isLegacyCacheTripPageMessage(value)) {
-		return { homeUrl: null, urls: [value.url] };
-	}
-
 	if (typeof value !== 'object' || value === null) {
 		return null;
 	}
 
-	const message = value as { readonly type?: unknown; readonly homeUrl?: unknown; readonly urls?: unknown };
+	const message = value as {
+		readonly type?: unknown;
+		readonly homeUrl?: unknown;
+		readonly urls?: unknown;
+	};
 	if (
 		message.type !== offlineMessageTypes.cacheTripPages ||
 		!Array.isArray(message.urls) ||
@@ -127,8 +126,8 @@ function responseIsCacheableOfflineResource(request: Request, response: Response
 	return response.ok && !response.redirected && isOfflineViewerResource(new URL(request.url));
 }
 
-async function cacheOfflineResourceResponse(request: Request, response: Response): Promise<void> {
-	const cache = await caches.open(offlineViewerCacheName);
+async function cacheOfflineResourceResponse(viewerId: string, request: Request, response: Response): Promise<void> {
+	const cache = await caches.open(offlineViewerCacheName(viewerId));
 	if (responseIsCacheableOfflineResource(request, response)) {
 		await cache.put(request, response.clone());
 	} else {
@@ -136,9 +135,9 @@ async function cacheOfflineResourceResponse(request: Request, response: Response
 	}
 }
 
-async function fetchAndCacheOfflineResource(request: Request): Promise<Response> {
+async function fetchAndCacheOfflineResource(viewerId: string, request: Request): Promise<Response> {
 	const response = await fetch(request);
-	await cacheOfflineResourceResponse(request, response);
+	await cacheOfflineResourceResponse(viewerId, request, response);
 	return response;
 }
 
@@ -147,9 +146,9 @@ function pageDataRequest(pageUrl: URL): Request {
 	return new Request(new URL(`${pagePath}/__data.json`, pageUrl.origin), { credentials: 'same-origin' });
 }
 
-async function cacheOfflinePage(pageUrl: URL): Promise<OfflinePageCacheResult> {
+async function cacheOfflinePage(viewerId: string, pageUrl: URL): Promise<OfflinePageCacheResult> {
 	const pageRequest = new Request(pageUrl, { credentials: 'same-origin' });
-	const pageResponse = await fetchAndCacheOfflineResource(pageRequest);
+	const pageResponse = await fetchAndCacheOfflineResource(viewerId, pageRequest);
 	if (pageResponse.status === 403) {
 		return 'not-authorized';
 	}
@@ -158,21 +157,21 @@ async function cacheOfflinePage(pageUrl: URL): Promise<OfflinePageCacheResult> {
 	}
 
 	const dataRequest = pageDataRequest(pageUrl);
-	const dataResponse = await fetchAndCacheOfflineResource(dataRequest);
+	const dataResponse = await fetchAndCacheOfflineResource(viewerId, dataRequest);
 	if (dataResponse.status === 403) {
 		return 'not-authorized';
 	}
 	return responseIsCacheableOfflineResource(dataRequest, dataResponse) ? 'cached' : 'failed';
 }
 
-async function cacheHomePage(url: string): Promise<boolean> {
+async function cacheHomePage(viewerId: string, url: string): Promise<boolean> {
 	try {
 		const homeUrl = new URL(url, worker.location.origin);
 		if (homeUrl.origin !== worker.location.origin || !isHomePage(homeUrl)) {
 			return false;
 		}
 
-		return (await cacheOfflinePage(homeUrl)) === 'cached';
+		return (await cacheOfflinePage(viewerId, homeUrl)) === 'cached';
 	} catch {
 		return false;
 	}
@@ -182,8 +181,8 @@ function tripCacheStatusRequest(tripUrl: URL): Request {
 	return new Request(new URL(`${tripCacheStatusPathPrefix}${encodeURIComponent(tripUrl.pathname)}`, tripUrl.origin));
 }
 
-async function setTripCacheStatus(tripUrl: URL, cached: boolean): Promise<void> {
-	const cache = await caches.open(offlineViewerCacheName);
+async function setTripCacheStatus(viewerId: string, tripUrl: URL, cached: boolean): Promise<void> {
+	const cache = await caches.open(offlineViewerCacheName(viewerId));
 	const request = tripCacheStatusRequest(tripUrl);
 	if (cached) {
 		await cache.put(request, new Response());
@@ -192,7 +191,7 @@ async function setTripCacheStatus(tripUrl: URL, cached: boolean): Promise<void> 
 	}
 }
 
-async function cacheTripPages(request: CachedTripPagesRequest): Promise<boolean> {
+async function cacheTripPages(viewerId: string, request: CachedTripPagesRequest): Promise<boolean> {
 	const pageUrls = request.urls.map((url) => {
 		const tripUrl = new URL(url, worker.location.origin);
 		return tripUrl.origin === worker.location.origin && isTripPage(tripUrl) ? tripUrl : null;
@@ -205,16 +204,16 @@ async function cacheTripPages(request: CachedTripPagesRequest): Promise<boolean>
 	const results = await Promise.all(
 		pageUrls.map(async (tripUrl) => {
 			try {
-				return await cacheOfflinePage(tripUrl);
+				return await cacheOfflinePage(viewerId, tripUrl);
 			} catch {
 				return 'failed' as const;
 			}
 		})
 	);
 	const pagesCached = results[0] === 'cached' && results.slice(1).every((result) => result !== 'failed');
-	const homeCached = request.homeUrl ? await cacheHomePage(request.homeUrl) : true;
+	const homeCached = request.homeUrl ? await cacheHomePage(viewerId, request.homeUrl) : true;
 	const cached = pagesCached && homeCached;
-	await setTripCacheStatus(rootUrl, cached);
+	await setTripCacheStatus(viewerId, rootUrl, cached);
 	return cached;
 }
 
@@ -232,14 +231,23 @@ function offlineResponse(): Response {
 	);
 }
 
-async function respondToOfflineViewerResource(request: Request): Promise<Response> {
+async function clearOfflineViewerCache(viewerId: string): Promise<void> {
+	await caches.delete(offlineViewerCacheName(viewerId));
+}
+
+async function respondToOfflineViewerResource(request: Request, viewerId: string | undefined): Promise<Response> {
 	try {
-		return await fetch(request);
+		const response = await fetch(request);
+		if (viewerId && (response.redirected || response.status === 401 || response.status === 403)) {
+			await clearOfflineViewerCache(viewerId);
+		}
+		return response;
 	} catch {
-		const cache = await caches.open(offlineViewerCacheName);
-		const cacheMatchOptions = isOfflineViewerDataRequest(new URL(request.url))
-			? { ignoreSearch: true, ignoreVary: true }
-			: undefined;
+		if (!viewerId) {
+			return offlineResponse();
+		}
+		const cache = await caches.open(offlineViewerCacheName(viewerId));
+		const cacheMatchOptions = isOfflineViewerDataRequest(new URL(request.url)) ? { ignoreSearch: true } : undefined;
 		return (await cache.match(request, cacheMatchOptions)) ?? offlineResponse();
 	}
 }
@@ -250,41 +258,29 @@ async function respondToApplicationAsset(request: Request): Promise<Response> {
 }
 
 async function clearOfflineTripPages(): Promise<void> {
-	const cache = await caches.open(offlineViewerCacheName);
-	const requests = await cache.keys();
-	await Promise.all(requests.map((request) => cache.delete(request)));
+	const cacheNames = await caches.keys();
+	await Promise.all(
+		cacheNames
+			.filter((cacheName) => cacheName.startsWith(offlineViewerCacheNamePrefix))
+			.map((cacheName) => caches.delete(cacheName))
+	);
+	viewerIdsByClientId.clear();
 }
 
 async function migrateLegacyOfflineCaches(): Promise<void> {
-	const offlineViewerCache = await caches.open(offlineViewerCacheName);
-	const applicationCache = await caches.open(applicationCacheName);
 	const cacheNames = await caches.keys();
 	await Promise.all(
 		cacheNames
 			.filter(
 				(existingCacheName) =>
-					existingCacheName.startsWith(legacyCacheNamePrefix) && existingCacheName !== offlineViewerCacheName
+					existingCacheName.startsWith(legacyCacheNamePrefix) &&
+					!existingCacheName.startsWith(offlineViewerCacheNamePrefix)
 			)
-			.map(async (existingCacheName) => {
-				const legacyCache = await caches.open(existingCacheName);
-				const requests = await legacyCache.keys();
-				await Promise.all(
-					requests.map(async (request) => {
-						const response = await legacyCache.match(request);
-						if (!response) {
-							return;
-						}
-
-						const targetCache = isTripPage(new URL(request.url)) ? offlineViewerCache : applicationCache;
-						await targetCache.put(request, response);
-					})
-				);
-				await caches.delete(existingCacheName);
-			})
+			.map((existingCacheName) => caches.delete(existingCacheName))
 	);
 }
 
-async function hasSavedTrip(url: string): Promise<boolean> {
+async function hasSavedTrip(viewerId: string, url: string): Promise<boolean> {
 	try {
 		const tripUrl = new URL(url, worker.location.origin);
 		const rootUrl = tripUrl.origin === worker.location.origin ? tripRootUrl(tripUrl) : null;
@@ -292,7 +288,7 @@ async function hasSavedTrip(url: string): Promise<boolean> {
 			return false;
 		}
 
-		const cache = await caches.open(offlineViewerCacheName);
+		const cache = await caches.open(offlineViewerCacheName(viewerId));
 		return (await cache.match(tripCacheStatusRequest(rootUrl))) !== undefined;
 	} catch {
 		return false;
@@ -306,6 +302,56 @@ function respondWithCacheStatus(port: MessagePort | undefined, cached: boolean):
 
 	const response: TripCacheStatusResponse = { type: offlineMessageTypes.tripCacheStatus, cached };
 	port.postMessage(response);
+}
+
+function sourceClientId(event: ExtendableMessageEvent): string | undefined {
+	const source = event.source as { readonly id?: unknown } | null;
+	return typeof source?.id === 'string' ? source.id : undefined;
+}
+
+function rememberViewerId(clientId: string, viewerId: string): void {
+	while (!viewerIdsByClientId.has(clientId) && viewerIdsByClientId.size >= maximumTrackedViewerClients) {
+		const oldestClientId = viewerIdsByClientId.keys().next().value;
+		if (oldestClientId === undefined) {
+			break;
+		}
+		viewerIdsByClientId.delete(oldestClientId);
+	}
+	viewerIdsByClientId.set(clientId, viewerId);
+}
+
+async function viewerIdForMessage(event: ExtendableMessageEvent): Promise<string | undefined> {
+	const clientId = sourceClientId(event);
+	if (!clientId) {
+		return undefined;
+	}
+
+	const response = await fetch(
+		new Request(new URL(offlineViewerPath, worker.location.origin), {
+			cache: 'no-store',
+			credentials: 'same-origin'
+		})
+	);
+	const viewer = (await response.json().catch(() => null)) as { readonly viewerId?: unknown } | null;
+	if (!response.ok || !isViewerId(viewer?.viewerId)) {
+		const previousViewerId = viewerIdsByClientId.get(clientId);
+		viewerIdsByClientId.delete(clientId);
+		if (previousViewerId) {
+			await clearOfflineViewerCache(previousViewerId);
+		}
+		return undefined;
+	}
+
+	const previousViewerId = viewerIdsByClientId.get(clientId);
+	if (previousViewerId && previousViewerId !== viewer.viewerId) {
+		await clearOfflineViewerCache(previousViewerId);
+	}
+	rememberViewerId(clientId, viewer.viewerId);
+	return viewer.viewerId;
+}
+
+function viewerIdForFetch(event: FetchEvent): string | undefined {
+	return viewerIdsByClientId.get(event.clientId) ?? viewerIdsByClientId.get(event.resultingClientId);
 }
 
 worker.addEventListener('install', (event) => {
@@ -332,7 +378,12 @@ worker.addEventListener('message', (event) => {
 	}
 
 	if (isGetTripCacheStatusMessage(event.data)) {
-		event.waitUntil(hasSavedTrip(event.data.url).then((cached) => respondWithCacheStatus(event.ports[0], cached)));
+		event.waitUntil(
+			viewerIdForMessage(event)
+				.then((viewerId) => (viewerId ? hasSavedTrip(viewerId, event.data.url) : false))
+				.catch(() => false)
+				.then((cached) => respondWithCacheStatus(event.ports[0], cached))
+		);
 		return;
 	}
 
@@ -341,7 +392,12 @@ worker.addEventListener('message', (event) => {
 		return;
 	}
 
-	event.waitUntil(cacheTripPages(request).then((cached) => respondWithCacheStatus(event.ports[0], cached)));
+	event.waitUntil(
+		viewerIdForMessage(event)
+			.then((viewerId) => (viewerId ? cacheTripPages(viewerId, request) : false))
+			.catch(() => false)
+			.then((cached) => respondWithCacheStatus(event.ports[0], cached))
+	);
 });
 
 worker.addEventListener('fetch', (event) => {
@@ -351,7 +407,7 @@ worker.addEventListener('fetch', (event) => {
 	}
 
 	if (event.request.method === 'POST') {
-		if (url.pathname === logoutPath) {
+		if (url.pathname === loginPath || url.pathname === logoutPath) {
 			event.waitUntil(clearOfflineTripPages());
 		}
 		return;
@@ -367,11 +423,11 @@ worker.addEventListener('fetch', (event) => {
 	}
 
 	if (isOfflineViewerDataRequest(url)) {
-		event.respondWith(respondToOfflineViewerResource(event.request));
+		event.respondWith(respondToOfflineViewerResource(event.request, viewerIdForFetch(event)));
 		return;
 	}
 
 	if (event.request.mode === 'navigate' && (isHomePage(url) || isTripPage(url))) {
-		event.respondWith(respondToOfflineViewerResource(event.request));
+		event.respondWith(respondToOfflineViewerResource(event.request, viewerIdForFetch(event)));
 	}
 });

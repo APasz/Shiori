@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, open, readFile, readdir, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { itineraryIdentifierSchema } from '$lib/itinerary/schema';
-import { migrateStoredTripFile } from './migrations';
+import { migrateStoredTripFile, migrateStoredUsersFile } from './migrations';
 import {
 	storedDataSchema,
 	storedDataVersion,
@@ -146,7 +146,8 @@ async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 			}))
 		)
 	]);
-	const users = storedUsersFileSchema.parse(usersFile);
+	const migratedUsersFile = migrateStoredUsersFile(usersFile);
+	const users = storedUsersFileSchema.parse(migratedUsersFile.file);
 	const shares = storedSharesFileSchema.parse(sharesFile);
 	const sessions = storedSessionsFileSchema.parse(sessionsFile);
 	const editLocks = storedEditLocksFileSchema.parse(editLocksFile);
@@ -169,7 +170,7 @@ async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 			editLocks: editLocks.editLocks
 		}),
 		migrationRequired:
-			users.version !== storedDataVersion ||
+			migratedUsersFile.migrationRequired ||
 			shares.version !== storedDataVersion ||
 			sessions.version !== storedDataVersion ||
 			editLocks.version !== storedDataVersion ||

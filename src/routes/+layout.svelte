@@ -40,7 +40,7 @@
 
 <svelte:head>
 	<link rel="icon" href={appIcon} type="image/svg+xml" />
-	<!-- eslint-disable-next-line svelte/no-at-html-tags -- The static theme initializer contains only local constants. -->
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- Hash allowlisted by the CSP from its local source. -->
 	{@html themeInitializationScript}
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- The local palette is validated before rendering. -->
 	{@html themeStyleTag}

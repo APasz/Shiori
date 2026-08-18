@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { isExampleEnvironmentValue } from './example-environment';
 
 export type GoogleApiDomain = 'knowledgeGraph' | 'places' | 'routes' | 'timeZone';
 type GoogleApiKeyEnvironmentVariable =
@@ -19,7 +20,7 @@ const apiKeyEnvironmentVariables: Readonly<Record<GoogleApiDomain, readonly Goog
 export function configuredGoogleApiKey(domain: GoogleApiDomain): string | undefined {
 	for (const environmentVariable of apiKeyEnvironmentVariables[domain]) {
 		const apiKey = env[environmentVariable]?.trim();
-		if (apiKey) {
+		if (apiKey && !isExampleEnvironmentValue(environmentVariable, apiKey)) {
 			return apiKey;
 		}
 	}

@@ -4,13 +4,13 @@ import { sessionCookieName } from '$lib/server/session';
 import { forceReleaseAllEditLocks, hasActiveEditSessions } from '$lib/server/store/edit-locks';
 import { StoreError } from '$lib/server/store/error';
 import { forceLogoutAllUsers, listActiveSessionUsers } from '$lib/server/store/sessions';
-import { ownsAnyTrip } from '$lib/server/store/trips';
+import { isSudoUser } from '$lib/server/store/auth';
 
 async function requireAdmin(user: App.Locals['user']) {
 	if (!user) {
 		redirect(303, '/login');
 	}
-	if (!(await ownsAnyTrip(user.id))) {
+	if (!(await isSudoUser(user.id))) {
 		redirect(303, '/');
 	}
 	return user;

@@ -3,6 +3,7 @@ export {
 	createAccount,
 	createInitialSudo,
 	deleteAccount,
+	isSudoUser,
 	listAccounts,
 	listAccountsForManagement,
 	needsInitialSetup,

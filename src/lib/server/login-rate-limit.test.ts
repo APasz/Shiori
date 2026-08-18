@@ -44,4 +44,16 @@ describe('LoginRateLimiter', () => {
 		limiter.clear(attempt);
 		expect(limiter.check(attempt)).toEqual({ allowed: true });
 	});
+
+	it('uses one bounded rate-limit key for every invalid username', () => {
+		const limiter = new LoginRateLimiter({ ...testPolicy, maximumFailures: 1 }, () => 0);
+		const oversizedUsername = 'x'.repeat(1024 * 1024);
+
+		limiter.recordFailure({ clientAddress: '203.0.113.8', username: oversizedUsername });
+
+		expect(limiter.check({ clientAddress: '198.51.100.42', username: `${oversizedUsername}2` })).toEqual({
+			allowed: false,
+			retryAfterSeconds: 1
+		});
+	});
 });

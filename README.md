@@ -125,7 +125,8 @@ sudoedit /etc/shiori/shiori.env
 ```
 
 Set the production values in `/etc/shiori/shiori.env`, including a random
-`SHIORI_SETUP_TOKEN` of at least 32 bytes. `BODY_SIZE_LIMIT=20M` is required: Shiori allows trip
+`SHIORI_SETUP_TOKEN` of at least 32 bytes. The public placeholders in `.env.example` are rejected;
+replace every configured API-key placeholder with a real key, or remove the optional setting. `BODY_SIZE_LIMIT=20M` is required: Shiori allows trip
 backup imports up to 20 MB, while the Node adapter otherwise defaults to 512 KiB. Bind Node to
 loopback and trust the one local Caddy proxy with `ADDRESS_HEADER=x-forwarded-for` and
 `XFF_DEPTH=1`; Caddy clears any client-provided forwarded headers and sets its own value.
@@ -290,20 +291,24 @@ are recomputed rather than extracted from Google Maps’ private page state, so 
 service matches the intended one. Successful Routes results are kept in a bounded process-local cache for 15
 minutes; duplicate requests are coalesced and a `429` response is retried once after `Retry-After`.
 
-Accounts are global and do not receive access to a private trip by default. A sudo user can create
-accounts at `/accounts`, then use `/settings/access` to grant read-only `user` or `admin`
-access to a specific trip or enable its public visitor schedule. Passwords are hashed with Node's
+Accounts are global and do not receive access to a private trip by default. The initial setup account
+is the one global sudo user: only it can create or manage accounts, list active sessions, or force a
+global logout. A trip owner can still manage access to that trip, but owning a trip does not grant
+global sudo privileges. The sudo user can create accounts at `/accounts`, then use `/settings/access`
+to grant read-only `user` or `admin` access to a specific trip or enable its public visitor schedule. Passwords are hashed with Node's
 `scrypt`; sessions are stored server-side and issued in HTTP-only cookies. Sessions expire after
 seven days without a persisted renewal; active sessions renew at most once every nine hours, so
 their effective idle timeout can be up to nine hours shorter than the browser's most recent request.
+When upgrading existing data, Shiori promotes the earliest-created account (breaking timestamp ties
+by account ID) to the sole global sudo user.
 
 Visitors receive only each item's start time, type, and title. Standard `user` accounts can view
 normal details, while documents, reservations, transport seat assignments, and platform data are
 withheld until `admin` or `sudo` access. This visibility policy is centralized in
 `src/lib/itinerary/access.ts`.
 
-Each trip has a local currency, selected by its sudo owner in **Edit trip** (new and legacy trips
-default to AUD). A sudo owner can add one cost to an itinerary item in the charged currency, leave
+Each trip has a local currency, selected by its trip owner in **Edit trip** (new and legacy trips
+default to AUD). A trip owner can add one cost to an itinerary item in the charged currency, leave
 it unpaid, set an optional scheduled payment date, or mark it paid. Costs are visible only to
 `admin` and `sudo` accounts. When a cost is marked paid, Shiori retains the original amount and
 records the paid timestamp, local-currency minor-unit amount, direct conversion rate, and date of
@@ -313,7 +318,7 @@ uses the latest shared reference rate published on or before the UTC payment dat
 trip's local currency affects later payments only; previous snapshots continue to show their
 original saved currency.
 
-The sudo owner can add, edit, and delete itinerary items from the itinerary page. New items begin
+The trip owner can add, edit, and delete itinerary items from the itinerary page. New items begin
 with an import-first dialog: Google Maps place and directions links, selected Google Flights links,
 and Google Hotels search or property links prefill the fields that can be parsed safely. Hotels imports create an
 accommodation item from the destination or selected property and the link's check-in/check-out dates. Property
@@ -330,5 +335,5 @@ confirmation. The final transport schedule and save step remains in the shared e
 time must still be confirmed before saving. Advanced changes remain available in the shared editor after any
 item is created. Items are ordered and grouped by their timestamps in each viewer's local calendar.
 Edits use one trip-wide lock, so changes cannot race with an open editor. Persisted edit locks are cleared
-when a server process starts; the sudo owner can also force close an active edit session from the Access
+when a server process starts; the trip owner can also force close an active edit session from the Access
 page when a browser session has become stuck.

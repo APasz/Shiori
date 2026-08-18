@@ -1,5 +1,6 @@
 import { isAbsolute } from 'node:path';
 import { maximumTripBackupBytes, maximumTripBackupSizeLabel } from '$lib/trip-backup';
+import { exampleEnvironmentVariableNames, isExampleEnvironmentValue } from './example-environment';
 
 export const minimumSetupTokenBytes = 32;
 
@@ -10,6 +11,9 @@ export function setupTokenConfigurationError(environment: EnvironmentVariables, 
 	const configuredToken = environment.SHIORI_SETUP_TOKEN;
 	if (!configuredToken) {
 		return required ? 'SHIORI_SETUP_TOKEN must be configured before production setup.' : null;
+	}
+	if (isExampleEnvironmentValue('SHIORI_SETUP_TOKEN', configuredToken)) {
+		return 'SHIORI_SETUP_TOKEN must be replaced with a unique random secret.';
 	}
 	if (Buffer.byteLength(configuredToken) < minimumSetupTokenBytes) {
 		return `SHIORI_SETUP_TOKEN must contain at least ${minimumSetupTokenBytes} bytes.`;
@@ -67,6 +71,17 @@ function bodySizeLimitConfigurationError(bodySizeLimit: string | undefined): str
 	return null;
 }
 
+function exampleApiKeyConfigurationErrors(environment: EnvironmentVariables): readonly string[] {
+	return exampleEnvironmentVariableNames
+		.filter((variableName) => variableName !== 'SHIORI_SETUP_TOKEN')
+		.flatMap((variableName) => {
+			const value = environment[variableName];
+			return value && isExampleEnvironmentValue(variableName, value)
+				? [`${variableName} must be replaced with a real key or removed.`]
+				: [];
+		});
+}
+
 /** Lists invalid settings that would otherwise make a production server unsafe or non-durable. */
 export function productionConfigurationErrors(environment: EnvironmentVariables): readonly string[] {
 	if (environment.NODE_ENV !== 'production') {
@@ -95,6 +110,7 @@ export function productionConfigurationErrors(environment: EnvironmentVariables)
 	if (bodySizeLimitError) {
 		errors.push(bodySizeLimitError);
 	}
+	errors.push(...exampleApiKeyConfigurationErrors(environment));
 	return errors;
 }
 

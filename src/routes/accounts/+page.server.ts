@@ -2,37 +2,48 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { ZodError } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
-import { createAccount, deleteAccount, listAccountsForManagement, resetAccountPassword } from '$lib/server/store/auth';
+import {
+	createAccount,
+	deleteAccount,
+	isSudoUser,
+	listAccountsForManagement,
+	resetAccountPassword
+} from '$lib/server/store/auth';
 import { StoreError } from '$lib/server/store/error';
 import { listTripMembers, setTripMemberAccess } from '$lib/server/store/members';
 import type { AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
-import { listOwnedTripOptions, ownsAnyTrip } from '$lib/server/store/trips';
+import { listOwnedTripOptions } from '$lib/server/store/trips';
+import type { OwnedTripOption } from '$lib/server/store/views';
 
 function validationMessage(error: ZodError): string {
 	return error.issues[0]?.message ?? 'Enter valid account details.';
 }
 
-async function requireAccountManager(user: AuthenticatedUser | null): Promise<AuthenticatedUser> {
+type AccountContext = {
+	manager: AuthenticatedUser;
+	selectedTrip: OwnedTripOption | null;
+	trips: OwnedTripOption[];
+};
+
+async function requireSudo(user: AuthenticatedUser | null): Promise<AuthenticatedUser> {
 	if (!user) {
 		redirect(303, '/login');
 	}
-	if (!(await ownsAnyTrip(user.id))) {
+	if (!(await isSudoUser(user.id))) {
 		redirect(303, '/');
 	}
 	return user;
 }
 
-async function accountContext(user: AuthenticatedUser | null, url: URL) {
-	const manager = await requireAccountManager(user);
+async function accountContext(user: AuthenticatedUser | null, url: URL): Promise<AccountContext> {
+	const manager = await requireSudo(user);
 	const trips = await listOwnedTripOptions(manager.id);
 	const fallbackTrip = trips[0];
-	if (!fallbackTrip) {
-		throw new Error('An account manager must own at least one trip.');
-	}
-
-	const selectedSlug = url.searchParams.get('trip') ?? fallbackTrip.slug;
-	const selectedTrip = trips.find((trip) => trip.slug === selectedSlug);
-	if (!selectedTrip) {
+	const requestedSlug = url.searchParams.get('trip');
+	const selectedTrip = requestedSlug
+		? (trips.find((trip) => trip.slug === requestedSlug) ?? null)
+		: (fallbackTrip ?? null);
+	if (requestedSlug && !selectedTrip) {
 		error(404, 'The selected trip is not available for account management.');
 	}
 
@@ -56,7 +67,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const context = await accountContext(locals.user, url);
 	const [accounts, members] = await Promise.all([
 		listAccountsForManagement(context.manager.id),
-		listTripMembers(context.selectedTrip.id, context.manager.id)
+		context.selectedTrip ? listTripMembers(context.selectedTrip.id, context.manager.id) : Promise.resolve([])
 	]);
 	const rolesByUserId = new Map(members.map((member) => [member.id, member.role]));
 
@@ -70,7 +81,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 export const actions: Actions = {
 	createAccount: async ({ locals, request }) => {
-		const manager = await requireAccountManager(locals.user);
+		const manager = await requireSudo(locals.user);
 		const formData = await request.formData();
 
 		try {
@@ -91,7 +102,7 @@ export const actions: Actions = {
 		}
 	},
 	resetPassword: async ({ locals, request }) => {
-		const manager = await requireAccountManager(locals.user);
+		const manager = await requireSudo(locals.user);
 		const formData = await request.formData();
 		const userId = formDataText(formData, 'userId');
 		if (userId === manager.id) {
@@ -113,6 +124,9 @@ export const actions: Actions = {
 	},
 	setTripAccess: async ({ locals, request, url }) => {
 		const context = await accountContext(locals.user, url);
+		if (!context.selectedTrip) {
+			return fail(400, { memberAccessError: 'Choose a trip you own before changing trip access.' });
+		}
 		const formData = await request.formData();
 		const role = selectedMemberRole(formDataText(formData, 'role'));
 		if (role === undefined) {
@@ -135,7 +149,7 @@ export const actions: Actions = {
 		}
 	},
 	deleteAccount: async ({ locals, request }) => {
-		const manager = await requireAccountManager(locals.user);
+		const manager = await requireSudo(locals.user);
 		const userId = formDataText(await request.formData(), 'userId');
 		if (userId === manager.id) {
 			return fail(400, { accountDeletionError: 'You cannot delete your own account.' });

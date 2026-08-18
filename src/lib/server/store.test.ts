@@ -102,6 +102,101 @@ describe('JSON store', () => {
 		await expect(store.listTripSwitchOptions(owner.id)).resolves.toEqual([]);
 	});
 
+	it('assigns global administration only to the initial sudo account', async () => {
+		const store = await import('./store');
+		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
+		const person = await store.createAccount({
+			actorId: sudo.id,
+			password: 'another strong test password',
+			username: 'person'
+		});
+		await store.createTrip({ details: { title: 'Person trip', timeZone: 'UTC' }, ownerId: person.id });
+
+		await expect(store.isSudoUser(sudo.id)).resolves.toBe(true);
+		await expect(store.isSudoUser(person.id)).resolves.toBe(false);
+		await expect(store.listAccounts(person.id)).rejects.toMatchObject({ status: 403 });
+		await expect(
+			store.createAccount({ actorId: person.id, password: 'third strong test password', username: 'third-person' })
+		).rejects.toMatchObject({ status: 403 });
+		await expect(store.forceLogoutAllUsers(person.id)).rejects.toMatchObject({ status: 403 });
+
+		const persistedUsers: { users: Array<{ isSudo: boolean; username: string }> } = JSON.parse(
+			await readFile(managedDataPath('users.json'), 'utf8')
+		);
+		expect(persistedUsers.users).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ isSudo: true, username: 'sudo' }),
+				expect.objectContaining({ isSudo: false, username: 'person' })
+			])
+		);
+	});
+
+	it('migrates version 13 data to a single sudo account', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+		const store = await import('./store');
+		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
+		vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
+		const person = await store.createAccount({
+			actorId: sudo.id,
+			password: 'another strong test password',
+			username: 'person'
+		});
+		const trip = await createTestTrip(store, person.id);
+
+		const users: { users: Array<Record<string, unknown>>; version: number } = JSON.parse(
+			await readFile(managedDataPath('users.json'), 'utf8')
+		);
+		users.version = 13;
+		for (const user of users.users) {
+			delete user.isSudo;
+		}
+		await writeFile(managedDataPath('users.json'), JSON.stringify(users, null, 4), 'utf8');
+		for (const filename of ['shares.json', 'sessions.json', 'edit-locks.json']) {
+			const globalData: { version: number } = JSON.parse(await readFile(managedDataPath(filename), 'utf8'));
+			globalData.version = 13;
+			await writeFile(managedDataPath(filename), JSON.stringify(globalData, null, 4), 'utf8');
+		}
+		const tripData: { version: number } = JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'));
+		tripData.version = 13;
+		await writeFile(managedTripPath(trip.slug), JSON.stringify(tripData, null, 4), 'utf8');
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		await expect(restartedStore.isSudoUser(sudo.id)).resolves.toBe(true);
+		await expect(restartedStore.isSudoUser(person.id)).resolves.toBe(false);
+		expect(JSON.parse(await readFile(managedDataPath('users.json'), 'utf8'))).toMatchObject({
+			version: storedDataVersion,
+			users: [
+				{ id: sudo.id, isSudo: true },
+				{ id: person.id, isSudo: false }
+			]
+		});
+	});
+
+	it('breaks legacy sudo-migration timestamp ties by account ID', async () => {
+		const { migrateStoredUsersFile } = await import('./store/migrations');
+
+		const migrated = migrateStoredUsersFile({
+			version: 13,
+			users: [
+				{ createdAt: 0, id: 'z-user', passwordHash: 'hash', username: 'zuser' },
+				{ createdAt: 0, id: 'a-user', passwordHash: 'hash', username: 'auser' }
+			]
+		});
+
+		expect(migrated).toEqual({
+			file: {
+				version: storedDataVersion,
+				users: [
+					{ createdAt: 0, id: 'z-user', isSudo: false, passwordHash: 'hash', username: 'zuser' },
+					{ createdAt: 0, id: 'a-user', isSudo: true, passwordHash: 'hash', username: 'auser' }
+				]
+			},
+			migrationRequired: true
+		});
+	});
+
 	it('restores a backup as a new private trip without changing itinerary data', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');

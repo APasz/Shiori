@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { needsInitialSetup } from '$lib/server/store/auth';
-import { listTripSwitchOptions, ownsAnyTrip } from '$lib/server/store/trips';
+import { isSudoUser, needsInitialSetup } from '$lib/server/store/auth';
+import { listTripSwitchOptions } from '$lib/server/store/trips';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const setupRequired = await needsInitialSetup();
@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		redirect(303, '/login');
 	}
 
-	const [trips, canManageAccounts] = await Promise.all([listTripSwitchOptions(user.id), ownsAnyTrip(user.id)]);
+	const [trips, canManageAccounts] = await Promise.all([listTripSwitchOptions(user.id), isSudoUser(user.id)]);
 
 	return {
 		canManageAccounts,

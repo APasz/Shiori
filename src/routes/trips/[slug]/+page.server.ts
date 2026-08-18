@@ -1,8 +1,8 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { needsInitialSetup } from '$lib/server/store/auth';
+import { isSudoUser, needsInitialSetup } from '$lib/server/store/auth';
 import { publicTripCacheControl } from '$lib/server/public-cache';
-import { getTripView, ownsAnyTrip } from '$lib/server/store/trips';
+import { getTripView } from '$lib/server/store/trips';
 
 export const load: PageServerLoad = async ({ locals, params, setHeaders }) => {
 	const setupRequired = await needsInitialSetup();
@@ -23,7 +23,7 @@ export const load: PageServerLoad = async ({ locals, params, setHeaders }) => {
 		});
 	}
 
-	const canManageAccounts = locals.user ? await ownsAnyTrip(locals.user.id) : false;
+	const canManageAccounts = locals.user ? await isSudoUser(locals.user.id) : false;
 	return {
 		canManageAccounts,
 		currentUser: locals.user,

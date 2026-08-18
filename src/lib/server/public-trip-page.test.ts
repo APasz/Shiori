@@ -3,10 +3,10 @@ import { publicTripCacheControl } from './public-cache';
 
 const needsInitialSetup = vi.hoisted(() => vi.fn());
 const getTripView = vi.hoisted(() => vi.fn());
-const ownsAnyTrip = vi.hoisted(() => vi.fn());
+const isSudoUser = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/store/auth', () => ({ needsInitialSetup }));
-vi.mock('$lib/server/store/trips', () => ({ getTripView, ownsAnyTrip }));
+vi.mock('$lib/server/store/auth', () => ({ isSudoUser, needsInitialSetup }));
+vi.mock('$lib/server/store/trips', () => ({ getTripView }));
 
 import { load } from '../../routes/trips/[slug]/+page.server';
 
@@ -24,7 +24,7 @@ describe('public trip page', () => {
 	beforeEach(() => {
 		needsInitialSetup.mockReset().mockResolvedValue(false);
 		getTripView.mockReset().mockResolvedValue(publicTripView);
-		ownsAnyTrip.mockReset();
+		isSudoUser.mockReset().mockResolvedValue(false);
 	});
 
 	it('permits shared caching for an anonymous public visitor', async () => {
