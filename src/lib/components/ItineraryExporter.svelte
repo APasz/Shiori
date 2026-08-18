@@ -6,6 +6,7 @@
 		defaultItineraryExportOptions,
 		itineraryExportFormatMetadata,
 		itineraryExportFormats,
+		type ItineraryExportFile,
 		type ItineraryExportFormat,
 		type ItineraryExportSource
 	} from '$lib/itinerary/export';
@@ -14,6 +15,8 @@
 
 	let dialogElement: HTMLDialogElement;
 	let format = $state<ItineraryExportFormat>('json');
+	type ClipboardCopyStatus = 'idle' | 'copying' | 'copied' | 'failed';
+	let clipboardCopyStatus = $state<ClipboardCopyStatus>('idle');
 	let includeNotes = $state(defaultItineraryExportOptions.includeNotes);
 	let includeLinksAndDocuments = $state(defaultItineraryExportOptions.includeLinksAndDocuments);
 	let includeReservationDetails = $state(defaultItineraryExportOptions.includeReservationDetails);
@@ -22,8 +25,8 @@
 	let useEpochTimestamps = $state(defaultItineraryExportOptions.useEpochTimestamps);
 	let normalizeCostAmounts = $state(defaultItineraryExportOptions.normalizeCostAmounts);
 
-	function downloadExport(): void {
-		const file = createItineraryExportFile(itinerary, format, {
+	function exportFile(): ItineraryExportFile {
+		return createItineraryExportFile(itinerary, format, {
 			includeCoordinates,
 			includeCosts,
 			includeLinksAndDocuments,
@@ -32,12 +35,27 @@
 			normalizeCostAmounts,
 			useEpochTimestamps
 		});
+	}
+
+	function downloadExport(): void {
+		const file = exportFile();
 		const objectUrl = URL.createObjectURL(new Blob([file.contents], { type: file.mediaType }));
 		const download = document.createElement('a');
 		download.download = file.filename;
 		download.href = objectUrl;
 		download.click();
 		window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+	}
+
+	async function copyExportToClipboard(): Promise<void> {
+		clipboardCopyStatus = 'copying';
+
+		try {
+			await navigator.clipboard.writeText(exportFile().contents);
+			clipboardCopyStatus = 'copied';
+		} catch {
+			clipboardCopyStatus = 'failed';
+		}
 	}
 
 	onMount(() => {
@@ -116,6 +134,23 @@
 		</fieldset>
 
 		<div class="actions">
+			{#if clipboardCopyStatus !== 'idle'}
+				<p aria-live="polite" class:copy-error={clipboardCopyStatus === 'failed'} class="copy-status">
+					{clipboardCopyStatus === 'copying'
+						? 'Copying export…'
+						: clipboardCopyStatus === 'copied'
+							? 'Export copied to clipboard.'
+							: 'Could not copy the export to the clipboard.'}
+				</p>
+			{/if}
+			<button
+				class="copy-button shiori-form-button"
+				disabled={clipboardCopyStatus === 'copying'}
+				onclick={() => void copyExportToClipboard()}
+				type="button"
+			>
+				Copy Clipboard
+			</button>
 			<button class="download-button shiori-form-button" onclick={downloadExport} type="button">Download</button>
 		</div>
 	</div>
@@ -175,6 +210,7 @@
 	}
 
 	.close-button,
+	.copy-button,
 	.download-button {
 		cursor: pointer;
 	}
@@ -212,8 +248,20 @@
 	}
 
 	.actions {
+		align-items: center;
 		display: flex;
+		gap: 0.75rem;
 		justify-content: end;
 		margin-top: 1.5rem;
+	}
+
+	.copy-status {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+		margin: 0 auto 0 0;
+	}
+
+	.copy-error {
+		color: var(--color-state-error);
 	}
 </style>
