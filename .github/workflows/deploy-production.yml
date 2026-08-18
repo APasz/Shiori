@@ -53,4 +53,4 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -p "$SHIORI_DEPLOY_PORT" \
             "$SHIORI_DEPLOY_USER@$SHIORI_DEPLOY_HOST" \
-            "bash /srv/shiori/deploy/deploy-main '$SHIORI_COMMIT_SHA'"
+            "bash /srv/shiori/repository/deploy/deploy-main '$SHIORI_COMMIT_SHA'"

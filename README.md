@@ -31,7 +31,8 @@ npm run verify
 ```
 
 `npm run verify` runs the complete required suite: type and Svelte checks, formatting and linting,
-tests, and a production build. GitHub Actions runs the same command for every push to `main`.
+tests, a production build, and deployment-script syntax validation. GitHub Actions runs the same
+command for every push to `main`.
 Production deployment runs only after that verification succeeds, so a failing commit remains in
 source control but does not replace the running application.
 
@@ -110,18 +111,24 @@ Anonymous public itinerary pages may be cached for one minute and served stale w
 for up to five additional minutes. Signed-in views and every other response remain uncached.
 
 For a single-server production deployment, use the supplied Caddy and systemd configuration as a
-baseline. It assumes the app lives in `/srv/shiori`, has dedicated runtime and deployment accounts,
-and stores its persistent data in `/srv/shiori/data`. Create the accounts and private data directory
-first:
+baseline. It uses immutable releases below `/srv/shiori/releases`, with `/srv/shiori/current` as the
+atomically switched release symlink. The deployment checkout lives at `/srv/shiori/repository`; the
+runtime account has no write access to it or to releases. Persistent data remains outside every
+release at `/srv/shiori/data`.
+
+Create the accounts and release layout first, substituting the repository URL:
 
 ```bash
 sudo useradd --system --user-group --home-dir /srv/shiori --shell /usr/sbin/nologin shiori
 sudo useradd --system --create-home --user-group --shell /bin/bash shiori-deploy
-sudo install --directory --owner shiori-deploy --group shiori --mode 0750 /srv/shiori
+sudo usermod --append --groups shiori shiori-deploy
+sudo install --directory --owner shiori-deploy --group shiori --mode 2750 /srv/shiori
 sudo install --directory --owner shiori --group shiori --mode 0700 /srv/shiori/data
+sudo install --directory --owner shiori-deploy --group shiori --mode 2750 /srv/shiori/releases
 sudo install --directory --owner shiori --group shiori --mode 0755 /etc/shiori
 sudo install --owner root --group root --mode 0600 .env.example /etc/shiori/shiori.env
 sudoedit /etc/shiori/shiori.env
+sudo -u shiori-deploy git clone <REPOSITORY_URL> /srv/shiori/repository
 ```
 
 Set the production values in `/etc/shiori/shiori.env`, including a random
@@ -129,22 +136,39 @@ Set the production values in `/etc/shiori/shiori.env`, including a random
 replace every configured API-key placeholder with a real key, or remove the optional setting. `BODY_SIZE_LIMIT=20M` is required: Shiori allows trip
 backup imports up to 20 MB, while the Node adapter otherwise defaults to 512 KiB. Bind Node to
 loopback and trust the one local Caddy proxy with `ADDRESS_HEADER=x-forwarded-for` and
-`XFF_DEPTH=1`; Caddy clears any client-provided forwarded headers and sets its own value.
-Copy the application source into `/srv/shiori` with `shiori-deploy:shiori` ownership before building.
-The `data/` directory is part of the application tree but is persistent state: every release copy,
-cleanup, rollback, and source-control operation must preserve it.
+`XFF_DEPTH=1`; Caddy clears any client-provided forwarded headers and sets its own value. The
+`data/` directory is persistent state: release creation, cleanup, and rollback never modify it.
 
-Install dependencies, build as the `shiori-deploy` account, and install the provided unit. Adjust only
-the paths in `deploy/shiori.service` if this host uses different application or data directories:
+Install the sudo rule and unit before creating the first release. Adjust only the paths in
+`deploy/shiori.service` if this host uses different application or data directories:
 
 ```bash
-cd /srv/shiori
-sudo -u shiori-deploy npm ci
-sudo -u shiori-deploy npm run build
-sudo install --owner root --group root --mode 0644 deploy/shiori.service /etc/systemd/system/shiori.service
+sudo install --owner root --group root --mode 0644 /srv/shiori/repository/deploy/shiori.service /etc/systemd/system/shiori.service
+sudo install --owner root --group root --mode 0440 /srv/shiori/repository/deploy/shiori-deploy.sudoers /etc/sudoers.d/shiori-deploy
+sudo visudo --check --file /etc/sudoers.d/shiori-deploy
 sudo systemctl daemon-reload
-sudo systemctl enable --now shiori
+sudo -u shiori-deploy bash /srv/shiori/repository/deploy/deploy-main \
+  "$(sudo -u shiori-deploy git -C /srv/shiori/repository rev-parse origin/main)"
+sudo systemctl enable shiori
 ```
+
+The initial release has no predecessor, so it cannot be rolled back automatically. Confirm it passes
+before considering the host ready. To migrate an existing checkout at `/srv/shiori`, first make a
+verified backup of its `data/` directory, stop `shiori`, then move the checkout aside and promote its
+data and source into the layout above:
+
+```bash
+sudo systemctl stop shiori
+sudo mv /srv/shiori /srv/shiori.previous-layout
+sudo install --directory --owner shiori-deploy --group shiori --mode 2750 /srv/shiori
+sudo mv /srv/shiori.previous-layout/data /srv/shiori/data
+sudo mv /srv/shiori.previous-layout /srv/shiori/repository
+sudo chown --recursive shiori-deploy:shiori /srv/shiori/repository
+sudo install --directory --owner shiori-deploy --group shiori --mode 2750 /srv/shiori/releases
+```
+
+Then install the updated unit and sudo rule and run the initial-release command above. The old
+checkout is now `/srv/shiori/repository`; the moves preserve all application files and persistent data.
 
 Replace the current Shiori site block in Caddy with `deploy/Caddyfile`, then validate and reload
 Caddy:
@@ -191,10 +215,11 @@ curl --fail --show-error --head https://shiori.apasz.com/api/health
 over 20 MB at the edge, adds an active 204 health check, and matches Caddy's upstream connection
 reuse to Node's five-second default. It requires Caddy 2.10 or later.
 
-The service unit requires the data path to be mounted and writable, restricts the process to that
-path, and makes newly created directories private. Run a single Shiori process only: its JSON store
-and edit locks are deliberately single-instance. The health endpoint is a process liveness check;
-monitor it and the systemd unit, but also monitor the data volume itself.
+The service unit resolves its working directory and release identifier through the `current` symlink,
+requires the data path to be mounted and writable, restricts the process to that path, and makes newly
+created directories private. Run a single Shiori process only: its JSON store and edit locks are
+deliberately single-instance. The health endpoint is a process liveness check; monitor it and the
+systemd unit, but also monitor the data volume itself.
 
 Each managed JSON file has one neighbouring `.backup` copy, which protects against an interrupted
 write but is not a disaster-recovery plan. Configure encrypted, off-host backups of the entire data
@@ -213,13 +238,19 @@ After the `Verify` workflow succeeds for a commit on `main`, it runs
 `.github/workflows/deploy-production.yml`. The workflow uses native OpenSSH rather than a
 third-party deployment action. It serializes deployments, connects as the
 unprivileged `shiori-deploy` user, and skips stale runs so only the current `main` tip is deployed.
-The selected commit runs `npm ci` and the production build, restarts only the `shiori` service, then
-checks the loopback health endpoint. The deploy user cannot access `/srv/shiori/data`.
+The selected commit is locally cloned and built in a new immutable release directory while `current`
+continues to serve the previous release. Once built, deployment atomically swaps the `current` symlink,
+restarts only the `shiori` service, and checks both the loopback health endpoint and its release-ID
+header. A restart failure, liveness failure, or release-ID mismatch automatically restores the previous
+symlink, restarts it, and verifies that rollback. The deployment remains failed so GitHub surfaces the
+incident. The deploy user cannot access `/srv/shiori/data`. Successful deployments retain the immediate
+rollback release and up to three additional inactive releases; only those release directories are
+cleaned up.
 
-Install the narrowly scoped sudo rule and validate it before enabling the workflow:
+The initial setup already installs the narrowly scoped sudo rule. To reinstall it after an update:
 
 ```bash
-sudo install --owner root --group root --mode 0440 deploy/shiori-deploy.sudoers /etc/sudoers.d/shiori-deploy
+sudo install --owner root --group root --mode 0440 /srv/shiori/repository/deploy/shiori-deploy.sudoers /etc/sudoers.d/shiori-deploy
 sudo visudo --check --file /etc/sudoers.d/shiori-deploy
 ```
 

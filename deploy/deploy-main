@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+umask 0027
+
 readonly application_directory='/srv/shiori'
+readonly repository_directory="$application_directory/repository"
+readonly releases_directory="$application_directory/releases"
+readonly current_release_link="$application_directory/current"
+readonly deployment_lock_file="$application_directory/deploy.lock"
 readonly branch_name='main'
 readonly health_endpoint='http://127.0.0.1:5173/api/health'
-readonly health_attempts=10
+readonly health_attempts=15
 readonly health_retry_delay_seconds=1
+readonly retained_inactive_releases=3
 
 commit_sha="${1:-}"
 if [[ ! "$commit_sha" =~ ^[0-9a-f]{40}$ ]]; then
@@ -13,16 +20,202 @@ if [[ ! "$commit_sha" =~ ^[0-9a-f]{40}$ ]]; then
 	exit 64
 fi
 
-cd "$application_directory"
-if [[ ! -d .git ]]; then
-	echo "Expected a Git checkout at $application_directory." >&2
+function fetch_origin_commit_sha() {
+	git -C "$repository_directory" fetch --no-tags origin "+refs/heads/$branch_name:refs/remotes/origin/$branch_name"
+	git -C "$repository_directory" rev-parse "refs/remotes/origin/$branch_name"
+}
+
+function release_directory_for() {
+	local release_sha="$1"
+	printf '%s/release-%s\n' "$releases_directory" "$release_sha"
+}
+
+function is_release_directory() {
+	local release_directory="$1"
+	local release_name="${release_directory##*/}"
+
+	[[ "$release_directory" == "$releases_directory/$release_name" ]] &&
+		[[ "$release_name" =~ ^release-[0-9a-f]{40}$ ]]
+}
+
+function release_is_ready() {
+	local release_directory="$1"
+	local release_sha="$2"
+
+	is_release_directory "$release_directory" &&
+		[[ -d "$release_directory" ]] &&
+		[[ -f "$release_directory/.release-ready" ]] &&
+		[[ -f "$release_directory/.release.env" ]] &&
+		[[ "$(<"$release_directory/.release-ready")" == "$release_sha" ]] &&
+		[[ "$(<"$release_directory/.release.env")" == "SHIORI_RELEASE_ID=$release_sha" ]] &&
+		[[ "$(git -C "$release_directory" rev-parse --verify HEAD)" == "$release_sha" ]]
+}
+
+function current_release_directory() {
+	local release_directory
+	local release_sha
+
+	if [[ ! -L "$current_release_link" ]]; then
+		echo "Expected $current_release_link to be a release symlink." >&2
+		return 1
+	fi
+	release_directory="$(readlink -f -- "$current_release_link")"
+	if ! is_release_directory "$release_directory"; then
+		echo "Current release target is outside $releases_directory." >&2
+		return 1
+	fi
+	release_sha="${release_directory##*/release-}"
+	if ! release_is_ready "$release_directory" "$release_sha"; then
+		echo "Current release $release_directory is incomplete or invalid." >&2
+		return 1
+	fi
+	printf '%s\n' "$release_directory"
+}
+
+function prepare_release() {
+	local release_directory="$1"
+
+	if release_is_ready "$release_directory" "$commit_sha"; then
+		echo "Reusing prepared release $commit_sha."
+		return
+	fi
+	if [[ -e "$release_directory" || -L "$release_directory" ]]; then
+		if ! is_release_directory "$release_directory"; then
+			echo "Refusing to remove an invalid release path: $release_directory" >&2
+			exit 1
+		fi
+		rm -rf -- "$release_directory"
+	fi
+
+	git clone --local --no-checkout "$repository_directory" "$release_directory"
+	git -C "$release_directory" checkout --detach --quiet "$commit_sha"
+	(
+		cd "$release_directory"
+		npm ci
+		npm run build
+		printf 'SHIORI_RELEASE_ID=%s\n' "$commit_sha" > .release.env
+		printf '%s\n' "$commit_sha" > .release-ready
+	)
+}
+
+function activate_release() {
+	local release_directory="$1"
+	local release_name="${release_directory##*/}"
+	local next_release_link="${current_release_link}.next"
+
+	if ! is_release_directory "$release_directory"; then
+		echo "Refusing to activate an invalid release path: $release_directory" >&2
+		exit 1
+	fi
+	if [[ -e "$next_release_link" || -L "$next_release_link" ]]; then
+		if [[ ! -L "$next_release_link" ]]; then
+			echo "Refusing to replace non-symlink deployment staging path: $next_release_link" >&2
+			exit 1
+		fi
+		rm -- "$next_release_link"
+	fi
+	ln -s "releases/$release_name" "$next_release_link"
+	mv -Tf -- "$next_release_link" "$current_release_link"
+}
+
+function health_response_matches_release() {
+	local expected_release_sha="$1"
+	local response_headers
+	local served_release_sha=''
+
+	response_headers="$(mktemp)"
+	if curl --fail --silent --show-error --output /dev/null --dump-header "$response_headers" "$health_endpoint"; then
+		served_release_sha="$(awk '
+			tolower($1) == "x-shiori-release:" {
+				value = $0
+				sub(/^[^:]*:[[:space:]]*/, "", value)
+				sub(/\r$/, "", value)
+				print value
+				exit
+			}
+		' "$response_headers")"
+	fi
+	rm -f -- "$response_headers"
+	[[ "$served_release_sha" == "$expected_release_sha" ]]
+}
+
+function wait_for_healthy_release() {
+	local expected_release_sha="$1"
+	local attempt
+
+	for ((attempt = 1; attempt <= health_attempts; attempt += 1)); do
+		if health_response_matches_release "$expected_release_sha"; then
+			return 0
+		fi
+		sleep "$health_retry_delay_seconds"
+	done
+	return 1
+}
+
+function restart_shiori() {
+	sudo -n /usr/bin/systemctl restart shiori
+}
+
+function prune_releases() {
+	local rollback_release_directory="$1"
+	local active_release_directory
+	local release_directory
+	local release_sha
+	local release_listing
+	local retained_count=0
+	local -a release_directories=()
+
+	if ! active_release_directory="$(current_release_directory)"; then
+		return 1
+	fi
+	if ! release_listing="$(
+		find "$releases_directory" -mindepth 1 -maxdepth 1 -type d -name 'release-*' -printf '%T@ %p\n' |
+			LC_ALL=C sort --numeric-sort --reverse |
+			awk '{ print $2 }'
+	)"; then
+		return 1
+	fi
+	if [[ -n "$release_listing" ]]; then
+		mapfile -t release_directories <<<"$release_listing"
+	fi
+	for release_directory in "${release_directories[@]}"; do
+		if ! is_release_directory "$release_directory"; then
+			continue
+		fi
+		if [[ "$release_directory" == "$active_release_directory" || "$release_directory" == "$rollback_release_directory" ]]; then
+			continue
+		fi
+		release_sha="${release_directory##*/release-}"
+		if ! release_is_ready "$release_directory" "$release_sha"; then
+			if ! rm -rf -- "$release_directory"; then
+				return 1
+			fi
+			continue
+		fi
+		if ((retained_count < retained_inactive_releases)); then
+			((retained_count += 1))
+			continue
+		fi
+		if ! rm -rf -- "$release_directory"; then
+			return 1
+		fi
+	done
+}
+
+if [[ ! -d "$repository_directory/.git" ]]; then
+	echo "Expected a Git checkout at $repository_directory." >&2
+	exit 1
+fi
+if [[ ! -d "$releases_directory" ]]; then
+	echo "Expected a release directory at $releases_directory." >&2
 	exit 1
 fi
 
-function fetch_origin_commit_sha() {
-	git fetch --no-tags origin "+refs/heads/$branch_name:refs/remotes/origin/$branch_name"
-	git rev-parse "refs/remotes/origin/$branch_name"
-}
+exec 9>"$deployment_lock_file"
+if ! flock --nonblock 9; then
+	echo 'Another Shiori deployment is already running.' >&2
+	exit 75
+fi
 
 origin_commit_sha="$(fetch_origin_commit_sha)"
 if [[ "$commit_sha" != "$origin_commit_sha" ]]; then
@@ -30,25 +223,50 @@ if [[ "$commit_sha" != "$origin_commit_sha" ]]; then
 	exit 0
 fi
 
-git reset --hard "$commit_sha"
-npm ci
-npm run build
+git -C "$repository_directory" checkout --detach --force --quiet "$commit_sha"
+
+previous_release_directory=''
+if [[ -e "$current_release_link" || -L "$current_release_link" ]]; then
+	previous_release_directory="$(current_release_directory)"
+	if [[ "${previous_release_directory##*/release-}" == "$commit_sha" ]]; then
+		if wait_for_healthy_release "$commit_sha"; then
+			echo "Shiori is already serving $commit_sha."
+			exit 0
+		fi
+		echo "Current release $commit_sha is not healthy; no older release was selected for rollback." >&2
+		exit 1
+	fi
+fi
+
+release_directory="$(release_directory_for "$commit_sha")"
+prepare_release "$release_directory"
 
 origin_commit_sha="$(fetch_origin_commit_sha)"
 if [[ "$commit_sha" != "$origin_commit_sha" ]]; then
-	echo "Not restarting Shiori for stale deployment $commit_sha; origin/$branch_name is now $origin_commit_sha."
+	echo "Not activating stale deployment $commit_sha; origin/$branch_name is now $origin_commit_sha."
 	exit 0
 fi
 
-sudo -n /usr/bin/systemctl restart shiori
-
-for ((attempt = 1; attempt <= health_attempts; attempt += 1)); do
-	if curl --fail --silent --show-error --output /dev/null "$health_endpoint"; then
-		echo "Shiori is serving $commit_sha."
-		exit 0
+activate_release "$release_directory"
+if restart_shiori && wait_for_healthy_release "$commit_sha"; then
+	if ! prune_releases "$previous_release_directory"; then
+		echo 'Shiori is serving the new release, but inactive release cleanup failed.' >&2
 	fi
-	sleep "$health_retry_delay_seconds"
-done
+	echo "Shiori is serving $commit_sha."
+	exit 0
+fi
 
-echo 'Shiori did not pass its health check after deployment.' >&2
-exit 1
+echo "Shiori did not pass its release health check for $commit_sha; restoring the previous release." >&2
+if [[ -z "$previous_release_directory" ]]; then
+	echo 'No previous release is available for automatic rollback.' >&2
+	exit 1
+fi
+
+activate_release "$previous_release_directory"
+if restart_shiori && wait_for_healthy_release "${previous_release_directory##*/release-}"; then
+	echo "Rollback restored ${previous_release_directory##*/release-}." >&2
+	exit 1
+fi
+
+echo "Rollback failed; manual intervention is required for $previous_release_directory." >&2
+	exit 1
