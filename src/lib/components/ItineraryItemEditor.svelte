@@ -1086,6 +1086,7 @@
 							Type
 							<select
 								class="shiori-form-control"
+								disabled={mode === 'edit'}
 								value={itemType}
 								onchange={(event) => changeItemType(event.currentTarget.value)}
 							>
@@ -1093,6 +1094,7 @@
 									<option value={option}>{option}</option>
 								{/each}
 							</select>
+							{#if mode === 'edit'}<span class="field-hint">Item type is locked after creation.</span>{/if}
 						</label>
 						<label class="shiori-form-label">
 							Title

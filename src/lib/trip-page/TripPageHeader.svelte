@@ -5,10 +5,14 @@
 
 	let {
 		data,
-		connectivityStatus
+		connectivityStatus,
+		canSelectItems,
+		onSelectItem
 	}: {
 		data: TripPageData;
 		connectivityStatus: ConnectivityStatus;
+		canSelectItems: boolean;
+		onSelectItem: (itemId: string) => void;
 	} = $props();
 
 	const itinerary = $derived(data.trip.itinerary);
@@ -21,7 +25,7 @@
 		</p>
 	{/if}
 	<PageTitle title={itinerary.title} />
-	<ItineraryNowNext items={itinerary.items} tripTimeZone={itinerary.timeZone} />
+	<ItineraryNowNext items={itinerary.items} tripTimeZone={itinerary.timeZone} {canSelectItems} {onSelectItem} />
 </header>
 
 <style>

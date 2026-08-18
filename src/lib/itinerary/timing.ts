@@ -98,7 +98,7 @@ function accommodationDateRangeLabel(startAt: number, endAt: number, timeZone: s
 }
 
 export type TimingDisplayPart = Readonly<{
-	label?: 'From' | 'To';
+	label?: 'Check-in' | 'Check-out';
 	value: string;
 }>;
 
@@ -222,13 +222,13 @@ export function formatAccommodationTimingParts(
 		return null;
 	}
 	if (timing.endAt === undefined) {
-		return [{ label: 'From', value: start }];
+		return [{ label: 'Check-in', value: start }];
 	}
 	const end = timestampLabel(timing.endAt, includeDate, timeZone);
 	return end
 		? [
-				{ label: 'From', value: start },
-				{ label: 'To', value: end }
+				{ label: 'Check-in', value: start },
+				{ label: 'Check-out', value: end }
 			]
 		: null;
 }
@@ -303,13 +303,13 @@ export function formatAccommodationTimingForDayParts(
 	switch (range.position) {
 		case 'both':
 			return [
-				{ label: 'From', value: range.startTime },
-				{ label: 'To', value: range.endTime }
+				{ label: 'Check-in', value: range.startTime },
+				{ label: 'Check-out', value: range.endTime }
 			];
 		case 'start':
-			return [{ label: 'From', value: range.startTime }];
+			return [{ label: 'Check-in', value: range.startTime }];
 		case 'end':
-			return [{ label: 'To', value: range.endTime }];
+			return [{ label: 'Check-out', value: range.endTime }];
 		case 'continues':
 			return [{ value: 'Stay continues' }];
 	}

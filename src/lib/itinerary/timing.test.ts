@@ -64,17 +64,17 @@ describe('daily itinerary timing', () => {
 		};
 
 		expect(formatAccommodationTiming(timing, true, 'Asia/Tokyo')).toBe(
-			'From 29 Oct 2026, 15:00 · To 01 Nov 2026, 10:00'
+			'Check-in 29 Oct 2026, 15:00 · Check-out 01 Nov 2026, 10:00'
 		);
-		expect(formatAccommodationTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('From 15:00');
+		expect(formatAccommodationTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in 15:00');
 		expect(formatAccommodationTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBe('Stay continues');
-		expect(formatAccommodationTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('To 10:00');
+		expect(formatAccommodationTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out 10:00');
 		expect(formatAccommodationTimingParts(timing, true, 'Asia/Tokyo')).toEqual([
-			{ label: 'From', value: '29 Oct 2026, 15:00' },
-			{ label: 'To', value: '01 Nov 2026, 10:00' }
+			{ label: 'Check-in', value: '29 Oct 2026, 15:00' },
+			{ label: 'Check-out', value: '01 Nov 2026, 10:00' }
 		]);
 		expect(formatAccommodationTimingForDayParts(timing, '2026-11-01', 'Asia/Tokyo')).toEqual([
-			{ label: 'To', value: '10:00' }
+			{ label: 'Check-out', value: '10:00' }
 		]);
 	});
 

@@ -170,7 +170,7 @@
 
 				{#if hasEndTime}
 					<div class="timing-boundary">
-						<span class="timing-boundary-label">{endLabel}</span>
+						{#if item.type !== 'transport'}<span class="timing-boundary-label">{endLabel}</span>{/if}
 						<ItineraryTiming display="end" includeDate timing={item.timing} timeZone={timingTimeZone} />
 					</div>
 				{/if}

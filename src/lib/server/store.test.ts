@@ -1451,4 +1451,26 @@ describe('JSON store', () => {
 		});
 		expect(deleted.revision).toBe(2);
 	});
+
+	it('does not allow an existing itinerary item type to change', async () => {
+		const store = await import('./store');
+		const user = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, user.id, ['locked-item']);
+		const lock = await store.acquireItemLock({ itemId: 'locked-item', tripId: trip.id, userId: user.id });
+		const replacement = {
+			...createEmptyItineraryItem('accommodation', 'locked-item', Date.UTC(2026, 0, 1)),
+			title: 'Locked item'
+		};
+
+		await expect(
+			store.saveItem({
+				item: replacement,
+				itemId: replacement.id,
+				lockToken: lock.token,
+				revision: trip.revision,
+				tripId: trip.id,
+				userId: user.id
+			})
+		).rejects.toMatchObject({ message: 'An item type cannot be changed after creation.', status: 400 });
+	});
 });

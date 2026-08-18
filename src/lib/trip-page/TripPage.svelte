@@ -55,6 +55,10 @@
 		itemWorkflow.selectedItemId = null;
 	}
 
+	function selectItem(itemId: string): void {
+		itemWorkflow.selectedItemId = itemId;
+	}
+
 	async function finishNoteEditing(): Promise<void> {
 		editingNote = null;
 		await refreshTripPage();
@@ -94,7 +98,12 @@
 />
 
 <main>
-	<TripPageHeader {data} connectivityStatus={connectivity.status} />
+	<TripPageHeader
+		{data}
+		connectivityStatus={connectivity.status}
+		canSelectItems={detailedTrip !== null}
+		onSelectItem={selectItem}
+	/>
 
 	<ItinerarySchedule
 		tripId={data.trip.id}
@@ -102,7 +111,7 @@
 		{canModifyItinerary}
 		canSelectItems={detailedTrip !== null}
 		selectedItemId={itemWorkflow.selectedItemId}
-		onSelectItem={(itemId) => (itemWorkflow.selectedItemId = itemId)}
+		onSelectItem={selectItem}
 		onCreateItem={(localDay) => itemWorkflow.beginCreation(localDay)}
 		onEditDayNote={beginEditingDayNote}
 	/>

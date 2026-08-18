@@ -78,7 +78,12 @@ describe('itinerary item details', () => {
 				{ id: 'departure', name: 'Melbourne', role: 'departure' },
 				{ id: 'arrival', name: 'Hong Kong', role: 'arrival' }
 			],
-			timing: { kind: 'exact', startAt: Date.UTC(2026, 9, 26, 0, 45), timeZone: 'Australia/Melbourne' },
+			timing: {
+				kind: 'exact',
+				startAt: Date.UTC(2026, 9, 26, 0, 45),
+				endAt: Date.UTC(2026, 9, 26, 3, 15),
+				timeZone: 'Australia/Melbourne'
+			},
 			title: 'Melbourne to Hong Kong',
 			transport: {
 				mode: 'air',
@@ -102,9 +107,10 @@ describe('itinerary item details', () => {
 
 		expect(html).not.toContain('>Schedule');
 		expect(html).not.toContain('>Start');
+		expect(html).not.toContain('>End');
 		expect(html).not.toContain('>Scheduled');
 		expect(html).toContain('Travel time: 2h 30m');
-		expect(occurrences(html, 'Localizing…')).toBe(2);
+		expect(occurrences(html, 'Localizing…')).toBe(3);
 	});
 
 	it('condenses paid costs and shows conversion details only when the currencies differ', () => {

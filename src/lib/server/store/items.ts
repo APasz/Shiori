@@ -45,6 +45,12 @@ function assertNewLinkedExpensesAreSelectable(
 	}
 }
 
+function assertItemTypeIsUnchanged(existingItem: ItineraryItem, item: ItineraryItemDraft): void {
+	if (existingItem.type !== item.type) {
+		throw new StoreError(400, 'An item type cannot be changed after creation.');
+	}
+}
+
 export async function saveItem(
 	input: VersionedTripMutation & { item: unknown; itemId: string; lockToken: string }
 ): Promise<{ revision: number }> {
@@ -60,6 +66,7 @@ export async function saveItem(
 	if (!existingItem) {
 		throw new StoreError(404, 'Itinerary item not found.');
 	}
+	assertItemTypeIsUnchanged(existingItem, item);
 	assertNewLinkedExpensesAreSelectable(preflightTrip.itinerary, item, existingItem);
 	const persistedItem = await persistedItemForCost(item, preflightTrip.itinerary.localCurrency, existingItem);
 
@@ -72,6 +79,11 @@ export async function saveItem(
 			if (itemIndex < 0) {
 				throw new StoreError(404, 'Itinerary item not found.');
 			}
+			const existingItem = trip.itinerary.items[itemIndex];
+			if (!existingItem) {
+				throw new StoreError(404, 'Itinerary item not found.');
+			}
+			assertItemTypeIsUnchanged(existingItem, item);
 			const items = trip.itinerary.items.map((existingItem, index) =>
 				index === itemIndex ? persistedItem : existingItem
 			);
