@@ -167,8 +167,17 @@ sudo chown --recursive shiori-deploy:shiori /srv/shiori/repository
 sudo install --directory --owner shiori-deploy --group shiori --mode 2750 /srv/shiori/releases
 ```
 
-Then install the updated unit and sudo rule and run the initial-release command above. The old
-checkout is now `/srv/shiori/repository`; the moves preserve all application files and persistent data.
+Update the moved checkout before installing the updated unit and sudo rule and running the
+initial-release command above:
+
+```bash
+sudo -u shiori-deploy git -C /srv/shiori/repository fetch --no-tags origin \
+  '+refs/heads/main:refs/remotes/origin/main'
+sudo -u shiori-deploy git -C /srv/shiori/repository checkout --detach --force origin/main
+```
+
+The old checkout is now `/srv/shiori/repository`; the moves preserve all application files and
+persistent data.
 
 Replace the current Shiori site block in Caddy with `deploy/Caddyfile`, then validate and reload
 Caddy:

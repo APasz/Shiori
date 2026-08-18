@@ -210,6 +210,7 @@ if [[ ! -d "$releases_directory" ]]; then
 	echo "Expected a release directory at $releases_directory." >&2
 	exit 1
 fi
+cd "$repository_directory"
 
 exec 9>"$deployment_lock_file"
 if ! flock --nonblock 9; then
