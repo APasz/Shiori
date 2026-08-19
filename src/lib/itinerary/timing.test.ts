@@ -87,6 +87,9 @@ describe('daily itinerary timing', () => {
 
 		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo')).toBe('29 Oct 2026, 15:00');
 		expect(formatItineraryTimingBoundary(timing, 'end', true, 'Asia/Tokyo')).toBe('01 Nov 2026, 10:00');
+		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo', 'date-with-weekday')).toBe(
+			'29 Oct 2026 (Thu), 15:00'
+		);
 	});
 
 	it('keeps date-only timing boundaries time-free', () => {

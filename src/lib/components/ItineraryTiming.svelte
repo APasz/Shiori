@@ -13,6 +13,7 @@
 		type TimingBoundary,
 		type TimingDisplayPart
 	} from '$lib/itinerary/timing';
+	import type { CalendarDateFormat } from '$lib/itinerary/calendar';
 	import type { ItineraryItem, ItineraryTiming } from '$lib/itinerary/schema';
 	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -22,6 +23,7 @@
 		timeZone,
 		day,
 		includeDate = false,
+		calendarDateFormat = 'date',
 		itemType,
 		display = 'full'
 	}: {
@@ -29,6 +31,7 @@
 		timeZone: string;
 		day?: string;
 		includeDate?: boolean;
+		calendarDateFormat?: CalendarDateFormat;
 		itemType?: ItineraryItem['type'];
 		display?: 'full' | TimingBoundary;
 	} = $props();
@@ -36,7 +39,7 @@
 
 	function formatTiming(displayTimeZone: string, dayTimeZone?: string): string | null {
 		if (display !== 'full') {
-			return formatItineraryTimingBoundary(timing, display, includeDate, displayTimeZone);
+			return formatItineraryTimingBoundary(timing, display, includeDate, displayTimeZone, calendarDateFormat);
 		}
 		if (day) {
 			return itemType === 'accommodation'
@@ -44,8 +47,8 @@
 				: formatItineraryTimingForDay(timing, day, displayTimeZone, dayTimeZone);
 		}
 		return itemType === 'accommodation'
-			? formatAccommodationTiming(timing, includeDate, displayTimeZone)
-			: formatItineraryTiming(timing, includeDate, displayTimeZone);
+			? formatAccommodationTiming(timing, includeDate, displayTimeZone, calendarDateFormat)
+			: formatItineraryTiming(timing, includeDate, displayTimeZone, calendarDateFormat);
 	}
 
 	function formatTimingParts(displayTimeZone: string, dayTimeZone?: string): readonly TimingDisplayPart[] | null {
@@ -54,7 +57,7 @@
 		}
 		return day
 			? formatAccommodationTimingForDayParts(timing, day, displayTimeZone, dayTimeZone)
-			: formatAccommodationTimingParts(timing, includeDate, displayTimeZone);
+			: formatAccommodationTimingParts(timing, includeDate, displayTimeZone, calendarDateFormat);
 	}
 
 	const viewerParts = $derived(browserReady ? formatTimingParts(viewerContext.timeZone, viewerContext.timeZone) : null);

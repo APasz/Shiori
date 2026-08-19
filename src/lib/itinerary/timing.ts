@@ -1,4 +1,4 @@
-import { formatCalendarDate } from './calendar';
+import { formatCalendarDate, type CalendarDateFormat } from './calendar';
 import type { ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 
@@ -39,7 +39,12 @@ function formatTimestamp(timestamp: number, timeZone: string | undefined) {
 	return timeZone ? formatTimestampInTimeZone(timestamp, timeZone) : formatLocalTimestamp(timestamp);
 }
 
-function timestampLabel(timestamp: number, includeDate: boolean, timeZone: string | undefined): string | null {
+function timestampLabel(
+	timestamp: number,
+	includeDate: boolean,
+	timeZone: string | undefined,
+	calendarDateFormat: CalendarDateFormat
+): string | null {
 	const formatted = formatTimestamp(timestamp, timeZone);
 	if (!formatted) {
 		return null;
@@ -48,7 +53,7 @@ function timestampLabel(timestamp: number, includeDate: boolean, timeZone: strin
 		return formatted.time;
 	}
 
-	const date = formatCalendarDate(formatted.date);
+	const date = formatCalendarDate(formatted.date, calendarDateFormat);
 	return date ? `${date}, ${formatted.time}` : null;
 }
 
@@ -56,7 +61,8 @@ function timestampRangeLabel(
 	startAt: number,
 	endAt: number,
 	includeDate: boolean,
-	timeZone: string | undefined
+	timeZone: string | undefined,
+	calendarDateFormat: CalendarDateFormat
 ): string | null {
 	const start = formatTimestamp(startAt, timeZone);
 	const end = formatTimestamp(endAt, timeZone);
@@ -67,33 +73,43 @@ function timestampRangeLabel(
 		return `${start.time}–${end.time}`;
 	}
 
-	const startDate = formatCalendarDate(start.date);
-	const endDate = formatCalendarDate(end.date);
+	const startDate = formatCalendarDate(start.date, calendarDateFormat);
+	const endDate = formatCalendarDate(end.date, calendarDateFormat);
 	return startDate && endDate ? `${startDate}, ${start.time} – ${endDate}, ${end.time}` : null;
 }
 
-function dateRangeLabel(startAt: number, endAt: number, timeZone: string | undefined): string | null {
+function dateRangeLabel(
+	startAt: number,
+	endAt: number,
+	timeZone: string | undefined,
+	calendarDateFormat: CalendarDateFormat
+): string | null {
 	const start = formatTimestamp(startAt, timeZone);
 	const end = formatTimestamp(endAt, timeZone);
 	if (!start || !end) {
 		return null;
 	}
-	const startDate = formatCalendarDate(start.date);
-	const endDate = formatCalendarDate(end.date);
+	const startDate = formatCalendarDate(start.date, calendarDateFormat);
+	const endDate = formatCalendarDate(end.date, calendarDateFormat);
 	if (!startDate || !endDate) {
 		return null;
 	}
 	return start.date === end.date ? `${startDate} · time unknown` : `${startDate} – ${endDate} · times unknown`;
 }
 
-function accommodationDateRangeLabel(startAt: number, endAt: number, timeZone: string | undefined): string | null {
+function accommodationDateRangeLabel(
+	startAt: number,
+	endAt: number,
+	timeZone: string | undefined,
+	calendarDateFormat: CalendarDateFormat
+): string | null {
 	const start = formatTimestamp(startAt, timeZone);
 	const end = formatTimestamp(endAt, timeZone);
 	if (!start || !end) {
 		return null;
 	}
-	const startDate = formatCalendarDate(start.date);
-	const endDate = formatCalendarDate(end.date);
+	const startDate = formatCalendarDate(start.date, calendarDateFormat);
+	const endDate = formatCalendarDate(end.date, calendarDateFormat);
 	return startDate && endDate ? `Check-in ${startDate} · Check-out ${endDate} · times unknown` : null;
 }
 
@@ -158,21 +174,26 @@ function timingRangeLabelForDay(
 	}
 }
 
-export function formatItineraryTiming(timing: ItineraryTiming, includeDate = false, timeZone?: string): string | null {
+export function formatItineraryTiming(
+	timing: ItineraryTiming,
+	includeDate = false,
+	timeZone?: string,
+	calendarDateFormat: CalendarDateFormat = 'date'
+): string | null {
 	switch (timing.kind) {
 		case 'exact':
 			if (timing.timePrecision === 'date') {
-				return dateRangeLabel(timing.startAt, timing.endAt ?? timing.startAt, timeZone);
+				return dateRangeLabel(timing.startAt, timing.endAt ?? timing.startAt, timeZone, calendarDateFormat);
 			}
 			return timing.endAt === undefined
-				? timestampLabel(timing.startAt, includeDate, timeZone)
-				: timestampRangeLabel(timing.startAt, timing.endAt, includeDate, timeZone);
+				? timestampLabel(timing.startAt, includeDate, timeZone, calendarDateFormat)
+				: timestampRangeLabel(timing.startAt, timing.endAt, includeDate, timeZone, calendarDateFormat);
 		case 'approximate': {
-			const nominal = timestampLabel(timing.nominalAt, includeDate, timeZone);
+			const nominal = timestampLabel(timing.nominalAt, includeDate, timeZone, calendarDateFormat);
 			return nominal ? `~${nominal} ±${toleranceLabel(timing.toleranceMinutes)}` : null;
 		}
 		case 'window': {
-			const window = timestampRangeLabel(timing.earliestAt, timing.latestAt, includeDate, timeZone);
+			const window = timestampRangeLabel(timing.earliestAt, timing.latestAt, includeDate, timeZone, calendarDateFormat);
 			return window ? `~${window}` : null;
 		}
 	}
@@ -183,7 +204,8 @@ export function formatItineraryTimingBoundary(
 	timing: ItineraryTiming,
 	boundary: TimingBoundary,
 	includeDate = false,
-	timeZone?: string
+	timeZone?: string,
+	calendarDateFormat: CalendarDateFormat = 'date'
 ): string | null {
 	switch (timing.kind) {
 		case 'exact': {
@@ -193,14 +215,14 @@ export function formatItineraryTimingBoundary(
 			}
 			if (timing.timePrecision === 'date') {
 				const formatted = formatTimestamp(timestamp, timeZone);
-				const date = formatted ? formatCalendarDate(formatted.date) : null;
+				const date = formatted ? formatCalendarDate(formatted.date, calendarDateFormat) : null;
 				return date ? `${date} · time unknown` : null;
 			}
-			return timestampLabel(timestamp, includeDate, timeZone);
+			return timestampLabel(timestamp, includeDate, timeZone, calendarDateFormat);
 		}
 		case 'approximate':
 		case 'window':
-			return boundary === 'start' ? formatItineraryTiming(timing, includeDate, timeZone) : null;
+			return boundary === 'start' ? formatItineraryTiming(timing, includeDate, timeZone, calendarDateFormat) : null;
 	}
 }
 
@@ -212,19 +234,20 @@ function timingDisplayPartsLabel(parts: readonly TimingDisplayPart[]): string {
 export function formatAccommodationTimingParts(
 	timing: ItineraryTiming,
 	includeDate = false,
-	timeZone?: string
+	timeZone?: string,
+	calendarDateFormat: CalendarDateFormat = 'date'
 ): readonly TimingDisplayPart[] | null {
 	if (timing.kind !== 'exact' || timing.timePrecision === 'date') {
 		return null;
 	}
-	const start = timestampLabel(timing.startAt, includeDate, timeZone);
+	const start = timestampLabel(timing.startAt, includeDate, timeZone, calendarDateFormat);
 	if (!start) {
 		return null;
 	}
 	if (timing.endAt === undefined) {
 		return [{ label: 'Check-in', value: start }];
 	}
-	const end = timestampLabel(timing.endAt, includeDate, timeZone);
+	const end = timestampLabel(timing.endAt, includeDate, timeZone, calendarDateFormat);
 	return end
 		? [
 				{ label: 'Check-in', value: start },
@@ -237,15 +260,16 @@ export function formatAccommodationTimingParts(
 export function formatAccommodationTiming(
 	timing: ItineraryTiming,
 	includeDate = false,
-	timeZone?: string
+	timeZone?: string,
+	calendarDateFormat: CalendarDateFormat = 'date'
 ): string | null {
 	if (timing.kind !== 'exact') {
-		return formatItineraryTiming(timing, includeDate, timeZone);
+		return formatItineraryTiming(timing, includeDate, timeZone, calendarDateFormat);
 	}
 	if (timing.timePrecision === 'date') {
-		return accommodationDateRangeLabel(timing.startAt, timing.endAt ?? timing.startAt, timeZone);
+		return accommodationDateRangeLabel(timing.startAt, timing.endAt ?? timing.startAt, timeZone, calendarDateFormat);
 	}
-	const parts = formatAccommodationTimingParts(timing, includeDate, timeZone);
+	const parts = formatAccommodationTimingParts(timing, includeDate, timeZone, calendarDateFormat);
 	return parts ? timingDisplayPartsLabel(parts) : null;
 }
 

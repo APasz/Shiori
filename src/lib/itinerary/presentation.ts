@@ -1,4 +1,4 @@
-import { addCalendarDays, formatCalendarDate } from './calendar';
+import { addCalendarDays, formatCalendarDate, type CalendarDateFormat } from './calendar';
 import type { ItineraryItem, ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
@@ -205,8 +205,8 @@ export function groupItemsByLocalDay<Item extends TimedItem>(
 		.map(([date, dayItems]) => ({ date, items: dayItems }));
 }
 
-export function formatLocalDay(date: string): string {
-	const formatted = formatCalendarDate(date);
+export function formatLocalDay(date: string, format: CalendarDateFormat = 'date'): string {
+	const formatted = formatCalendarDate(date, format);
 	if (!formatted) {
 		throw new Error(`Calendar day ${date} cannot be formatted.`);
 	}

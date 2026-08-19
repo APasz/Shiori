@@ -143,7 +143,7 @@
 {/snippet}
 
 <details class="day" open={isOpen} ontoggle={(event) => onDisclosureChange(date, event)}>
-	<summary><h3>Day {dayNumber}: {formatLocalDay(date)}</h3></summary>
+	<summary><h3>Day {dayNumber}: {formatLocalDay(date, 'date-with-weekday')}</h3></summary>
 	<div class="day-content">
 		{#if dayItems.ongoingStays.length > 0}
 			{@render stayBlock(dayItems.ongoingStays, 'ongoing')}

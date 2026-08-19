@@ -110,7 +110,7 @@
 					{#each dayNotes as note (note.date)}
 						<ItineraryNoteView
 							defaultTimeZone={data.trip.itinerary.timeZone}
-							heading={formatCalendarDate(note.date) ?? note.date}
+							heading={formatCalendarDate(note.date, 'date-with-weekday') ?? note.date}
 							{note}
 							onEdit={canModifyNotes ? () => beginEditing({ date: note.date, kind: 'day' }, note) : undefined}
 						/>

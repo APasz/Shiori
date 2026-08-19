@@ -26,6 +26,7 @@ describe('calendar helpers', () => {
 	it('moves across a year boundary and formats valid selections', () => {
 		expect(addCalendarMonths({ month: 12, year: 2026 }, 1)).toEqual({ month: 1, year: 2027 });
 		expect(formatCalendarDate('2026-12-04')).toBe('04 Dec 2026');
+		expect(formatCalendarDate('2026-12-04', 'date-with-weekday')).toBe('04 Dec 2026 (Fri)');
 		expect(formatCalendarDate('2026-02-29')).toBeNull();
 	});
 });

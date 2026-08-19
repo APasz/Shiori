@@ -68,7 +68,14 @@
 	}
 
 	function paidAtLabel(paidAt: number): string {
-		return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(paidAt);
+		return new Intl.DateTimeFormat(undefined, {
+			day: '2-digit',
+			hour: 'numeric',
+			minute: '2-digit',
+			month: 'short',
+			weekday: 'short',
+			year: 'numeric'
+		}).format(paidAt);
 	}
 
 	function exchangeRateLabel(exchangeRate: number): string {
@@ -112,7 +119,13 @@
 			<div class="item-flow">
 				<div class="timing-boundary">
 					{#if item.type !== 'transport'}<span class="timing-boundary-label">{startLabel}</span>{/if}
-					<ItineraryTiming display="start" includeDate timing={item.timing} timeZone={timingTimeZone} />
+					<ItineraryTiming
+						calendarDateFormat="date-with-weekday"
+						display="start"
+						includeDate
+						timing={item.timing}
+						timeZone={timingTimeZone}
+					/>
 				</div>
 
 				{#if locationFlow.length > 0}
@@ -138,6 +151,7 @@
 									{#if entry.schedule && shouldShowTransportStopSchedule(entry, locationIndex, item.timing)}
 										<span class="location-time">
 											<ItineraryTime
+												calendarDateFormat="date-with-weekday"
 												includeDate
 												startAt={entry.schedule.scheduledAt}
 												timeZone={entry.schedule.timeZone}
@@ -148,7 +162,13 @@
 								{:else if item.type !== 'accommodation'}
 									<span class="location-time">
 										<span class="location-time-label">At</span>
-										<ItineraryTiming display="start" includeDate timing={item.timing} timeZone={timingTimeZone} />
+										<ItineraryTiming
+											calendarDateFormat="date-with-weekday"
+											display="start"
+											includeDate
+											timing={item.timing}
+											timeZone={timingTimeZone}
+										/>
 									</span>
 								{/if}
 
@@ -171,7 +191,13 @@
 				{#if hasEndTime}
 					<div class="timing-boundary">
 						{#if item.type !== 'transport'}<span class="timing-boundary-label">{endLabel}</span>{/if}
-						<ItineraryTiming display="end" includeDate timing={item.timing} timeZone={timingTimeZone} />
+						<ItineraryTiming
+							calendarDateFormat="date-with-weekday"
+							display="end"
+							includeDate
+							timing={item.timing}
+							timeZone={timingTimeZone}
+						/>
 					</div>
 				{/if}
 			</div>
@@ -236,7 +262,10 @@
 								≈ {formatMonetaryAmount(item.cost.payment.localAmountMinor, item.cost.payment.localCurrency)}
 							</p>
 							<p class="cost-payment-detail">
-								Paid {paidAtLabel(item.cost.payment.paidAt)} · Rate on {formatCalendarDate(item.cost.payment.rateDate)}
+								Paid {paidAtLabel(item.cost.payment.paidAt)} · Rate on {formatCalendarDate(
+									item.cost.payment.rateDate,
+									'date-with-weekday'
+								)}
 							</p>
 							<p class="cost-rate">
 								1 {item.cost.currency} = {exchangeRateLabel(item.cost.payment.exchangeRate)}
@@ -249,7 +278,9 @@
 							<p class="cost-note">Trip currency is now {localCurrency}.</p>
 						{/if}
 					{:else if item.cost.scheduledPaymentDate}
-						<p class="cost-payment-detail">Due {formatCalendarDate(item.cost.scheduledPaymentDate)}</p>
+						<p class="cost-payment-detail">
+							Due {formatCalendarDate(item.cost.scheduledPaymentDate, 'date-with-weekday')}
+						</p>
 					{/if}
 				</div>
 			</section>

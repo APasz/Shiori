@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { formatTimestampInTimeZone, type FormattedLocalTimestamp } from '$lib/itinerary/time';
-	import { formatCalendarDate } from '$lib/itinerary/calendar';
+	import { formatCalendarDate, type CalendarDateFormat } from '$lib/itinerary/calendar';
 	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { onMount } from 'svelte';
@@ -8,8 +8,14 @@
 	let {
 		startAt,
 		timeZone,
-		includeDate = false
-	}: { startAt: number; timeZone: string; includeDate?: boolean } = $props();
+		includeDate = false,
+		calendarDateFormat = 'date'
+	}: {
+		startAt: number;
+		timeZone: string;
+		includeDate?: boolean;
+		calendarDateFormat?: CalendarDateFormat;
+	} = $props();
 	let viewerTime = $state<FormattedLocalTimestamp | null>(null);
 	let localTime = $state<FormattedLocalTimestamp | null>(null);
 	let browserReady = $state(false);
@@ -23,7 +29,7 @@
 		if (!includeDate) {
 			return timestamp.time;
 		}
-		const date = formatCalendarDate(timestamp.date);
+		const date = formatCalendarDate(timestamp.date, calendarDateFormat);
 		return date ? `${date}, ${timestamp.time}` : timestamp.time;
 	}
 

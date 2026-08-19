@@ -9,6 +9,8 @@ export type CalendarMonth = Readonly<{
 	year: number;
 }>;
 
+export type CalendarDateFormat = 'date' | 'date-with-weekday';
+
 const calendarDatePattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/;
 
 function padded(value: number): string {
@@ -78,16 +80,23 @@ export function formatCalendarMonth(month: CalendarMonth): string {
 	}).format(new Date(Date.UTC(month.year, month.month - 1, 1)));
 }
 
-export function formatCalendarDate(value: string): string | null {
+export function formatCalendarDate(value: string, format: CalendarDateFormat = 'date'): string | null {
 	const parts = calendarDateParts(value);
 	if (!parts) {
 		return null;
 	}
 
-	return new Intl.DateTimeFormat('en-AU', {
+	const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+	const dateLabel = new Intl.DateTimeFormat('en-AU', {
 		day: '2-digit',
 		month: 'short',
 		timeZone: 'UTC',
 		year: 'numeric'
-	}).format(new Date(Date.UTC(parts.year, parts.month - 1, parts.day)));
+	}).format(date);
+	if (format === 'date') {
+		return dateLabel;
+	}
+
+	const weekday = new Intl.DateTimeFormat('en-AU', { timeZone: 'UTC', weekday: 'short' }).format(date);
+	return `${dateLabel} (${weekday})`;
 }
