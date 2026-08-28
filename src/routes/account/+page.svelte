@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { availableAccountTabs, type AccountTab } from '$lib/account/tabs';
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
 	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
@@ -14,6 +15,18 @@
 	let selectedColourway = $state<Colourway | null>(null);
 	let previousSavedColourway = $state<Colourway | undefined>(undefined);
 	const previewColourway = $derived(selectedColourway ?? data.currentUser.colourway);
+	const visibleTabs = $derived(availableAccountTabs(data.canManageAccounts));
+
+	const accountActionTabs = {
+		changeColourway: 'appearance',
+		changePassword: 'account',
+		changeUsername: 'account'
+	} as const satisfies Record<string, AccountTab>;
+	type AccountAction = keyof typeof accountActionTabs;
+
+	function actionUrl(action: AccountAction): string {
+		return `?tab=${accountActionTabs[action]}&/${action}`;
+	}
 
 	$effect(() => {
 		const savedColourway = data.currentUser.colourway;
@@ -35,145 +48,155 @@
 		<PageTitle title="Account" />
 	</header>
 
-	<section aria-labelledby="appearance-heading">
-		<h2 id="appearance-heading">Appearance</h2>
-		<div class="appearance-theme">
-			<h3>Theme</h3>
-			<ThemeModePicker />
-		</div>
-
-		<form action="?/changeColourway" class="shiori-form appearance-form" method="POST">
-			<fieldset>
-				<legend>Colour</legend>
-				<div class="colourway-options">
-					{#each colourwayOptions as colourway (colourway.name)}
-						<label class:colourway-selected={previewColourway === colourway.name}>
-							<input
-								checked={previewColourway === colourway.name}
-								class="colourway-input"
-								name="colourway"
-								onchange={() => (selectedColourway = colourway.name)}
-								type="radio"
-								value={colourway.name}
-							/>
-							<span class="colourway-option">
-								<span aria-hidden="true" class="colourway-swatch" style:background-color={colourway.swatch}></span>
-								<span>{colourway.label}</span>
-							</span>
-						</label>
-					{/each}
-				</div>
-			</fieldset>
-
-			<div
-				aria-labelledby="colourway-preview-heading"
-				class="appearance-preview"
-				data-colourway={previewColourway}
-				role="group"
+	<nav aria-label="Account settings" class="account-tabs">
+		{#each visibleTabs as tab (tab.id)}
+			<a aria-current={data.selectedTab === tab.id ? 'page' : undefined} href={resolve(`/account?tab=${tab.id}`)}
+				>{tab.label}</a
 			>
-				<div class="preview-heading">
-					<h3 id="colourway-preview-heading">Preview</h3>
-					<span>{colourwayLabels[previewColourway]}</span>
-				</div>
-				<div class="preview-card">
-					<div class="preview-item">
-						<span class="preview-time">09:30</span>
-						<div>
-							<strong>Train to Kyoto</strong>
-							<span>Reserved itinerary item</span>
-						</div>
-					</div>
-					<div class="preview-actions">
-						<button class="preview-primary" type="button">Save itinerary</button>
-						<button class="preview-secondary" type="button">Focus example</button>
-					</div>
-					<div aria-label="Itinerary item colours" class="preview-item-types" role="group">
-						<span class="transport">Transport</span>
-						<span class="accommodation">Stay</span>
-						<span class="activity">Activity</span>
-					</div>
-					<div aria-label="Status colours" class="preview-statuses" role="group">
-						<span class="success">Confirmed</span>
-						<span class="warning">Pending</span>
-						<span class="error">Cancelled</span>
-					</div>
-				</div>
+		{/each}
+	</nav>
+
+	{#if data.selectedTab === 'appearance'}
+		<section aria-labelledby="appearance-heading" class="account-panel">
+			<h2 id="appearance-heading">Appearance</h2>
+			<div class="appearance-theme">
+				<h3>Theme</h3>
+				<ThemeModePicker />
 			</div>
 
-			{#if form?.colourwayError}<p class="error" role="alert">{form.colourwayError}</p>{/if}
-			{#if form?.colourwayUpdated}<p class="success" role="status">Colour updated.</p>{/if}
-			<button class="shiori-form-button" type="submit">Save colour</button>
-		</form>
-	</section>
+			<form action={actionUrl('changeColourway')} class="shiori-form appearance-form" method="POST">
+				<fieldset>
+					<legend>Colour</legend>
+					<div class="colourway-options">
+						{#each colourwayOptions as colourway (colourway.name)}
+							<label class:colourway-selected={previewColourway === colourway.name}>
+								<input
+									checked={previewColourway === colourway.name}
+									class="colourway-input"
+									name="colourway"
+									onchange={() => (selectedColourway = colourway.name)}
+									type="radio"
+									value={colourway.name}
+								/>
+								<span class="colourway-option">
+									<span aria-hidden="true" class="colourway-swatch" style:background-color={colourway.swatch}></span>
+									<span>{colourway.label}</span>
+								</span>
+							</label>
+						{/each}
+					</div>
+				</fieldset>
 
-	<section aria-labelledby="username-heading">
-		<h2 id="username-heading">Username</h2>
-		<p>Use this name to sign in and identify your account.</p>
-		<form action="?/changeUsername" class="shiori-form" method="POST">
-			<label class="shiori-form-label">
-				Username
-				<input
-					class="shiori-form-control"
-					autocomplete="username"
-					name="username"
-					required
-					value={data.currentUser.username}
-				/>
-			</label>
-			{#if form?.usernameError}<p class="error" role="alert">{form.usernameError}</p>{/if}
-			{#if form?.usernameUpdated}<p class="success" role="status">Username updated.</p>{/if}
-			<button class="shiori-form-button" type="submit">Save username</button>
-		</form>
-	</section>
+				<div
+					aria-labelledby="colourway-preview-heading"
+					class="appearance-preview"
+					data-colourway={previewColourway}
+					role="group"
+				>
+					<div class="preview-heading">
+						<h3 id="colourway-preview-heading">Preview</h3>
+						<span>{colourwayLabels[previewColourway]}</span>
+					</div>
+					<div class="preview-card">
+						<div class="preview-item">
+							<span class="preview-time">09:30</span>
+							<div>
+								<strong>Train to Kyoto</strong>
+								<span>Reserved itinerary item</span>
+							</div>
+						</div>
+						<div class="preview-actions">
+							<button class="preview-primary" type="button">Save itinerary</button>
+							<button class="preview-secondary" type="button">Focus example</button>
+						</div>
+						<div aria-label="Itinerary item colours" class="preview-item-types" role="group">
+							<span class="transport">Transport</span>
+							<span class="accommodation">Stay</span>
+							<span class="activity">Activity</span>
+						</div>
+						<div aria-label="Status colours" class="preview-statuses" role="group">
+							<span class="success">Confirmed</span>
+							<span class="warning">Pending</span>
+							<span class="error">Cancelled</span>
+						</div>
+					</div>
+				</div>
 
-	<section aria-labelledby="password-heading">
-		<h2 id="password-heading">Password</h2>
-		<p>Changing your password signs out your other active sessions.</p>
-		<form action="?/changePassword" class="shiori-form" method="POST">
-			<label class="shiori-form-label">
-				Current password
-				<input
-					class="shiori-form-control"
-					autocomplete="current-password"
-					name="currentPassword"
-					required
-					type={showPasswords ? 'text' : 'password'}
-				/>
-			</label>
-			<label class="shiori-form-label">
-				New password
-				<input
-					class="shiori-form-control"
-					autocomplete="new-password"
-					minlength={minimumPasswordLength}
-					name="newPassword"
-					required
-					type={showPasswords ? 'text' : 'password'}
-				/>
-			</label>
-			<label class="shiori-form-label">
-				Confirm new password
-				<input
-					class="shiori-form-control"
-					autocomplete="new-password"
-					minlength={minimumPasswordLength}
-					name="newPasswordConfirmation"
-					required
-					type={showPasswords ? 'text' : 'password'}
-				/>
-			</label>
-			<label class="password-visibility">
-				<input bind:checked={showPasswords} type="checkbox" />
-				Show passwords
-			</label>
-			{#if form?.passwordError}<p class="error" role="alert">{form.passwordError}</p>{/if}
-			{#if form?.passwordChanged}<p class="success" role="status">Password updated.</p>{/if}
-			<button class="shiori-form-button" type="submit">Change password</button>
-		</form>
-	</section>
+				{#if form?.colourwayError}<p class="error" role="alert">{form.colourwayError}</p>{/if}
+				{#if form?.colourwayUpdated}<p class="success" role="status">Colour updated.</p>{/if}
+				<button class="shiori-form-button" type="submit">Save colour</button>
+			</form>
+		</section>
+	{:else if data.selectedTab === 'account'}
+		<div class="account-panel">
+			<section aria-labelledby="username-heading" class="account-section">
+				<h2 id="username-heading">Username</h2>
+				<p>Use this name to sign in and identify your account.</p>
+				<form action={actionUrl('changeUsername')} class="shiori-form" method="POST">
+					<label class="shiori-form-label">
+						Username
+						<input
+							class="shiori-form-control"
+							autocomplete="username"
+							name="username"
+							required
+							value={data.currentUser.username}
+						/>
+					</label>
+					{#if form?.usernameError}<p class="error" role="alert">{form.usernameError}</p>{/if}
+					{#if form?.usernameUpdated}<p class="success" role="status">Username updated.</p>{/if}
+					<button class="shiori-form-button" type="submit">Save username</button>
+				</form>
+			</section>
 
-	{#if data.canManageAccounts}
-		<section aria-labelledby="administration-heading">
+			<section aria-labelledby="password-heading" class="account-section">
+				<h2 id="password-heading">Password</h2>
+				<p>Changing your password signs out your other active sessions.</p>
+				<form action={actionUrl('changePassword')} class="shiori-form" method="POST">
+					<label class="shiori-form-label">
+						Current password
+						<input
+							class="shiori-form-control"
+							autocomplete="current-password"
+							name="currentPassword"
+							required
+							type={showPasswords ? 'text' : 'password'}
+						/>
+					</label>
+					<label class="shiori-form-label">
+						New password
+						<input
+							class="shiori-form-control"
+							autocomplete="new-password"
+							minlength={minimumPasswordLength}
+							name="newPassword"
+							required
+							type={showPasswords ? 'text' : 'password'}
+						/>
+					</label>
+					<label class="shiori-form-label">
+						Confirm new password
+						<input
+							class="shiori-form-control"
+							autocomplete="new-password"
+							minlength={minimumPasswordLength}
+							name="newPasswordConfirmation"
+							required
+							type={showPasswords ? 'text' : 'password'}
+						/>
+					</label>
+					<label class="password-visibility">
+						<input bind:checked={showPasswords} type="checkbox" />
+						Show passwords
+					</label>
+					{#if form?.passwordError}<p class="error" role="alert">{form.passwordError}</p>{/if}
+					{#if form?.passwordChanged}<p class="success" role="status">Password updated.</p>{/if}
+					<button class="shiori-form-button" type="submit">Change password</button>
+				</form>
+			</section>
+		</div>
+	{:else if data.canManageAccounts}
+		<section aria-labelledby="administration-heading" class="account-panel">
 			<h2 id="administration-heading">Administration</h2>
 			<p>Manage global accounts and their access to your trips.</p>
 			<a class="accounts-link" href={resolve('/accounts')}>Accounts</a>
@@ -202,13 +225,58 @@
 		font-size: 0.9375rem;
 	}
 
-	section {
+	.account-tabs {
+		border-bottom: 1px solid var(--color-border-default);
+		display: flex;
+		gap: 0.125rem;
+		margin-top: 1.5rem;
+		overflow-x: auto;
+	}
+
+	.account-tabs a {
+		align-items: center;
+		border: 1px solid transparent;
+		border-bottom: 0;
+		color: var(--color-text-secondary);
+		display: inline-flex;
+		font-size: 0.875rem;
+		font-weight: 700;
+		min-height: 2.75rem;
+		padding: 0.5rem 0.75rem;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.account-tabs a:hover {
+		background: var(--color-surface-subtle);
+		color: var(--color-text-primary);
+	}
+
+	.account-tabs a[aria-current='page'] {
+		background: var(--color-surface-page);
+		border-color: var(--color-border-default);
+		box-shadow: inset 0 -2px 0 var(--color-state-selection);
+		color: var(--color-text-primary);
+	}
+
+	.account-tabs a:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: -3px;
+	}
+
+	.account-panel {
+		margin-top: 1.5rem;
+		padding-top: 1.25rem;
+	}
+
+	.account-section + .account-section {
 		border-top: 1px solid var(--color-border-default);
 		margin-top: 1.5rem;
 		padding-top: 1.25rem;
 	}
 
-	section > p {
+	.account-panel > p,
+	.account-section > p {
 		color: var(--color-text-secondary);
 		font-size: 0.875rem;
 		margin-top: 0.375rem;

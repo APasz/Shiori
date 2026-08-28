@@ -41,13 +41,29 @@ describe('account actions', () => {
 		const usernameForm = new FormData();
 		usernameForm.set('username', 'renamed-member');
 
-		await expect(load({ locals: { user: memberSession } } as never)).resolves.toMatchObject({
+		await expect(
+			load({ locals: { user: memberSession }, url: new URL('http://localhost/account?tab=account') } as never)
+		).resolves.toMatchObject({
 			canManageAccounts: false,
-			currentUser: memberSession
+			currentUser: memberSession,
+			selectedTab: 'account'
 		});
-		await expect(load({ locals: { user: sudoSession } } as never)).resolves.toMatchObject({
+		await expect(
+			load({ locals: { user: sudoSession }, url: new URL('http://localhost/account?tab=administration') } as never)
+		).resolves.toMatchObject({
 			canManageAccounts: true,
-			currentUser: sudoSession
+			currentUser: sudoSession,
+			selectedTab: 'administration'
+		});
+		await expect(
+			load({ locals: { user: memberSession }, url: new URL('http://localhost/account?tab=administration') } as never)
+		).resolves.toMatchObject({
+			selectedTab: 'appearance'
+		});
+		await expect(
+			load({ locals: { user: memberSession }, url: new URL('http://localhost/account?tab=unknown') } as never)
+		).resolves.toMatchObject({
+			selectedTab: 'appearance'
 		});
 		await expect(
 			actions.changeUsername({

@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { ZodError } from 'zod';
+import { resolveAccountTab } from '$lib/account/tabs';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
 import { hasBodySizeAtMost, maximumAccountRequestBytes } from '$lib/server/request-size';
@@ -17,11 +18,13 @@ function requireAccount(user: AuthenticatedSessionUser | null): AuthenticatedSes
 	return user;
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const currentUser = requireAccount(locals.user);
+	const canManageAccounts = await isSudoUser(currentUser.id);
 	return {
-		canManageAccounts: await isSudoUser(currentUser.id),
-		currentUser
+		canManageAccounts,
+		currentUser,
+		selectedTab: resolveAccountTab(url.searchParams.get('tab'), canManageAccounts)
 	};
 };
 
