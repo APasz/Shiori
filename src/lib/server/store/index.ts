@@ -1,5 +1,6 @@
 export {
 	authenticate,
+	changeOwnPassword,
 	createAccount,
 	createInitialSudo,
 	deleteAccount,
@@ -7,7 +8,8 @@ export {
 	listAccounts,
 	listAccountsForManagement,
 	needsInitialSetup,
-	resetAccountPassword
+	resetAccountPassword,
+	updateOwnUsername
 } from './auth';
 export { StoreError } from './error';
 export {

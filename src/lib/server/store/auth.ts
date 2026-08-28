@@ -41,6 +41,24 @@ function newStoredUser(account: { isSudo: boolean; passwordHash: string; usernam
 	});
 }
 
+function accountForId(data: StoredData, userId: string): StoredUser {
+	const user = data.users.find((candidate) => candidate.id === userId);
+	if (!user) {
+		throw new StoreError(404, 'Account not found.');
+	}
+	return user;
+}
+
+function assertUsernameIsAvailable(data: StoredData, username: string, excludedUserId?: string): void {
+	if (
+		data.users.some(
+			(user) => user.id !== excludedUserId && usernameIdentityKey(user.username) === usernameIdentityKey(username)
+		)
+	) {
+		throw new StoreError(409, 'That username is already in use.');
+	}
+}
+
 export function isSudo(data: StoredData, userId: string): boolean {
 	return data.users.some((user) => user.id === userId && user.isSudo);
 }
@@ -116,15 +134,58 @@ export async function createAccount(input: {
 	return transaction(
 		(data) => {
 			assertSudo(data, input.actorId);
-			if (data.users.some((user) => usernameIdentityKey(user.username) === usernameIdentityKey(account.username))) {
-				throw new StoreError(409, 'That username is already in use.');
-			}
+			assertUsernameIsAvailable(data, account.username);
 
 			const user = newStoredUser({ ...account, isSudo: false });
 			data.users.push(user);
 			return { id: user.id, username: user.username };
 		},
 		{ global: ['users'], tripIds: [] }
+	);
+}
+
+export async function updateOwnUsername(input: { userId: string; username: string }): Promise<AuthenticatedUser> {
+	const username = usernameSchema.parse(input.username);
+
+	return transaction(
+		(data) => {
+			const user = accountForId(data, input.userId);
+			assertUsernameIsAvailable(data, username, user.id);
+			user.username = username;
+			return { id: user.id, username: user.username };
+		},
+		{ global: ['users'], tripIds: [] }
+	);
+}
+
+/** Changes an account password after verifying the current password and revokes every active session. */
+export async function changeOwnPassword(input: {
+	currentPassword: string;
+	newPassword: string;
+	userId: string;
+}): Promise<void> {
+	const newPassword = passwordSchema.parse(input.newPassword);
+	const snapshot = await readData();
+	const account = accountForId(snapshot, input.userId);
+	if (!(await verifyPassword(input.currentPassword, account.passwordHash))) {
+		throw new StoreError(400, 'Your current password is incorrect.');
+	}
+	const passwordHash = await hashPassword(newPassword);
+
+	return transaction(
+		(data) => {
+			const user = accountForId(data, input.userId);
+			if (user.passwordHash !== account.passwordHash) {
+				throw new StoreError(
+					409,
+					'Your password changed in another session. Enter your current password and try again.'
+				);
+			}
+
+			user.passwordHash = passwordHash;
+			data.sessions = data.sessions.filter((session) => session.userId !== user.id);
+		},
+		{ global: ['users', 'sessions'], tripIds: [] }
 	);
 }
 
@@ -155,10 +216,7 @@ export async function resetAccountPassword(input: {
 	return transaction(
 		(data) => {
 			assertSudo(data, input.actorId);
-			const user = data.users.find((candidate) => candidate.id === input.userId);
-			if (!user) {
-				throw new StoreError(404, 'Account not found.');
-			}
+			const user = accountForId(data, input.userId);
 			user.passwordHash = passwordHash;
 			data.sessions = data.sessions.filter((session) => session.userId !== user.id);
 		},
@@ -170,10 +228,7 @@ export async function deleteAccount(input: { actorId: string; userId: string }):
 	return transaction(
 		(data) => {
 			assertSudo(data, input.actorId);
-			const user = data.users.find((candidate) => candidate.id === input.userId);
-			if (!user) {
-				throw new StoreError(404, 'Account not found.');
-			}
+			const user = accountForId(data, input.userId);
 			if (user.isSudo) {
 				throw new StoreError(409, 'The sudo account cannot be deleted.');
 			}

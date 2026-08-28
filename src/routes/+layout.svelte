@@ -17,6 +17,7 @@
 	let DevelopmentViewerControls = $state<Component | null>(null);
 	const inlineThemeToggleRoutes = new Set([
 		'/',
+		'/account',
 		'/accounts',
 		'/settings/access',
 		'/trips/[slug]',

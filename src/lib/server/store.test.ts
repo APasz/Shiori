@@ -1252,6 +1252,54 @@ describe('JSON store', () => {
 		).resolves.toEqual({ id: person.id, role: 'user', username: 'User' });
 	});
 
+	it('lets an account holder change their username and password', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const person = await store.createAccount({
+			actorId: owner.id,
+			password: 'initial strong password',
+			username: 'person'
+		});
+		const sessionId = await store.createSession(person.id);
+
+		await expect(store.updateOwnUsername({ userId: person.id, username: 'OWNER' })).rejects.toMatchObject({
+			status: 409
+		});
+		await expect(store.updateOwnUsername({ userId: person.id, username: 'Renamed' })).resolves.toEqual({
+			id: person.id,
+			username: 'Renamed'
+		});
+		await expect(store.authenticate('person', 'initial strong password')).resolves.toBeNull();
+		await expect(store.authenticate('renamed', 'initial strong password')).resolves.toEqual({
+			id: person.id,
+			username: 'Renamed'
+		});
+
+		await expect(
+			store.changeOwnPassword({
+				currentPassword: 'incorrect password',
+				newPassword: 'replacement strong password',
+				userId: person.id
+			})
+		).rejects.toMatchObject({ status: 400 });
+		await expect(store.refreshSession(sessionId)).resolves.toEqual({
+			renewed: false,
+			user: { id: person.id, username: 'Renamed' }
+		});
+
+		await store.changeOwnPassword({
+			currentPassword: 'initial strong password',
+			newPassword: 'replacement strong password',
+			userId: person.id
+		});
+		await expect(store.authenticate('Renamed', 'initial strong password')).resolves.toBeNull();
+		await expect(store.authenticate('Renamed', 'replacement strong password')).resolves.toEqual({
+			id: person.id,
+			username: 'Renamed'
+		});
+		await expect(store.refreshSession(sessionId)).resolves.toBeNull();
+	});
+
 	it('blocks an attached account from a public trip and can later detach it', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');

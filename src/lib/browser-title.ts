@@ -1,6 +1,7 @@
 export const applicationTitle = 'Shiori';
 
 export const browserPages = {
+	account: 'Account',
 	access: 'Access',
 	accounts: 'Accounts',
 	admin: 'Admin',

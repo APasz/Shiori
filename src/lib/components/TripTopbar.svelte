@@ -10,7 +10,7 @@
 	import OfflineTripControl from './OfflineTripControl.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
-	type TopbarPage = 'access' | 'accounts' | 'admin' | 'costs' | 'itinerary' | 'notes' | 'trips';
+	type TopbarPage = 'account' | 'access' | 'accounts' | 'admin' | 'costs' | 'itinerary' | 'notes' | 'trips';
 	type TopbarTrip = Pick<TripView, 'access' | 'itinerary' | 'slug'>;
 	type TopbarUser = Pick<AuthenticatedUser, 'username'>;
 
@@ -170,6 +170,13 @@
 						<Icon name="disclosure" size="0.875rem" />
 					</summary>
 					<div class="topbar-menu">
+						<a
+							aria-current={activePage === 'account' ? 'page' : undefined}
+							href={resolve('/account')}
+							onclick={() => (accountMenuOpen = false)}
+						>
+							Account
+						</a>
 						{#if canManageAccounts}
 							<a
 								aria-current={activePage === 'admin' ? 'page' : undefined}
@@ -177,15 +184,6 @@
 								onclick={() => (accountMenuOpen = false)}
 							>
 								Admin
-							</a>
-						{/if}
-						{#if canManageAccounts}
-							<a
-								aria-current={activePage === 'accounts' ? 'page' : undefined}
-								href={resolve('/accounts')}
-								onclick={() => (accountMenuOpen = false)}
-							>
-								Accounts
 							</a>
 						{/if}
 						<form action="/logout" method="POST" onsubmit={clearOfflineTripPages}>

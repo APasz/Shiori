@@ -13,11 +13,8 @@ import { StoreError } from '$lib/server/store/error';
 import { listTripMembers, setTripMemberAccess } from '$lib/server/store/members';
 import type { AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
 import { listOwnedTripOptions } from '$lib/server/store/trips';
+import { validationMessage } from '$lib/server/validation';
 import type { OwnedTripOption } from '$lib/server/store/views';
-
-function validationMessage(error: ZodError): string {
-	return error.issues[0]?.message ?? 'Enter valid account details.';
-}
 
 type AccountContext = {
 	manager: AuthenticatedUser;
@@ -96,7 +93,7 @@ export const actions: Actions = {
 				return fail(error.status, { createAccountError: error.message });
 			}
 			if (error instanceof ZodError) {
-				return fail(400, { createAccountError: validationMessage(error) });
+				return fail(400, { createAccountError: validationMessage(error, 'Enter valid account details.') });
 			}
 			throw error;
 		}
@@ -117,7 +114,7 @@ export const actions: Actions = {
 				return fail(error.status, { passwordResetError: error.message });
 			}
 			if (error instanceof ZodError) {
-				return fail(400, { passwordResetError: validationMessage(error) });
+				return fail(400, { passwordResetError: validationMessage(error, 'Enter valid account details.') });
 			}
 			throw error;
 		}

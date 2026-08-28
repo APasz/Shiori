@@ -1,3 +1,6 @@
+/** Caps username-and-password forms before parsing their request bodies. */
+export const maximumCredentialRequestBytes = 16 * 1024;
+
 /** Returns whether a request declares a non-negative body size within the route's limit. */
 export function hasBodySizeAtMost(request: Request, maximumBytes: number): boolean {
 	if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0) {

@@ -2,8 +2,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { maximumCredentialRequestBytes } from './request-size';
 
 let dataDirectory = '';
+
+function formRequest(url: string, formData: FormData): Request {
+	return new Request(url, {
+		body: formData,
+		headers: { 'content-length': '1024' },
+		method: 'POST'
+	});
+}
 
 beforeEach(async () => {
 	dataDirectory = await mkdtemp(join(tmpdir(), 'shiori-accounts-route-test-'));
@@ -17,6 +26,77 @@ afterEach(async () => {
 });
 
 describe('account actions', () => {
+	it('lets every signed-in user manage their own account', async () => {
+		const store = await import('$lib/server/store');
+		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
+		const member = await store.createAccount({
+			actorId: sudo.id,
+			password: 'member strong test password',
+			username: 'member'
+		});
+		const { actions, load } = await import('../../routes/account/+page.server');
+		const usernameForm = new FormData();
+		usernameForm.set('username', 'renamed-member');
+
+		await expect(load({ locals: { user: member } } as never)).resolves.toMatchObject({
+			canManageAccounts: false,
+			currentUser: member
+		});
+		await expect(load({ locals: { user: sudo } } as never)).resolves.toMatchObject({
+			canManageAccounts: true,
+			currentUser: sudo
+		});
+		await expect(
+			actions.changeUsername({
+				locals: { user: member },
+				request: formRequest('http://localhost/account', usernameForm)
+			} as never)
+		).resolves.toEqual({ usernameUpdated: 'renamed-member' });
+
+		const passwordForm = new FormData();
+		passwordForm.set('currentPassword', 'member strong test password');
+		passwordForm.set('newPassword', 'replacement member test password');
+		passwordForm.set('newPasswordConfirmation', 'replacement member test password');
+		const cookies = { set: vi.fn() };
+		await expect(
+			actions.changePassword({
+				cookies,
+				locals: { user: { id: member.id, username: 'renamed-member' } },
+				request: formRequest('http://localhost/account', passwordForm),
+				url: new URL('http://localhost/account')
+			} as never)
+		).resolves.toEqual({ passwordChanged: true });
+
+		await expect(store.authenticate('renamed-member', 'replacement member test password')).resolves.toEqual({
+			id: member.id,
+			username: 'renamed-member'
+		});
+		expect(cookies.set).toHaveBeenCalledWith(
+			'shiori_session',
+			expect.any(String),
+			expect.objectContaining({ httpOnly: true, path: '/' })
+		);
+	});
+
+	it('rejects oversized self-service account requests before parsing them', async () => {
+		const store = await import('$lib/server/store');
+		const user = await store.createInitialSudo('sudo', 'a strong test password');
+		const { actions } = await import('../../routes/account/+page.server');
+		const request = new Request('http://localhost/account', {
+			headers: { 'content-length': `${maximumCredentialRequestBytes + 1}` },
+			method: 'POST'
+		});
+
+		await expect(actions.changeUsername({ locals: { user }, request } as never)).resolves.toMatchObject({
+			data: { usernameError: 'The username update request is too large.' },
+			status: 413
+		});
+		await expect(actions.changePassword({ locals: { user }, request } as never)).resolves.toMatchObject({
+			data: { passwordError: 'The password update request is too large.' },
+			status: 413
+		});
+	});
+
 	it('creates an account through its named action', async () => {
 		const store = await import('$lib/server/store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
