@@ -9,6 +9,7 @@ export {
 	listAccountsForManagement,
 	needsInitialSetup,
 	resetAccountPassword,
+	updateOwnColourway,
 	updateOwnUsername
 } from './auth';
 export { StoreError } from './error';
@@ -53,7 +54,13 @@ export {
 	listTripSwitchOptions
 } from './trips';
 export type { ActiveSessionUser } from './sessions';
-export type { AccountManagementEntry, AuthenticatedUser, ShareRole, TripMemberRole } from './model';
+export type {
+	AccountManagementEntry,
+	AuthenticatedSessionUser,
+	AuthenticatedUser,
+	ShareRole,
+	TripMemberRole
+} from './model';
 export type {
 	DetailedTripAccessRole,
 	PublicItinerary,

@@ -1,5 +1,7 @@
+import type { ResolveOptions } from '@sveltejs/kit';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionCookieName, sessionLifetimeSeconds } from '$lib/server/session';
+import { defaultColourway } from '$lib/theme/colourway';
 
 const refreshSession = vi.hoisted(() => vi.fn());
 
@@ -14,14 +16,21 @@ type TestCookies = {
 	set: ReturnType<typeof vi.fn>;
 };
 
-function handleInput(cookies: TestCookies, response = new Response()): HandleInput {
+function handleInput(
+	cookies: TestCookies,
+	response = new Response(),
+	onResolve?: (event: HandleInput['event'], options: ResolveOptions | undefined) => void
+): HandleInput {
 	return {
 		event: {
 			cookies,
 			locals: {},
 			url: new URL('https://shiori.example/')
 		} as unknown as HandleInput['event'],
-		resolve: async () => response
+		resolve: async (event, options) => {
+			onResolve?.(event, options);
+			return response;
+		}
 	};
 }
 
@@ -36,7 +45,10 @@ describe('server hook', () => {
 			get: vi.fn(() => 'active-session'),
 			set: vi.fn()
 		};
-		refreshSession.mockResolvedValue({ renewed: true, user: { id: 'user-1', username: 'owner' } });
+		refreshSession.mockResolvedValue({
+			renewed: true,
+			user: { colourway: defaultColourway, id: 'user-1', username: 'owner' }
+		});
 
 		const response = await handle(handleInput(cookies));
 
@@ -58,12 +70,66 @@ describe('server hook', () => {
 			get: vi.fn(() => 'active-session'),
 			set: vi.fn()
 		};
-		refreshSession.mockResolvedValue({ renewed: false, user: { id: 'user-1', username: 'owner' } });
+		refreshSession.mockResolvedValue({
+			renewed: false,
+			user: { colourway: defaultColourway, id: 'user-1', username: 'owner' }
+		});
 
 		await handle(handleInput(cookies));
 
 		expect(cookies.set).not.toHaveBeenCalled();
 		expect(cookies.delete).not.toHaveBeenCalled();
+	});
+
+	it('sets the signed-in account colourway on the document before rendering', async () => {
+		const cookies: TestCookies = {
+			delete: vi.fn(),
+			get: vi.fn(() => 'active-session'),
+			set: vi.fn()
+		};
+		let resolveOptions: ResolveOptions | undefined;
+		refreshSession.mockResolvedValue({
+			renewed: false,
+			user: { colourway: 'violet', id: 'user-1', username: 'owner' }
+		});
+
+		await handle(handleInput(cookies, new Response(), (_event, options) => (resolveOptions = options)));
+
+		const transformPageChunk = resolveOptions?.transformPageChunk;
+		if (!transformPageChunk) {
+			throw new Error('The server hook must transform page HTML.');
+		}
+		expect(await transformPageChunk({ done: false, html: '<html lang="en">' })).toBe(
+			'<html lang="en" data-colourway="violet">'
+		);
+	});
+
+	it('uses the colourway written during page-action rendering', async () => {
+		const cookies: TestCookies = {
+			delete: vi.fn(),
+			get: vi.fn(() => 'active-session'),
+			set: vi.fn()
+		};
+		let resolveOptions: ResolveOptions | undefined;
+		refreshSession.mockResolvedValue({
+			renewed: false,
+			user: { colourway: defaultColourway, id: 'user-1', username: 'owner' }
+		});
+
+		await handle(
+			handleInput(cookies, new Response(), (event, options) => {
+				event.locals.user = { colourway: 'sunset', id: 'user-1', username: 'owner' };
+				resolveOptions = options;
+			})
+		);
+
+		const transformPageChunk = resolveOptions?.transformPageChunk;
+		if (!transformPageChunk) {
+			throw new Error('The server hook must transform page HTML.');
+		}
+		expect(await transformPageChunk({ done: false, html: '<html lang="en">' })).toBe(
+			'<html lang="en" data-colourway="sunset">'
+		);
 	});
 
 	it('removes an invalid session cookie', async () => {

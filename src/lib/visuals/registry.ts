@@ -10,6 +10,7 @@ import {
 	IconChevronLeft,
 	IconChevronRight,
 	IconDirection,
+	IconDeviceDesktop,
 	IconDots,
 	IconFerry,
 	IconMoon,
@@ -31,6 +32,7 @@ export const iconNames = [
 	'calendar',
 	'lightTheme',
 	'darkTheme',
+	'systemTheme',
 	'more',
 	'direction'
 ] as const;
@@ -72,6 +74,7 @@ export const iconAssets = {
 	calendar: tablerAsset(IconCalendar),
 	lightTheme: tablerAsset(IconSun),
 	darkTheme: tablerAsset(IconMoon),
+	systemTheme: tablerAsset(IconDeviceDesktop),
 	more: tablerAsset(IconDots),
 	direction: tablerAsset(IconDirection)
 } as const satisfies Record<IconName, VisualAsset>;

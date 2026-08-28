@@ -9,6 +9,7 @@ import {
 } from '$lib/itinerary/schema';
 import {
 	dailyExpenseStoredDataVersion,
+	preAppearanceStoredDataVersion,
 	freeformExpenseStoredDataVersion,
 	legacyStoredDataVersion,
 	preAccessBlockStoredDataVersion,
@@ -19,6 +20,7 @@ import {
 	migratableStoredUserSchema,
 	storedDataVersion
 } from './model';
+import { defaultColourway } from '$lib/theme/colourway';
 
 const legacyMonetaryAmountSchema = z.strictObject({
 	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
@@ -71,7 +73,8 @@ const migratableStoredTripFileEnvelopeSchema = z
 			z.literal(freeformExpenseStoredDataVersion),
 			z.literal(preNotesStoredDataVersion),
 			z.literal(preAccessBlockStoredDataVersion),
-			z.literal(preSudoStoredDataVersion)
+			z.literal(preSudoStoredDataVersion),
+			z.literal(preAppearanceStoredDataVersion)
 		]),
 		trip: z
 			.object({
@@ -96,7 +99,8 @@ const migratableStoredUsersFileSchema = z.strictObject({
 		z.literal(freeformExpenseStoredDataVersion),
 		z.literal(preNotesStoredDataVersion),
 		z.literal(preAccessBlockStoredDataVersion),
-		z.literal(preSudoStoredDataVersion)
+		z.literal(preSudoStoredDataVersion),
+		z.literal(preAppearanceStoredDataVersion)
 	]),
 	users: z.array(migratableStoredUserSchema)
 });
@@ -119,7 +123,7 @@ function earliestLegacyUserId(users: readonly { createdAt: number; id: string }[
 	return earliestUser?.id;
 }
 
-/** Promotes the earliest legacy account to the sole global sudo account. */
+/** Adds the default colourway and assigns a sudo user to pre-sudo data. */
 export function migrateStoredUsersFile(file: unknown): { file: unknown; migrationRequired: boolean } {
 	const parsedFile = migratableStoredUsersFileSchema.safeParse(file);
 	if (!parsedFile.success) {
@@ -127,10 +131,15 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 	}
 
 	const firstUserId = earliestLegacyUserId(parsedFile.data.users);
+	const preservesSudoRole = parsedFile.data.version === preAppearanceStoredDataVersion;
 	return {
 		file: {
 			version: storedDataVersion,
-			users: parsedFile.data.users.map((user) => ({ ...user, isSudo: user.id === firstUserId }))
+			users: parsedFile.data.users.map((user) => ({
+				...user,
+				colourway: user.colourway ?? defaultColourway,
+				isSudo: preservesSudoRole ? (user.isSudo ?? user.id === firstUserId) : user.id === firstUserId
+			}))
 		},
 		migrationRequired: true
 	};

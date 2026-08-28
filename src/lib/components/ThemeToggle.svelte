@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
-		alternateTheme,
-		defaultTheme,
-		setDocumentTheme,
-		themeFromStorageValue,
-		themeStorageKey,
-		type ThemeName
+		defaultThemeMode,
+		nextThemeMode,
+		setDocumentThemeMode,
+		subscribeToThemeMode,
+		type ThemeMode
 	} from '$lib/theme/theme';
+	import { themeModeVisuals } from '$lib/theme/theme-mode-options';
 	import Icon from '$lib/visuals/Icon.svelte';
 
 	let {
@@ -16,43 +16,28 @@
 		placement?: 'floating' | 'inline';
 	} = $props();
 
-	let theme = $state<ThemeName>(defaultTheme);
-
-	function applyTheme(nextTheme: ThemeName, persist: boolean): void {
-		theme = nextTheme;
-		setDocumentTheme(nextTheme);
-		if (!persist) {
-			return;
-		}
-
-		try {
-			localStorage.setItem(themeStorageKey, nextTheme);
-		} catch {
-			// The selected theme remains active when browser storage is unavailable.
-		}
-	}
+	let themeMode = $state<ThemeMode>(defaultThemeMode);
 
 	function toggleTheme(): void {
-		applyTheme(alternateTheme(theme), true);
+		setDocumentThemeMode(nextThemeMode(themeMode));
 	}
 
 	onMount(() => {
-		applyTheme(themeFromStorageValue(document.documentElement.dataset.theme), false);
+		return subscribeToThemeMode((mode) => (themeMode = mode));
 	});
 </script>
 
 <button
-	aria-label={`Switch to ${alternateTheme(theme)} mode`}
-	aria-pressed={theme === 'dark'}
+	aria-label={`Switch from ${themeModeVisuals[themeMode].compactLabel} to ${themeModeVisuals[nextThemeMode(themeMode)].compactLabel} mode`}
 	class="theme-toggle"
 	class:floating={placement === 'floating'}
 	class:inline={placement === 'inline'}
 	onclick={toggleTheme}
-	title={`Switch to ${alternateTheme(theme)} mode`}
+	title={`Switch to ${themeModeVisuals[nextThemeMode(themeMode)].compactLabel} mode`}
 	type="button"
 >
-	<Icon name={theme === 'dark' ? 'darkTheme' : 'lightTheme'} size="1rem" stroke={1.8} />
-	<span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+	<Icon name={themeModeVisuals[themeMode].icon} size="1rem" stroke={1.8} />
+	<span>{themeModeVisuals[themeMode].compactLabel}</span>
 </button>
 
 <style>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { dev } from '$app/environment';
 	import { page } from '$app/state';
-	import { onMount, type Component } from 'svelte';
+	import { onMount, type Component, type Snippet } from 'svelte';
 	import appIcon from '$lib/assets/icon.svg';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -9,11 +9,13 @@
 	import '$lib/styles/forms.css';
 	import '$lib/styles/page-titles.css';
 	import { themeStyleTag } from '$lib/theme/palette';
+	import { setDocumentColourway } from '$lib/theme/colourway';
 	import { themeInitializationScript } from '$lib/theme/theme';
 	import BrandFeedbackMonitor from '$lib/visuals/BrandFeedbackMonitor.svelte';
 	import { registerOfflineSupport } from '$lib/offline';
+	import type { LayoutData } from './$types';
 
-	let { children } = $props();
+	let { children, data }: { children: Snippet; data: LayoutData } = $props();
 	let DevelopmentViewerControls = $state<Component | null>(null);
 	const inlineThemeToggleRoutes = new Set([
 		'/',
@@ -25,6 +27,10 @@
 		'/trips/[slug]/costs'
 	]);
 	const hasInlineThemeToggle = $derived(inlineThemeToggleRoutes.has(page.route.id ?? ''));
+
+	$effect(() => {
+		setDocumentColourway(data.colourway);
+	});
 
 	onMount(() => {
 		viewerContext.initialize();

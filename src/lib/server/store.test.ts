@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyItineraryItem } from '../itinerary/draft';
 import { itinerarySchema } from '../itinerary/schema';
+import { defaultColourway } from '../theme/colourway';
 import { createTripBackup } from '../trip-backup';
 import { storedDataVersion } from './store/model';
 
@@ -189,8 +190,45 @@ describe('JSON store', () => {
 			file: {
 				version: storedDataVersion,
 				users: [
-					{ createdAt: 0, id: 'z-user', isSudo: false, passwordHash: 'hash', username: 'zuser' },
-					{ createdAt: 0, id: 'a-user', isSudo: true, passwordHash: 'hash', username: 'auser' }
+					{
+						colourway: defaultColourway,
+						createdAt: 0,
+						id: 'z-user',
+						isSudo: false,
+						passwordHash: 'hash',
+						username: 'zuser'
+					},
+					{
+						colourway: defaultColourway,
+						createdAt: 0,
+						id: 'a-user',
+						isSudo: true,
+						passwordHash: 'hash',
+						username: 'auser'
+					}
+				]
+			},
+			migrationRequired: true
+		});
+	});
+
+	it('adds the default colourway to version 14 accounts without changing their sudo user', async () => {
+		const { migrateStoredUsersFile } = await import('./store/migrations');
+
+		const migrated = migrateStoredUsersFile({
+			version: 14,
+			users: [
+				{ createdAt: 0, id: 'z-user', isSudo: false, passwordHash: 'hash', username: 'zuser' },
+				{ createdAt: 1, id: 'a-user', isSudo: true, passwordHash: 'hash', username: 'auser' }
+			]
+		});
+
+		expect(migrated).toMatchObject({
+			file: {
+				version: storedDataVersion,
+				users: [
+					{ colourway: defaultColourway, id: 'z-user', isSudo: false },
+					{ colourway: defaultColourway, id: 'a-user', isSudo: true }
 				]
 			},
 			migrationRequired: true
@@ -666,11 +704,17 @@ describe('JSON store', () => {
 		const beforeRefresh = await readFile(managedDataPath('sessions.json'), 'utf8');
 
 		vi.setSystemTime(new Date('2026-01-01T08:59:00.000Z'));
-		await expect(store.refreshSession(sessionId)).resolves.toEqual({ renewed: false, user });
+		await expect(store.refreshSession(sessionId)).resolves.toEqual({
+			renewed: false,
+			user: { ...user, colourway: defaultColourway }
+		});
 		expect(await readFile(managedDataPath('sessions.json'), 'utf8')).toBe(beforeRefresh);
 
 		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
-		await expect(store.refreshSession(sessionId)).resolves.toEqual({ renewed: true, user });
+		await expect(store.refreshSession(sessionId)).resolves.toEqual({
+			renewed: true,
+			user: { ...user, colourway: defaultColourway }
+		});
 
 		const persisted: { sessions: Array<{ expiresAt: number; id: string }> } = JSON.parse(
 			await readFile(managedDataPath('sessions.json'), 'utf8')
@@ -1284,7 +1328,7 @@ describe('JSON store', () => {
 		).rejects.toMatchObject({ status: 400 });
 		await expect(store.refreshSession(sessionId)).resolves.toEqual({
 			renewed: false,
-			user: { id: person.id, username: 'Renamed' }
+			user: { colourway: defaultColourway, id: person.id, username: 'Renamed' }
 		});
 
 		await store.changeOwnPassword({
@@ -1298,6 +1342,25 @@ describe('JSON store', () => {
 			username: 'Renamed'
 		});
 		await expect(store.refreshSession(sessionId)).resolves.toBeNull();
+	});
+
+	it('persists an account-wide colourway and exposes it to active sessions', async () => {
+		const store = await import('./store');
+		const user = await store.createInitialSudo('owner', 'a strong test password');
+		const sessionId = await store.createSession(user.id);
+
+		await expect(store.updateOwnColourway({ colourway: 'violet', userId: user.id })).resolves.toBe('violet');
+		await expect(store.refreshSession(sessionId)).resolves.toEqual({
+			renewed: false,
+			user: { colourway: 'violet', id: user.id, username: user.username }
+		});
+
+		const persisted: { users: Array<{ colourway: string; id: string }> } = JSON.parse(
+			await readFile(managedDataPath('users.json'), 'utf8')
+		);
+		expect(persisted.users).toEqual(
+			expect.arrayContaining([expect.objectContaining({ colourway: 'violet', id: user.id })])
+		);
 	});
 
 	it('blocks an attached account from a public trip and can later detach it', async () => {

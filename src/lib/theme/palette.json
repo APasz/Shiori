@@ -75,6 +75,68 @@
 			"backdrop": "#000000"
 		}
 	},
+	"colourways": {
+		"ocean": {
+			"light": {
+				"icon": { "route": "#00889b" },
+				"itemType": {
+					"transport": "#0d7490",
+					"accommodation": "#0f766e",
+					"activity": "#2563a8"
+				},
+				"state": { "focus": "#0759b8", "selection": "#0066cc" }
+			},
+			"dark": {
+				"icon": { "route": "#45d7e6" },
+				"itemType": {
+					"transport": "#51b6c9",
+					"accommodation": "#5abfae",
+					"activity": "#7cb8f5"
+				},
+				"state": { "focus": "#8cc5ff", "selection": "#6ab0ff" }
+			}
+		},
+		"violet": {
+			"light": {
+				"icon": { "route": "#7c3aed" },
+				"itemType": {
+					"transport": "#a14d77",
+					"accommodation": "#5d7a50",
+					"activity": "#6d62aa"
+				},
+				"state": { "focus": "#5b21b6", "selection": "#6d28d9" }
+			},
+			"dark": {
+				"icon": { "route": "#c4b5fd" },
+				"itemType": {
+					"transport": "#e184ad",
+					"accommodation": "#92bb85",
+					"activity": "#a9a2eb"
+				},
+				"state": { "focus": "#d4bbff", "selection": "#b89aff" }
+			}
+		},
+		"sunset": {
+			"light": {
+				"icon": { "route": "#e85d04" },
+				"itemType": {
+					"transport": "#c64c57",
+					"accommodation": "#8a6d30",
+					"activity": "#aa5c89"
+				},
+				"state": { "focus": "#b45309", "selection": "#c2410c" }
+			},
+			"dark": {
+				"icon": { "route": "#ffb36b" },
+				"itemType": {
+					"transport": "#fc8a90",
+					"accommodation": "#d9bd72",
+					"activity": "#e9a0c9"
+				},
+				"state": { "focus": "#ffc176", "selection": "#ff9861" }
+			}
+		}
+	},
 	"reservationStatus": {
 		"confirmed": "success",
 		"pending": "warning",

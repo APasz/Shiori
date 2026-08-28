@@ -2,6 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { assertProductionConfiguration } from '$lib/server/production-config';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
 import { refreshSession } from '$lib/server/store/sessions';
+import { defaultColourway } from '$lib/theme/colourway';
 
 assertProductionConfiguration(process.env);
 
@@ -29,7 +30,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 		sessionCookieChanged = true;
 	}
 
-	const response = await resolve(event);
+	const response = await resolve(event, {
+		transformPageChunk: ({ html }) =>
+			html.replace(
+				'<html lang="en">',
+				`<html lang="en" data-colourway="${event.locals.user?.colourway ?? defaultColourway}">`
+			)
+	});
 	if (sessionCookieChanged || !response.headers.has('cache-control')) {
 		response.headers.set('cache-control', 'no-store');
 	}

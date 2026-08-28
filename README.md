@@ -337,9 +337,11 @@ minutes; duplicate requests are coalesced and a `429` response is retried once a
 
 Accounts are global and do not receive access to a private trip by default. The initial setup account
 is the one global sudo user: only it can create or manage accounts, list active sessions, or force a
-global logout. Signed-in users can change their own username and password at `/account`; password
-changes sign out their other active sessions. A trip owner can still manage access to that trip, but
-owning a trip does not grant global sudo privileges. The sudo user can open `/accounts` from their
+global logout. Signed-in users can change their own username and password and save a curated colourway
+at `/account`; password changes sign out their other active sessions. A trip owner can still manage access
+to that trip, but owning a trip does not grant global sudo privileges. A colourway follows its account
+across devices; dark, automatic, and light mode remain a per-device preference and default to dark on a
+new device. The sudo user can open `/accounts` from their
 account page to create accounts, then use `/settings/access` to grant read-only `user` or `admin`
 access to a specific trip or enable its public visitor schedule. Passwords are hashed with Node's
 `scrypt`; sessions are stored server-side and issued in HTTP-only cookies. Sessions expire after

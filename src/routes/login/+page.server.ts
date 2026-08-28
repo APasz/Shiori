@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
 import { loginRateLimiter } from '$lib/server/login-rate-limit';
-import { hasBodySizeAtMost, maximumCredentialRequestBytes } from '$lib/server/request-size';
+import { hasBodySizeAtMost, maximumAccountRequestBytes } from '$lib/server/request-size';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
 import { authenticate, needsInitialSetup } from '$lib/server/store/auth';
 import { createSession } from '$lib/server/store/sessions';
@@ -17,7 +17,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	default: async ({ cookies, getClientAddress, request, url }) => {
-		if (!hasBodySizeAtMost(request, maximumCredentialRequestBytes)) {
+		if (!hasBodySizeAtMost(request, maximumAccountRequestBytes)) {
 			return fail(413, { requestTooLarge: true });
 		}
 		const formData = await request.formData();

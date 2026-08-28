@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { defaultColourway, colourwaySchema, type Colourway } from '$lib/theme/colourway';
 import { StoreError } from './error';
 import {
 	passwordSchema,
@@ -33,12 +34,17 @@ async function hashPassword(password: string): Promise<string> {
 
 function newStoredUser(account: { isSudo: boolean; passwordHash: string; username: string }): StoredUser {
 	return storedUserSchema.parse({
+		colourway: defaultColourway,
 		id: randomUUID(),
 		isSudo: account.isSudo,
 		username: account.username,
 		passwordHash: account.passwordHash,
 		createdAt: timestamp()
 	});
+}
+
+function authenticatedUser(user: StoredUser): AuthenticatedUser {
+	return { id: user.id, username: user.username };
 }
 
 function accountForId(data: StoredData, userId: string): StoredUser {
@@ -118,7 +124,7 @@ export async function createInitialSudo(usernameInput: string, passwordInput: st
 					trip.updatedAt = user.createdAt;
 				}
 			}
-			return { id: user.id, username: user.username };
+			return authenticatedUser(user);
 		},
 		{ global: ['users'], tripIds: 'all' }
 	);
@@ -138,7 +144,7 @@ export async function createAccount(input: {
 
 			const user = newStoredUser({ ...account, isSudo: false });
 			data.users.push(user);
-			return { id: user.id, username: user.username };
+			return authenticatedUser(user);
 		},
 		{ global: ['users'], tripIds: [] }
 	);
@@ -152,7 +158,20 @@ export async function updateOwnUsername(input: { userId: string; username: strin
 			const user = accountForId(data, input.userId);
 			assertUsernameIsAvailable(data, username, user.id);
 			user.username = username;
-			return { id: user.id, username: user.username };
+			return authenticatedUser(user);
+		},
+		{ global: ['users'], tripIds: [] }
+	);
+}
+
+export async function updateOwnColourway(input: { colourway: unknown; userId: string }): Promise<Colourway> {
+	const colourway = colourwaySchema.parse(input.colourway);
+
+	return transaction(
+		(data) => {
+			const user = accountForId(data, input.userId);
+			user.colourway = colourway;
+			return user.colourway;
 		},
 		{ global: ['users'], tripIds: [] }
 	);
@@ -192,9 +211,7 @@ export async function changeOwnPassword(input: {
 export async function listAccounts(actorId: string): Promise<AuthenticatedUser[]> {
 	const data = await readData();
 	assertSudo(data, actorId);
-	return data.users
-		.map(({ id, username }) => ({ id, username }))
-		.sort((left, right) => left.username.localeCompare(right.username));
+	return data.users.map(authenticatedUser).sort((left, right) => left.username.localeCompare(right.username));
 }
 
 export async function listAccountsForManagement(actorId: string): Promise<AccountManagementEntry[]> {
@@ -202,7 +219,7 @@ export async function listAccountsForManagement(actorId: string): Promise<Accoun
 	assertSudo(data, actorId);
 	const ownerIds = new Set(data.trips.map((trip) => trip.ownerId));
 	return data.users
-		.map(({ id, username }) => ({ id, ownsTrip: ownerIds.has(id), username }))
+		.map((user) => ({ ...authenticatedUser(user), ownsTrip: ownerIds.has(user.id) }))
 		.sort((left, right) => left.username.localeCompare(right.username));
 }
 
@@ -259,7 +276,7 @@ export async function authenticate(usernameInput: string, passwordInput: string)
 		return null;
 	}
 
-	return { id: user.id, username: user.username };
+	return authenticatedUser(user);
 }
 
 export async function prepareNewAccount(input: {

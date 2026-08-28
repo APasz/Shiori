@@ -2,7 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { maximumCredentialRequestBytes } from './request-size';
+import { defaultColourway } from '$lib/theme/colourway';
+import { maximumAccountRequestBytes } from './request-size';
 
 let dataDirectory = '';
 
@@ -34,24 +35,37 @@ describe('account actions', () => {
 			password: 'member strong test password',
 			username: 'member'
 		});
+		const sudoSession = { ...sudo, colourway: defaultColourway };
+		const memberSession = { ...member, colourway: defaultColourway };
 		const { actions, load } = await import('../../routes/account/+page.server');
 		const usernameForm = new FormData();
 		usernameForm.set('username', 'renamed-member');
 
-		await expect(load({ locals: { user: member } } as never)).resolves.toMatchObject({
+		await expect(load({ locals: { user: memberSession } } as never)).resolves.toMatchObject({
 			canManageAccounts: false,
-			currentUser: member
+			currentUser: memberSession
 		});
-		await expect(load({ locals: { user: sudo } } as never)).resolves.toMatchObject({
+		await expect(load({ locals: { user: sudoSession } } as never)).resolves.toMatchObject({
 			canManageAccounts: true,
-			currentUser: sudo
+			currentUser: sudoSession
 		});
 		await expect(
 			actions.changeUsername({
-				locals: { user: member },
+				locals: { user: memberSession },
 				request: formRequest('http://localhost/account', usernameForm)
 			} as never)
 		).resolves.toEqual({ usernameUpdated: 'renamed-member' });
+
+		const colourwayForm = new FormData();
+		colourwayForm.set('colourway', 'violet');
+		const colourwayLocals = { user: { ...memberSession, username: 'renamed-member' } };
+		await expect(
+			actions.changeColourway({
+				locals: colourwayLocals,
+				request: formRequest('http://localhost/account', colourwayForm)
+			} as never)
+		).resolves.toEqual({ colourwayUpdated: 'violet' });
+		expect(colourwayLocals.user).toEqual({ colourway: 'violet', id: member.id, username: 'renamed-member' });
 
 		const passwordForm = new FormData();
 		passwordForm.set('currentPassword', 'member strong test password');
@@ -61,7 +75,7 @@ describe('account actions', () => {
 		await expect(
 			actions.changePassword({
 				cookies,
-				locals: { user: { id: member.id, username: 'renamed-member' } },
+				locals: { user: { colourway: 'violet', id: member.id, username: 'renamed-member' } },
 				request: formRequest('http://localhost/account', passwordForm),
 				url: new URL('http://localhost/account')
 			} as never)
@@ -76,14 +90,19 @@ describe('account actions', () => {
 			expect.any(String),
 			expect.objectContaining({ httpOnly: true, path: '/' })
 		);
+
+		const sessionId = await store.createSession(member.id);
+		await expect(store.refreshSession(sessionId)).resolves.toMatchObject({
+			user: { colourway: 'violet', id: member.id, username: 'renamed-member' }
+		});
 	});
 
 	it('rejects oversized self-service account requests before parsing them', async () => {
 		const store = await import('$lib/server/store');
-		const user = await store.createInitialSudo('sudo', 'a strong test password');
+		const user = { ...(await store.createInitialSudo('sudo', 'a strong test password')), colourway: defaultColourway };
 		const { actions } = await import('../../routes/account/+page.server');
 		const request = new Request('http://localhost/account', {
-			headers: { 'content-length': `${maximumCredentialRequestBytes + 1}` },
+			headers: { 'content-length': `${maximumAccountRequestBytes + 1}` },
 			method: 'POST'
 		});
 
@@ -94,6 +113,28 @@ describe('account actions', () => {
 		await expect(actions.changePassword({ locals: { user }, request } as never)).resolves.toMatchObject({
 			data: { passwordError: 'The password update request is too large.' },
 			status: 413
+		});
+		await expect(actions.changeColourway({ locals: { user }, request } as never)).resolves.toMatchObject({
+			data: { colourwayError: 'The colour update request is too large.' },
+			status: 413
+		});
+	});
+
+	it('rejects an unsupported colourway', async () => {
+		const store = await import('$lib/server/store');
+		const user = { ...(await store.createInitialSudo('sudo', 'a strong test password')), colourway: defaultColourway };
+		const { actions } = await import('../../routes/account/+page.server');
+		const formData = new FormData();
+		formData.set('colourway', 'unknown');
+
+		await expect(
+			actions.changeColourway({
+				locals: { user },
+				request: formRequest('http://localhost/account', formData)
+			} as never)
+		).resolves.toMatchObject({
+			data: { colourwayError: expect.any(String) },
+			status: 400
 		});
 	});
 

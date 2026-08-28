@@ -3,11 +3,25 @@
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
 	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
+	import ThemeModePicker from '$lib/components/ThemeModePicker.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
+	import { colourwayLabels, type Colourway } from '$lib/theme/colourway';
+	import { colourwayOptions } from '$lib/theme/palette';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let showPasswords = $state(false);
+	let selectedColourway = $state<Colourway | null>(null);
+	let previousSavedColourway = $state<Colourway | undefined>(undefined);
+	const previewColourway = $derived(selectedColourway ?? data.currentUser.colourway);
+
+	$effect(() => {
+		const savedColourway = data.currentUser.colourway;
+		if (savedColourway !== previousSavedColourway) {
+			selectedColourway = null;
+			previousSavedColourway = savedColourway;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -20,6 +34,77 @@
 	<header class="page-heading">
 		<PageTitle title="Account" />
 	</header>
+
+	<section aria-labelledby="appearance-heading">
+		<h2 id="appearance-heading">Appearance</h2>
+		<div class="appearance-theme">
+			<h3>Theme</h3>
+			<ThemeModePicker />
+		</div>
+
+		<form action="?/changeColourway" class="shiori-form appearance-form" method="POST">
+			<fieldset>
+				<legend>Colour</legend>
+				<div class="colourway-options">
+					{#each colourwayOptions as colourway (colourway.name)}
+						<label class:colourway-selected={previewColourway === colourway.name}>
+							<input
+								checked={previewColourway === colourway.name}
+								class="colourway-input"
+								name="colourway"
+								onchange={() => (selectedColourway = colourway.name)}
+								type="radio"
+								value={colourway.name}
+							/>
+							<span class="colourway-option">
+								<span aria-hidden="true" class="colourway-swatch" style:background-color={colourway.swatch}></span>
+								<span>{colourway.label}</span>
+							</span>
+						</label>
+					{/each}
+				</div>
+			</fieldset>
+
+			<div
+				aria-labelledby="colourway-preview-heading"
+				class="appearance-preview"
+				data-colourway={previewColourway}
+				role="group"
+			>
+				<div class="preview-heading">
+					<h3 id="colourway-preview-heading">Preview</h3>
+					<span>{colourwayLabels[previewColourway]}</span>
+				</div>
+				<div class="preview-card">
+					<div class="preview-item">
+						<span class="preview-time">09:30</span>
+						<div>
+							<strong>Train to Kyoto</strong>
+							<span>Reserved itinerary item</span>
+						</div>
+					</div>
+					<div class="preview-actions">
+						<button class="preview-primary" type="button">Save itinerary</button>
+						<button class="preview-secondary" type="button">Focus example</button>
+					</div>
+					<div aria-label="Itinerary item colours" class="preview-item-types" role="group">
+						<span class="transport">Transport</span>
+						<span class="accommodation">Stay</span>
+						<span class="activity">Activity</span>
+					</div>
+					<div aria-label="Status colours" class="preview-statuses" role="group">
+						<span class="success">Confirmed</span>
+						<span class="warning">Pending</span>
+						<span class="error">Cancelled</span>
+					</div>
+				</div>
+			</div>
+
+			{#if form?.colourwayError}<p class="error" role="alert">{form.colourwayError}</p>{/if}
+			{#if form?.colourwayUpdated}<p class="success" role="status">Colour updated.</p>{/if}
+			<button class="shiori-form-button" type="submit">Save colour</button>
+		</form>
+	</section>
 
 	<section aria-labelledby="username-heading">
 		<h2 id="username-heading">Username</h2>
@@ -104,12 +189,17 @@
 	}
 
 	h2,
+	h3,
 	p {
 		margin: 0;
 	}
 
 	h2 {
 		font-size: 1.125rem;
+	}
+
+	h3 {
+		font-size: 0.9375rem;
 	}
 
 	section {
@@ -126,6 +216,202 @@
 
 	.shiori-form {
 		margin-top: 0.75rem;
+	}
+
+	.appearance-theme,
+	.appearance-form {
+		border-top: 1px solid var(--color-border-subtle);
+		margin-top: 1rem;
+		padding-top: 1rem;
+	}
+
+	.appearance-theme :global(.theme-mode-picker) {
+		margin-top: 0.75rem;
+	}
+
+	fieldset {
+		border: 0;
+		margin: 0;
+		min-width: 0;
+		padding: 0;
+	}
+
+	legend {
+		font-size: 0.9375rem;
+		font-weight: 700;
+		padding: 0;
+	}
+
+	.colourway-options {
+		display: grid;
+		gap: 0.5rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin-top: 0.75rem;
+	}
+
+	.colourway-options label {
+		cursor: pointer;
+		position: relative;
+	}
+
+	.colourway-input {
+		height: 1px;
+		margin: -1px;
+		opacity: 0;
+		position: absolute;
+		width: 1px;
+	}
+
+	.colourway-option {
+		align-items: center;
+		background: var(--color-surface-raised);
+		border: 1px solid var(--color-border-default);
+		display: flex;
+		font-size: 0.875rem;
+		font-weight: 700;
+		gap: 0.5rem;
+		min-height: 2.875rem;
+		padding: 0.5rem 0.625rem;
+	}
+
+	.colourway-options label:hover .colourway-option {
+		background: var(--color-surface-subtle);
+		border-color: var(--color-border-strong);
+	}
+
+	.colourway-selected .colourway-option {
+		border-color: var(--color-state-selection);
+		box-shadow: inset 0 0 0 1px var(--color-state-selection);
+	}
+
+	.colourway-input:focus-visible + .colourway-option {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 2px;
+	}
+
+	.colourway-swatch {
+		border-radius: 50%;
+		height: 1rem;
+		width: 1rem;
+	}
+
+	.appearance-preview {
+		border: 1px solid var(--color-border-default);
+		margin-top: 0.25rem;
+		padding: 1rem;
+	}
+
+	.preview-heading {
+		align-items: baseline;
+		display: flex;
+		justify-content: space-between;
+	}
+
+	.preview-heading span {
+		color: var(--color-text-muted);
+		font-size: 0.8125rem;
+	}
+
+	.preview-card {
+		background: var(--color-surface-subtle);
+		border: 1px solid var(--color-border-default);
+		display: grid;
+		gap: 0.875rem;
+		margin-top: 0.75rem;
+		padding: 0.875rem;
+	}
+
+	.preview-item {
+		align-items: start;
+		border-left: 3px solid var(--color-item-type-transport);
+		display: flex;
+		gap: 0.75rem;
+		padding-left: 0.625rem;
+	}
+
+	.preview-time {
+		color: var(--color-item-type-transport);
+		font-size: 0.8125rem;
+		font-weight: 700;
+	}
+
+	.preview-item div {
+		display: grid;
+		gap: 0.125rem;
+	}
+
+	.preview-item div span {
+		color: var(--color-text-secondary);
+		font-size: 0.8125rem;
+	}
+
+	.preview-actions,
+	.preview-item-types,
+	.preview-statuses {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.preview-primary,
+	.preview-secondary {
+		appearance: none;
+		border: 1px solid var(--color-border-strong);
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 700;
+		min-height: 2.25rem;
+		padding: 0.375rem 0.625rem;
+	}
+
+	.preview-primary {
+		background: var(--color-state-selection);
+		border-color: var(--color-state-selection);
+		color: var(--color-text-on-accent);
+	}
+
+	.preview-secondary {
+		background: var(--color-surface-raised);
+		color: inherit;
+	}
+
+	.preview-primary:focus-visible,
+	.preview-secondary:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 2px;
+	}
+
+	.preview-item-types span,
+	.preview-statuses span {
+		border: 1px solid currentColor;
+		font-size: 0.75rem;
+		font-weight: 700;
+		padding: 0.25rem 0.375rem;
+	}
+
+	.transport {
+		color: var(--color-item-type-transport);
+	}
+
+	.accommodation {
+		color: var(--color-item-type-accommodation);
+	}
+
+	.activity {
+		color: var(--color-item-type-activity);
+	}
+
+	.preview-statuses .success {
+		color: var(--color-state-success);
+	}
+
+	.preview-statuses .warning {
+		color: var(--color-state-warning);
+	}
+
+	.preview-statuses .error {
+		color: var(--color-state-error);
 	}
 
 	.password-visibility {
@@ -160,5 +446,11 @@
 		border-color: var(--color-state-focus);
 		outline: 2px solid var(--color-state-focus);
 		outline-offset: 2px;
+	}
+
+	@media (max-width: 30rem) {
+		.colourway-options {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

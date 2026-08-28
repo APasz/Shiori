@@ -2,15 +2,15 @@ import { fail, redirect } from '@sveltejs/kit';
 import { ZodError } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 import { formDataText } from '$lib/server/form-data';
-import { hasBodySizeAtMost, maximumCredentialRequestBytes } from '$lib/server/request-size';
+import { hasBodySizeAtMost, maximumAccountRequestBytes } from '$lib/server/request-size';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
-import { changeOwnPassword, isSudoUser, updateOwnUsername } from '$lib/server/store/auth';
+import { changeOwnPassword, isSudoUser, updateOwnColourway, updateOwnUsername } from '$lib/server/store/auth';
 import { StoreError } from '$lib/server/store/error';
-import type { AuthenticatedUser } from '$lib/server/store/model';
+import type { AuthenticatedSessionUser } from '$lib/server/store/model';
 import { createSession } from '$lib/server/store/sessions';
 import { validationMessage } from '$lib/server/validation';
 
-function requireAccount(user: AuthenticatedUser | null): AuthenticatedUser {
+function requireAccount(user: AuthenticatedSessionUser | null): AuthenticatedSessionUser {
 	if (!user) {
 		redirect(303, '/login');
 	}
@@ -28,7 +28,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	changeUsername: async ({ locals, request }) => {
 		const currentUser = requireAccount(locals.user);
-		if (!hasBodySizeAtMost(request, maximumCredentialRequestBytes)) {
+		if (!hasBodySizeAtMost(request, maximumAccountRequestBytes)) {
 			return fail(413, { usernameError: 'The username update request is too large.' });
 		}
 
@@ -37,7 +37,7 @@ export const actions: Actions = {
 				userId: currentUser.id,
 				username: formDataText(await request.formData(), 'username')
 			});
-			locals.user = updatedUser;
+			locals.user = { ...currentUser, ...updatedUser };
 			return { usernameUpdated: updatedUser.username };
 		} catch (error: unknown) {
 			if (error instanceof StoreError) {
@@ -49,9 +49,32 @@ export const actions: Actions = {
 			throw error;
 		}
 	},
+	changeColourway: async ({ locals, request }) => {
+		const currentUser = requireAccount(locals.user);
+		if (!hasBodySizeAtMost(request, maximumAccountRequestBytes)) {
+			return fail(413, { colourwayError: 'The colour update request is too large.' });
+		}
+
+		try {
+			const colourway = await updateOwnColourway({
+				colourway: formDataText(await request.formData(), 'colourway'),
+				userId: currentUser.id
+			});
+			locals.user = { ...currentUser, colourway };
+			return { colourwayUpdated: colourway };
+		} catch (error: unknown) {
+			if (error instanceof StoreError) {
+				return fail(error.status, { colourwayError: error.message });
+			}
+			if (error instanceof ZodError) {
+				return fail(400, { colourwayError: validationMessage(error, 'Choose a valid colour.') });
+			}
+			throw error;
+		}
+	},
 	changePassword: async ({ cookies, locals, request, url }) => {
 		const currentUser = requireAccount(locals.user);
-		if (!hasBodySizeAtMost(request, maximumCredentialRequestBytes)) {
+		if (!hasBodySizeAtMost(request, maximumAccountRequestBytes)) {
 			return fail(413, { passwordError: 'The password update request is too large.' });
 		}
 		const formData = await request.formData();

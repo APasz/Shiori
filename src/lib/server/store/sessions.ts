@@ -2,18 +2,22 @@ import { randomUUID } from 'node:crypto';
 import { isSessionRefreshDue, sessionLifetimeMilliseconds } from '../session';
 import { assertSudo } from './auth';
 import { StoreError } from './error';
-import type { AuthenticatedUser } from './model';
+import type { AuthenticatedSessionUser, AuthenticatedUser, StoredUser } from './model';
 import { readData, sessionTransaction, transaction } from './persistence';
 import { futureTimestamp, isExpired } from './time';
 
 export type SessionRefresh = {
 	renewed: boolean;
-	user: AuthenticatedUser;
+	user: AuthenticatedSessionUser;
 };
 
 export type ActiveSessionUser = AuthenticatedUser & {
 	lastSeenAt: number;
 };
+
+function authenticatedSessionUser(user: StoredUser): AuthenticatedSessionUser {
+	return { colourway: user.colourway, id: user.id, username: user.username };
+}
 
 export async function createSession(userId: string): Promise<string> {
 	return transaction(
@@ -52,11 +56,11 @@ export async function refreshSession(sessionId: string | undefined): Promise<Ses
 		}
 
 		if (!isSessionRefreshDue(session.expiresAt)) {
-			return { changed: false, value: { renewed: false, user: { id: user.id, username: user.username } } };
+			return { changed: false, value: { renewed: false, user: authenticatedSessionUser(user) } };
 		}
 
 		session.expiresAt = futureTimestamp(sessionLifetimeMilliseconds);
-		return { changed: true, value: { renewed: true, user: { id: user.id, username: user.username } } };
+		return { changed: true, value: { renewed: true, user: authenticatedSessionUser(user) } };
 	});
 }
 
