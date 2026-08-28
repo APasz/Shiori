@@ -1,9 +1,10 @@
 import { runInNewContext } from 'node:vm';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	defaultThemeMode,
 	nextThemeMode,
 	resolveTheme,
+	subscribeToThemeMode,
 	themeFromStorageValue,
 	themeInitializationScriptContent
 } from './theme';
@@ -18,8 +19,21 @@ function initializedThemeDataset(storedMode: string | null, prefersLight: boolea
 	return dataset;
 }
 
+function stubThemeDocument(dataset: Record<string, string>): void {
+	vi.stubGlobal('document', {
+		addEventListener: vi.fn(),
+		documentElement: { dataset },
+		removeEventListener: vi.fn()
+	});
+}
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
+
 describe('theme preference', () => {
-	it('defaults to dark mode when no valid preference has been stored', () => {
+	it('defaults to automatic mode when no valid preference has been stored', () => {
+		expect(defaultThemeMode).toBe('system');
 		expect(themeFromStorageValue(null)).toBe(defaultThemeMode);
 		expect(themeFromStorageValue('invalid')).toBe(defaultThemeMode);
 	});
@@ -40,10 +54,11 @@ describe('theme preference', () => {
 
 	it('sets the resolved system theme before the page renders', () => {
 		expect(initializedThemeDataset('system', true)).toEqual({ theme: 'light', themeMode: 'system' });
-		expect(initializedThemeDataset(null, true)).toEqual({ theme: 'dark', themeMode: 'dark' });
+		expect(initializedThemeDataset(null, true)).toEqual({ theme: 'light', themeMode: 'system' });
+		expect(initializedThemeDataset(null, false)).toEqual({ theme: 'dark', themeMode: 'system' });
 	});
 
-	it('retains the dark default when browser storage is unavailable', () => {
+	it('retains the automatic default when browser storage is unavailable', () => {
 		const dataset: Record<string, string> = {};
 		runInNewContext(themeInitializationScriptContent, {
 			document: { documentElement: { dataset } },
@@ -54,6 +69,52 @@ describe('theme preference', () => {
 			},
 			window: { matchMedia: () => ({ matches: true }) }
 		});
-		expect(dataset).toEqual({ theme: 'dark', themeMode: 'dark' });
+		expect(dataset).toEqual({ theme: 'light', themeMode: 'system' });
+	});
+
+	it('falls automatic mode back to dark when the system preference is unavailable', () => {
+		const dataset: Record<string, string> = {};
+		runInNewContext(themeInitializationScriptContent, {
+			document: { documentElement: { dataset } },
+			localStorage: { getItem: () => null },
+			window: {}
+		});
+		expect(dataset).toEqual({ theme: 'dark', themeMode: 'system' });
+	});
+
+	it('notifies automatic-mode subscribers when the system theme changes', () => {
+		const systemThemeListeners = new Set<() => void>();
+		const systemThemeQuery = {
+			addEventListener: (_type: string, listener: () => void) => systemThemeListeners.add(listener),
+			matches: false,
+			removeEventListener: (_type: string, listener: () => void) => systemThemeListeners.delete(listener)
+		};
+		const dataset = { theme: 'dark', themeMode: 'system' };
+		stubThemeDocument(dataset);
+		vi.stubGlobal('window', { matchMedia: () => systemThemeQuery });
+		const listener = vi.fn();
+		const unsubscribe = subscribeToThemeMode(listener);
+
+		expect(listener).toHaveBeenLastCalledWith('system', 'dark');
+		systemThemeQuery.matches = true;
+		for (const systemThemeListener of systemThemeListeners) {
+			systemThemeListener();
+		}
+
+		expect(dataset.theme).toBe('light');
+		expect(listener).toHaveBeenLastCalledWith('system', 'light');
+		unsubscribe();
+	});
+
+	it('falls automatic-mode subscribers back to dark without matchMedia support', () => {
+		const dataset = { theme: 'light', themeMode: 'system' };
+		stubThemeDocument(dataset);
+		vi.stubGlobal('window', {});
+		const listener = vi.fn();
+		const unsubscribe = subscribeToThemeMode(listener);
+
+		expect(dataset.theme).toBe('dark');
+		expect(listener).toHaveBeenLastCalledWith('system', 'dark');
+		unsubscribe();
 	});
 });

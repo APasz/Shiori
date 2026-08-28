@@ -3,7 +3,7 @@ export type ThemeName = (typeof themeNames)[number];
 export const themeModes = ['dark', 'system', 'light'] as const;
 export type ThemeMode = (typeof themeModes)[number];
 
-export const defaultThemeMode: ThemeMode = 'dark';
+export const defaultThemeMode = 'system' as const satisfies ThemeMode;
 export const themeStorageKey = 'shiori:theme';
 export const themeModeChangeEvent = 'shiori:theme-mode-change';
 const systemThemeMediaQuery = '(prefers-color-scheme: light)';
@@ -13,8 +13,12 @@ function isThemeMode(value: unknown): value is ThemeMode {
 	return themeModes.some((mode) => mode === value);
 }
 
-function systemPrefersLight(): boolean {
-	return window.matchMedia(systemThemeMediaQuery).matches;
+function systemThemeQuery(): MediaQueryList | null {
+	return typeof window.matchMedia === 'function' ? window.matchMedia(systemThemeMediaQuery) : null;
+}
+
+function systemPrefersLight(query: MediaQueryList | null = systemThemeQuery()): boolean {
+	return query?.matches ?? false;
 }
 
 export function themeFromStorageValue(value: unknown): ThemeMode {
@@ -49,26 +53,34 @@ export function setDocumentThemeMode(mode: ThemeMode): void {
 	document.dispatchEvent(new Event(themeModeChangeEvent));
 }
 
-function synchronizeSystemTheme(): void {
+function synchronizeSystemTheme(query: MediaQueryList | null = systemThemeQuery()): boolean {
 	if (currentThemeMode() !== 'system') {
-		return;
+		return false;
 	}
 
-	setDocumentTheme(resolveTheme('system', systemPrefersLight()));
+	setDocumentTheme(resolveTheme('system', systemPrefersLight(query)));
+	return true;
 }
 
-export function subscribeToThemeMode(listener: (mode: ThemeMode) => void): () => void {
-	const systemThemeQuery = window.matchMedia(systemThemeMediaQuery);
-	const synchronizeThemeMode = () => listener(currentThemeMode());
-	const synchronizeSystemThemeOnChange = () => synchronizeSystemTheme();
+export function subscribeToThemeMode(listener: (mode: ThemeMode, theme: ThemeName) => void): () => void {
+	const query = systemThemeQuery();
+	const synchronizeThemeMode = () => {
+		const mode = currentThemeMode();
+		listener(mode, resolveTheme(mode, systemPrefersLight(query)));
+	};
+	const synchronizeSystemThemeOnChange = () => {
+		if (synchronizeSystemTheme(query)) {
+			synchronizeThemeMode();
+		}
+	};
 
-	synchronizeSystemTheme();
+	synchronizeSystemTheme(query);
 	synchronizeThemeMode();
 	document.addEventListener(themeModeChangeEvent, synchronizeThemeMode);
-	systemThemeQuery.addEventListener('change', synchronizeSystemThemeOnChange);
+	query?.addEventListener('change', synchronizeSystemThemeOnChange);
 	return () => {
 		document.removeEventListener(themeModeChangeEvent, synchronizeThemeMode);
-		systemThemeQuery.removeEventListener('change', synchronizeSystemThemeOnChange);
+		query?.removeEventListener('change', synchronizeSystemThemeOnChange);
 	};
 }
 

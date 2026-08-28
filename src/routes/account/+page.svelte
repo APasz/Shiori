@@ -208,6 +208,7 @@
 	main {
 		margin: 0 auto;
 		padding: 0 1rem clamp(2rem, 6vw, 5rem);
+		text-align: center;
 		width: min(100%, 42rem);
 	}
 
@@ -229,6 +230,7 @@
 		border-bottom: 1px solid var(--color-border-default);
 		display: flex;
 		gap: 0.125rem;
+		justify-content: center;
 		margin-top: 1.5rem;
 		overflow-x: auto;
 	}
@@ -295,6 +297,7 @@
 
 	.appearance-theme :global(.theme-mode-picker) {
 		margin-top: 0.75rem;
+		margin-inline: auto;
 	}
 
 	fieldset {
@@ -338,6 +341,7 @@
 		font-size: 0.875rem;
 		font-weight: 700;
 		gap: 0.5rem;
+		justify-content: center;
 		min-height: 2.875rem;
 		padding: 0.5rem 0.625rem;
 	}
@@ -487,6 +491,11 @@
 		display: flex;
 		gap: 0.5rem;
 		width: fit-content;
+		justify-self: center;
+	}
+
+	.shiori-form-button {
+		justify-self: center;
 	}
 
 	.error {
@@ -517,6 +526,10 @@
 	}
 
 	@media (max-width: 30rem) {
+		.account-tabs {
+			justify-content: flex-start;
+		}
+
 		.colourway-options {
 			grid-template-columns: 1fr;
 		}

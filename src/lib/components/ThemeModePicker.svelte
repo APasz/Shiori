@@ -1,17 +1,31 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { defaultThemeMode, setDocumentThemeMode, subscribeToThemeMode, type ThemeMode } from '$lib/theme/theme';
+	import {
+		defaultThemeMode,
+		setDocumentThemeMode,
+		subscribeToThemeMode,
+		type ThemeMode,
+		type ThemeName
+	} from '$lib/theme/theme';
 	import { themeModeOptions } from '$lib/theme/theme-mode-options';
 	import Icon from '$lib/visuals/Icon.svelte';
 
 	let themeMode = $state<ThemeMode>(defaultThemeMode);
+	let resolvedTheme = $state<ThemeName>('dark');
 
 	function selectThemeMode(mode: ThemeMode): void {
 		setDocumentThemeMode(mode);
 	}
 
+	function isResolvedSystemTheme(mode: ThemeMode): boolean {
+		return themeMode === 'system' && (mode === 'dark' || mode === 'light') && mode === resolvedTheme;
+	}
+
 	onMount(() => {
-		return subscribeToThemeMode((mode) => (themeMode = mode));
+		return subscribeToThemeMode((mode, theme) => {
+			themeMode = mode;
+			resolvedTheme = theme;
+		});
 	});
 </script>
 
@@ -20,6 +34,7 @@
 		<button
 			aria-pressed={themeMode === option.value}
 			class:active={themeMode === option.value}
+			class:system-theme-active={isResolvedSystemTheme(option.value)}
 			onclick={() => selectThemeMode(option.value)}
 			type="button"
 		>
@@ -36,7 +51,7 @@
 		max-width: 25rem;
 		overflow: hidden;
 		border: 1px solid var(--color-border-strong);
-		border-radius: 999px;
+		border-radius: 0;
 	}
 
 	button {
@@ -68,6 +83,13 @@
 	button.active {
 		background: var(--color-state-selection);
 		color: var(--color-text-on-accent);
+	}
+
+	button.system-theme-active {
+		outline: 1px solid var(--color-state-selection);
+		outline-offset: -1px;
+		position: relative;
+		z-index: 1;
 	}
 
 	button:focus-visible {
