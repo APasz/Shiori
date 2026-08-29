@@ -22,20 +22,22 @@ import {
 } from '$lib/itinerary/schema';
 import { transportJourneyScheduleSchema } from '$lib/itinerary/transport-schedule';
 
+const tripRevisionSchema = z.number().int().nonnegative();
+
 export const editLockResponseSchema = z.strictObject({
 	expiresAt: unixTimestampSchema,
-	revisionAtStart: z.number().int().nonnegative(),
+	revisionAtStart: tripRevisionSchema,
 	token: z.string().uuid()
 });
 
 export const editSaveRequestSchema = z.strictObject({
 	item: itineraryItemDraftSchema,
 	lockToken: z.string().uuid(),
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
 });
 
 export const editSaveResponseSchema = z.strictObject({
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
 });
 
 export const tripCreateRequestSchema = z.strictObject({
@@ -49,29 +51,33 @@ export const tripCreateResponseSchema = z.strictObject({
 
 export const tripDetailsSaveRequestSchema = z.strictObject({
 	details: tripDetailsSchema,
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
+});
+
+export const tripDeleteRequestSchema = z.strictObject({
+	revision: tripRevisionSchema
 });
 
 export const expenseSaveRequestSchema = z.strictObject({
 	expense: expenseSchema,
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
 });
 
 export const expenseDeleteRequestSchema = z.strictObject({
 	expenseId: itineraryIdentifierSchema,
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
 });
 
 export const noteSaveRequestSchema = z.strictObject({
 	note: itineraryNoteSchema,
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
 });
 
 export const noteTargetSchema = itineraryNoteTargetSchema;
 
 export const noteDeleteRequestSchema = z.strictObject({
 	target: noteTargetSchema,
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
 });
 
 export const currencyConversionRatesRequestSchema = z
@@ -98,19 +104,19 @@ export const currencyConversionRatesResponseSchema = z.strictObject({
 export const itemCreateRequestSchema = z.strictObject({
 	item: itineraryItemDraftSchema,
 	lockToken: z.string().uuid(),
-	revision: z.number().int().nonnegative()
+	revision: tripRevisionSchema
 });
 
 export const itemMutationRequestSchema = z.discriminatedUnion('action', [
 	z.strictObject({
 		action: z.literal('delete'),
 		itemId: itineraryIdentifierSchema,
-		revision: z.number().int().nonnegative()
+		revision: tripRevisionSchema
 	}),
 	z.strictObject({
 		action: z.literal('mark-cost-paid'),
 		itemId: itineraryIdentifierSchema,
-		revision: z.number().int().nonnegative()
+		revision: tripRevisionSchema
 	})
 ]);
 

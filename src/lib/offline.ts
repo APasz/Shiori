@@ -4,6 +4,7 @@ import {
 	type CacheTripPagesMessage,
 	type ClearTripPagesMessage,
 	type GetTripCacheStatusMessage,
+	type RemoveTripPagesMessage,
 	type TripCacheStatusResponse
 } from '$lib/offline-protocol';
 
@@ -202,6 +203,21 @@ export async function saveCurrentTripForOffline(): Promise<OfflineTripCacheStatu
 /** Refreshes the saved trip sections after a successful itinerary mutation. */
 export function refreshOfflineTripPage(): void {
 	void refreshCurrentSavedTrip();
+}
+
+/** Removes the current trip's saved offline pages after the trip is deleted. */
+export function removeCurrentTripOfflinePages(): void {
+	if (!browserSupportsOfflineTrips()) {
+		return;
+	}
+
+	const [url] = currentTripUrls();
+	if (!url) {
+		return;
+	}
+
+	const message: RemoveTripPagesMessage = { type: offlineMessageTypes.removeTripPages, url };
+	void activeWorker().then((worker) => worker?.postMessage(message));
 }
 
 /** Removes locally cached offline-viewer pages before ending the browser session. */

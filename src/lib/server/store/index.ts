@@ -48,6 +48,7 @@ export { createSession, destroySession, forceLogoutAllUsers, listActiveSessionUs
 export {
 	assertTripOwnerAccess,
 	createTrip,
+	deleteTrip,
 	exportTripBackup,
 	getTripView,
 	importTripBackup,

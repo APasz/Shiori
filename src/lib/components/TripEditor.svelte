@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
-	import { apiErrorSchema, editSaveResponseSchema, tripCreateResponseSchema } from '$lib/editing/contracts';
+	import {
+		apiErrorSchema,
+		editSaveResponseSchema,
+		tripCreateResponseSchema,
+		tripDeleteRequestSchema
+	} from '$lib/editing/contracts';
 	import { currencyCodeSchema, tripDetailsSchema, type CurrencyCode, type TripDetails } from '$lib/itinerary/schema';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
@@ -18,9 +23,9 @@
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import TimeZonePicker from './TimeZonePicker.svelte';
 
-	type EditorState = 'editing' | 'importing' | 'saving';
+	type EditorState = 'deleting' | 'editing' | 'importing' | 'saving';
 	type CreatedTripCompletion = { readonly kind: 'created'; readonly slug: string };
-	type SavedTripCompletion = { readonly kind: 'saved' };
+	type EditedTripCompletion = { readonly kind: 'deleted' } | { readonly kind: 'saved' };
 	type TripDetailsValidation =
 		{ readonly details: TripDetails; readonly valid: true } | { readonly error: string; readonly valid: false };
 	type CreateTripEditorProps = {
@@ -33,7 +38,7 @@
 		mode: 'edit';
 		trip: DetailedTripView;
 		onDismiss: () => void;
-		onCompleted: (completion: SavedTripCompletion) => Promise<void>;
+		onCompleted: (completion: EditedTripCompletion) => Promise<void>;
 	};
 	type TripEditorProps = CreateTripEditorProps | EditTripEditorProps;
 
@@ -233,6 +238,44 @@
 		}
 	}
 
+	async function deleteTrip(): Promise<void> {
+		if (props.mode !== 'edit' || editorState !== 'editing') {
+			return;
+		}
+
+		const trip = props.trip;
+		if (!window.confirm(`Delete “${trip.itinerary.title}”? This will remove its itinerary and all shared access.`)) {
+			return;
+		}
+
+		const payload = tripDeleteRequestSchema.safeParse({ revision: trip.revision });
+		if (!payload.success) {
+			errorMessage = 'The trip could not be deleted.';
+			return;
+		}
+
+		editorState = 'deleting';
+		errorMessage = '';
+		try {
+			const response = await fetch(`/api/trips/${encodeURIComponent(trip.id)}`, {
+				method: 'DELETE',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload.data)
+			});
+			const data = await responseData(response);
+			if (!response.ok) {
+				editorState = 'editing';
+				errorMessage = errorFrom(data, 'The trip could not be deleted.');
+				return;
+			}
+			brandIconFeedback.publish('success');
+			await props.onCompleted({ kind: 'deleted' });
+		} catch {
+			editorState = 'editing';
+			errorMessage = 'The trip could not be deleted because the server is unavailable.';
+		}
+	}
+
 	onMount(() => {
 		timeZoneOptions = browserTimeZoneOptions();
 		populateDraft();
@@ -262,11 +305,13 @@
 				>
 					{editorState === 'saving'
 						? 'Saving changes…'
-						: editorState === 'importing'
-							? 'Importing trip…'
-							: hasUnsavedChanges
-								? 'Unsaved changes'
-								: 'All changes saved'}
+						: editorState === 'deleting'
+							? 'Deleting trip…'
+							: editorState === 'importing'
+								? 'Importing trip…'
+								: hasUnsavedChanges
+									? 'Unsaved changes'
+									: 'All changes saved'}
 				</p>
 			</div>
 			<div class="editor-actions">
@@ -356,6 +401,22 @@
 			</section>
 		{/if}
 		{#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
+		{#if props.mode === 'edit'}
+			<section aria-labelledby="delete-trip-heading" class="delete-trip">
+				<div>
+					<h3 id="delete-trip-heading">Delete trip</h3>
+					<p>Remove this itinerary and its shared access.</p>
+				</div>
+				<button
+					class="delete-trip-button shiori-form-button"
+					disabled={editorState !== 'editing'}
+					onclick={() => void deleteTrip()}
+					type="button"
+				>
+					{editorState === 'deleting' ? 'Deleting trip…' : 'Delete trip'}
+				</button>
+			</section>
+		{/if}
 	</form>
 </dialog>
 
@@ -443,6 +504,41 @@
 		padding-top: 1rem;
 	}
 
+	.delete-trip {
+		border-top: 1px solid var(--color-border-default);
+		display: flex;
+		gap: 0.75rem;
+		justify-content: space-between;
+		margin-top: 1.5rem;
+		padding-top: 1rem;
+	}
+
+	.delete-trip h3,
+	.delete-trip p {
+		margin: 0;
+	}
+
+	.delete-trip h3 {
+		font-size: 0.9375rem;
+	}
+
+	.delete-trip p {
+		color: var(--color-text-secondary);
+		font-size: 0.8125rem;
+		line-height: 1.4;
+		margin-top: 0.25rem;
+	}
+
+	.delete-trip-button {
+		border-color: var(--color-state-error);
+		color: var(--color-state-error);
+		flex-shrink: 0;
+	}
+
+	.delete-trip-button:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--color-state-error) 11%, transparent);
+	}
+
 	.backup-import h3,
 	.backup-import p {
 		margin: 0;
@@ -488,6 +584,11 @@
 
 		.editor-actions {
 			justify-content: end;
+		}
+
+		.delete-trip {
+			align-items: start;
+			flex-direction: column;
 		}
 	}
 </style>

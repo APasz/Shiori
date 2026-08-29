@@ -1010,6 +1010,41 @@ describe('JSON store', () => {
 		expect(updated?.itinerary.title).toBe('Autumn in Montréal');
 	});
 
+	it('deletes a sudo-owned trip and its shared access', async () => {
+		const store = await import('./store');
+		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
+		const person = await store.createAccount({
+			actorId: sudo.id,
+			password: 'another strong test password',
+			username: 'person'
+		});
+		const trip = await createTestTrip(store, sudo.id);
+		await store.setTripMemberAccess({ actorId: sudo.id, role: 'user', tripId: trip.id, userId: person.id });
+
+		await expect(
+			store.deleteTrip({ revision: trip.revision, tripId: trip.id, userId: person.id })
+		).rejects.toMatchObject({ status: 403 });
+		await expect(
+			store.deleteTrip({ revision: trip.revision + 1, tripId: trip.id, userId: sudo.id })
+		).rejects.toMatchObject({ status: 409 });
+
+		const lock = await store.acquireTripStructureLock({ tripId: trip.id, userId: sudo.id });
+		await expect(store.deleteTrip({ revision: trip.revision, tripId: trip.id, userId: sudo.id })).rejects.toMatchObject(
+			{ status: 423 }
+		);
+		await store.releaseTripStructureLock({ lockToken: lock.token, tripId: trip.id, userId: sudo.id });
+
+		await expect(
+			store.deleteTrip({ revision: trip.revision, tripId: trip.id, userId: sudo.id })
+		).resolves.toBeUndefined();
+		await expect(store.getTripView(trip.slug, sudo)).resolves.toBeNull();
+		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
+		await expect(store.listTripSwitchOptions(sudo.id)).resolves.toEqual([]);
+		await expect(store.listTripSwitchOptions(person.id)).resolves.toEqual([]);
+		await expect(readFile(managedTripPath(trip.slug), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+		expect(JSON.parse(await readFile(managedDataPath('shares.json'), 'utf8'))).toMatchObject({ shares: [] });
+	});
+
 	it('creates, updates, and deletes free-form expenses', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');

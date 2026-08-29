@@ -206,6 +206,26 @@ export async function createTrip(input: { actorId: string; details: unknown }): 
 	);
 }
 
+/** Deletes a sudo-owned trip together with every account-specific access record for it. */
+export async function deleteTrip(input: { revision: number; tripId: string; userId: string }): Promise<void> {
+	await transaction(
+		(data) => {
+			assertSudo(data, input.userId);
+			const trip = getTripForMutation(data, input.tripId, input.userId);
+			assertExpectedRevision(trip, input.revision);
+			assertNoActiveEditLock(data, trip);
+			data.trips = data.trips.filter((candidate) => candidate.id !== trip.id);
+			data.shares = data.shares.filter((share) => share.tripId !== trip.id);
+			return { slug: trip.slug };
+		},
+		{
+			deletedTripSlugs: (deletedTrip) => [deletedTrip.slug],
+			global: ['shares'],
+			tripIds: []
+		}
+	);
+}
+
 /** Returns a complete backup only to the sole sudo user, never to shared users or visitors. */
 export async function exportTripBackup(input: { tripId: string; userId: string }): Promise<TripBackup> {
 	const data = await readData();

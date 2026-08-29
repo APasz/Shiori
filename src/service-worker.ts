@@ -122,6 +122,24 @@ function isGetTripCacheStatusMessage(value: unknown): value is GetTripCacheStatu
 	return message.type === offlineMessageTypes.getTripCacheStatus && typeof message.url === 'string';
 }
 
+function removedTripPagesRootUrl(value: unknown): URL | null {
+	if (typeof value !== 'object' || value === null) {
+		return null;
+	}
+
+	const message = value as { readonly type?: unknown; readonly url?: unknown };
+	if (message.type !== offlineMessageTypes.removeTripPages || typeof message.url !== 'string') {
+		return null;
+	}
+
+	try {
+		const url = new URL(message.url, worker.location.origin);
+		return url.origin === worker.location.origin ? tripRootUrl(url) : null;
+	} catch {
+		return null;
+	}
+}
+
 function responseIsCacheableOfflineResource(request: Request, response: Response): boolean {
 	return response.ok && !response.redirected && isOfflineViewerResource(new URL(request.url));
 }
@@ -267,6 +285,20 @@ async function clearOfflineTripPages(): Promise<void> {
 	viewerIdsByClientId.clear();
 }
 
+async function removeOfflineTripPages(viewerId: string, rootUrl: URL): Promise<void> {
+	const cache = await caches.open(offlineViewerCacheName(viewerId));
+	const requests = await cache.keys();
+	await Promise.all(
+		requests
+			.filter((request) => {
+				const url = new URL(request.url);
+				return isHomePage(url) || isHomeDataRequest(url) || tripRootUrl(url)?.pathname === rootUrl.pathname;
+			})
+			.map((request) => cache.delete(request))
+	);
+	await cache.delete(tripCacheStatusRequest(rootUrl));
+}
+
 async function migrateLegacyOfflineCaches(): Promise<void> {
 	const cacheNames = await caches.keys();
 	await Promise.all(
@@ -374,6 +406,16 @@ worker.addEventListener('activate', (event) => {
 worker.addEventListener('message', (event) => {
 	if (isClearTripPagesMessage(event.data)) {
 		event.waitUntil(clearOfflineTripPages());
+		return;
+	}
+
+	const removedTripRootUrl = removedTripPagesRootUrl(event.data);
+	if (removedTripRootUrl) {
+		event.waitUntil(
+			viewerIdForMessage(event)
+				.then((viewerId) => (viewerId ? removeOfflineTripPages(viewerId, removedTripRootUrl) : undefined))
+				.catch(() => undefined)
+		);
 		return;
 	}
 

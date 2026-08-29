@@ -53,7 +53,7 @@ never changed.
 
 The homepage lists every trip available to the signed-in account. The sole sudo user also sees a
 New trip item for creating an empty private trip. New trips receive a readable URL at
-`/trips/<trip-name>`, are owned by that sudo account, and can be edited from an itinerary page’s
+`/trips/<trip-name>`, are owned by that sudo account, and can be edited or deleted from an itinerary page’s
 top-right overflow menu. The homepage shows empty trips first, then planned trips ordered by their
 latest item start.
 
@@ -64,7 +64,7 @@ that browser profile; the same control reports when the copy is ready and can up
 sign-in, imports, backups, exchange rates, and Google enrichments still require a connection.
 
 Offline copies may contain the details visible to the signed-in user, so sign out when using a shared
-device. Shiori clears saved itineraries when the user signs out. Browser storage can also be cleared
+device. Shiori clears saved itineraries when the user signs out or deletes the trip from that browser. Browser storage can also be cleared
 by the user or, when persistent storage is not granted, under device storage pressure. A saved trip
 retains the application files it needs when Shiori is updated, but it should still be opened and
 updated before travelling.

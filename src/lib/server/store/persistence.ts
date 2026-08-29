@@ -72,10 +72,12 @@ type SessionTransactionResult<Result> = {
 	value: Result;
 };
 type DataWriteScope<Result> = {
+	deletedTripSlugs?: readonly string[] | ((result: Result) => readonly string[]);
 	global: readonly GlobalDataDomain[];
 	tripIds: 'all' | readonly string[] | ((result: Result) => readonly string[]);
 };
 type ResolvedDataWriteScope = {
+	deletedTripSlugs: readonly string[];
 	global: readonly GlobalDataDomain[];
 	tripIds: 'all' | readonly string[];
 };
@@ -99,7 +101,11 @@ const allGlobalDataDomains = [
 	'sessions',
 	'editLocks'
 ] as const satisfies readonly GlobalDataDomain[];
-const allDataWriteScope: ResolvedDataWriteScope = { global: allGlobalDataDomains, tripIds: 'all' };
+const allDataWriteScope: ResolvedDataWriteScope = {
+	deletedTripSlugs: [],
+	global: allGlobalDataDomains,
+	tripIds: 'all'
+};
 
 function defaultData(): StoredData {
 	return {
@@ -323,6 +329,12 @@ async function writeManagedJsonFile(filePath: string, data: unknown, preserveExi
 	await writeDurableFile(filePath, `${JSON.stringify(data, null, jsonIndentation)}\n`);
 }
 
+async function deleteManagedTripFile(slug: string): Promise<void> {
+	const filePath = managedTripDataPath(slug);
+	await unlink(filePath);
+	await synchronizeDirectory(dirname(filePath));
+}
+
 function tripForWrite(data: StoredData, tripId: string): StoredTrip {
 	const trip = data.trips.find((candidate) => candidate.id === tripId);
 	if (!trip) {
@@ -355,6 +367,10 @@ async function writeData(
 		: globalDomains;
 	const trips =
 		scope.tripIds === 'all' ? validated.trips : scope.tripIds.map((tripId) => tripForWrite(validated, tripId));
+	const deletedTripSlugs = [...new Set(scope.deletedTripSlugs)];
+	if (trips.some((trip) => deletedTripSlugs.includes(trip.slug))) {
+		throw new Error('A trip cannot be written and deleted in the same transaction.');
+	}
 	const writeResults = await Promise.allSettled([
 		...remainingGlobalDomains.map((domain) => {
 			const file = globalDataFiles[domain];
@@ -372,6 +388,7 @@ async function writeData(
 			throw result.reason;
 		}
 	}
+	await Promise.all(deletedTripSlugs.map((slug) => deleteManagedTripFile(slug)));
 	return validated;
 }
 
@@ -405,7 +422,7 @@ async function initializePersistedData(): Promise<void> {
 	replaceCachedData(
 		await writeData(
 			data,
-			migrationRequired ? allDataWriteScope : { global: [...globalDomains], tripIds: [] },
+			migrationRequired ? allDataWriteScope : { deletedTripSlugs: [], global: [...globalDomains], tripIds: [] },
 			sudoPasswordResetConsumed
 				? {
 						// Do not make a new sudo password usable while an old sudo session could survive an I/O failure.
@@ -467,6 +484,10 @@ export async function transaction<Result>(
 		}
 		try {
 			const validated = await writeData(data, {
+				deletedTripSlugs:
+					typeof scope.deletedTripSlugs === 'function'
+						? scope.deletedTripSlugs(result)
+						: (scope.deletedTripSlugs ?? []),
 				global: [...globalDomains],
 				tripIds: typeof scope.tripIds === 'function' ? scope.tripIds(result) : scope.tripIds
 			});

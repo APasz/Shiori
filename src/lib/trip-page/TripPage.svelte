@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { browserPages, browserTitle } from '$lib/browser-title';
 	import ItineraryExporter from '$lib/components/ItineraryExporter.svelte';
 	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
@@ -8,6 +9,7 @@
 	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import TripEditor from '$lib/components/TripEditor.svelte';
+	import { removeCurrentTripOfflinePages } from '$lib/offline';
 	import type { ItineraryItem, ItineraryNoteTarget } from '$lib/itinerary/schema';
 	import { onMount } from 'svelte';
 	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
@@ -64,8 +66,13 @@
 		await refreshTripPage();
 	}
 
-	async function finishTripEditing(): Promise<void> {
+	async function finishTripEditing(completion: { readonly kind: 'deleted' | 'saved' }): Promise<void> {
 		editingTrip = false;
+		if (completion.kind === 'deleted') {
+			removeCurrentTripOfflinePages();
+			await goto(resolve('/'));
+			return;
+		}
 		await refreshTripPage();
 	}
 
