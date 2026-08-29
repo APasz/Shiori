@@ -589,7 +589,7 @@
 					</tbody>
 				</table>
 			</div>
-			{#if !data.trip.canEdit}<p class="table-note">Only the trip owner can add or edit expenses.</p>{/if}
+			{#if !data.trip.canEdit}<p class="table-note">Only the sudo user can add or edit expenses.</p>{/if}
 		</section>
 	</div>
 </main>

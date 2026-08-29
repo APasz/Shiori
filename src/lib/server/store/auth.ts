@@ -8,7 +8,6 @@ import {
 	storedUserSchema,
 	usernameIdentityKey,
 	usernameSchema,
-	type AccountManagementEntry,
 	type AuthenticatedUser,
 	type StoredData,
 	type StoredUser
@@ -200,13 +199,10 @@ export async function listAccounts(actorId: string): Promise<AuthenticatedUser[]
 	return data.users.map(authenticatedUser).sort((left, right) => left.username.localeCompare(right.username));
 }
 
-export async function listAccountsForManagement(actorId: string): Promise<AccountManagementEntry[]> {
+export async function listAccountsForManagement(actorId: string): Promise<AuthenticatedUser[]> {
 	const data = await readData();
 	assertSudo(data, actorId);
-	const ownerIds = new Set(data.trips.map((trip) => trip.ownerId));
-	return data.users
-		.map((user) => ({ ...authenticatedUser(user), ownsTrip: ownerIds.has(user.id) }))
-		.sort((left, right) => left.username.localeCompare(right.username));
+	return data.users.map(authenticatedUser).sort((left, right) => left.username.localeCompare(right.username));
 }
 
 export async function resetAccountPassword(input: {
@@ -238,10 +234,6 @@ export async function deleteAccount(input: { actorId: string; userId: string }):
 			if (user.isSudo) {
 				throw new StoreError(409, 'The sudo account cannot be deleted.');
 			}
-			if (data.trips.some((trip) => trip.ownerId === user.id)) {
-				throw new StoreError(409, 'Trip owners cannot be deleted.');
-			}
-
 			data.users = data.users.filter((candidate) => candidate.id !== user.id);
 			data.shares = data.shares.filter((share) => share.userId !== user.id);
 			data.sessions = data.sessions.filter((session) => session.userId !== user.id);

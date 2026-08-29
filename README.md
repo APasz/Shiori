@@ -51,10 +51,11 @@ corner to stage and apply the viewer's current local date, time, and IANA time z
 only client-side presentation and defaults for newly created items; stored Unix timestamps are
 never changed.
 
-The homepage lists every trip available to the signed-in account and includes a New trip item for
-creating an empty private trip. New trips receive a readable URL at `/trips/<trip-name>` and owners
-can use an itinerary page’s top-right overflow menu to edit their name and default time zone. The
-homepage shows empty trips first, then planned trips ordered by their latest item start.
+The homepage lists every trip available to the signed-in account. The sole sudo user also sees a
+New trip item for creating an empty private trip. New trips receive a readable URL at
+`/trips/<trip-name>`, are owned by that sudo account, and can be edited from an itinerary page’s
+top-right overflow menu. The homepage shows empty trips first, then planned trips ordered by their
+latest item start.
 
 Shiori can be installed as a read-only offline viewer on Android. Deploy it over HTTPS, open Shiori
 in Chrome, then choose **Install app** from Chrome's menu. While connected, open a trip and select
@@ -336,18 +337,20 @@ service matches the intended one. Successful Routes results are kept in a bounde
 minutes; duplicate requests are coalesced and a `429` response is retried once after `Retry-After`.
 
 Accounts are global and do not receive access to a private trip by default. The initial setup account
-is the one global sudo user: only it can create or manage accounts, list active sessions, or force a
-global logout. Signed-in users can change their own username and password and save a curated colourway
-at `/account`; password changes sign out their other active sessions. A trip owner can still manage access
-to that trip, but owning a trip does not grant global sudo privileges. A colourway follows its account
+is the one global sudo user: only it can create or manage accounts, create or restore trips, list active
+sessions, or force a global logout. It owns every trip and is the only account that can edit a trip or
+manage its access. Signed-in users can change their own username and password and save a curated colourway
+at `/account`; password changes sign out their other active sessions. A colourway follows its account
 across devices; dark, automatic, and light mode remain a per-device preference and default to dark on a
-new device. The sudo user can use the Administration tab on `/account` to create accounts, then use `/settings/access` to grant read-only `user` or `admin`
-access to a specific trip or enable its public visitor schedule. Passwords are hashed with Node's
+new device. The sudo user can use the Administration tab on `/account` to create accounts, then use
+`/settings/access` to grant read-only `user` or `admin` access to a specific trip or enable its public
+visitor schedule. Passwords are hashed with Node's
 `scrypt`; sessions are stored server-side and issued in HTTP-only cookies. Sessions expire after
 seven days without a persisted renewal; active sessions renew at most once every nine hours, so
 their effective idle timeout can be up to nine hours shorter than the browser's most recent request.
 When upgrading existing data, Shiori promotes the earliest-created account (breaking timestamp ties
-by account ID) to the sole global sudo user.
+by account ID) to the sole global sudo user and transfers every existing trip to it. A former trip
+owner retains read-only `admin` access to the transferred trip.
 
 If the sudo account password is lost, a server administrator can reset it without exposing a public
 recovery endpoint. Stop Shiori, use `sudoedit` to change that account's `passwordHash` in
@@ -371,8 +374,8 @@ normal details, while documents, reservations, transport seat assignments, and p
 withheld until `admin` or `sudo` access. This visibility policy is centralized in
 `src/lib/itinerary/access.ts`.
 
-Each trip has a local currency, selected by its trip owner in **Edit trip** (new and legacy trips
-default to AUD). A trip owner can add one cost to an itinerary item in the charged currency, leave
+Each trip has a local currency, selected by the sudo user in **Edit trip** (new and legacy trips
+default to AUD). The sudo user can add one cost to an itinerary item in the charged currency, leave
 it unpaid, set an optional scheduled payment date, or mark it paid. Costs are visible only to
 `admin` and `sudo` accounts. When a cost is marked paid, Shiori retains the original amount and
 records the paid timestamp, local-currency minor-unit amount, direct conversion rate, and date of
@@ -382,7 +385,7 @@ uses the latest shared reference rate published on or before the UTC payment dat
 trip's local currency affects later payments only; previous snapshots continue to show their
 original saved currency.
 
-The trip owner can add, edit, and delete itinerary items from the itinerary page. New items begin
+The sudo user can add, edit, and delete itinerary items from the itinerary page. New items begin
 with an import-first dialog: Google Maps place and directions links, selected Google Flights links,
 and Google Hotels search or property links prefill the fields that can be parsed safely. Hotels imports create an
 accommodation item from the destination or selected property and the link's check-in/check-out dates. Property
@@ -399,5 +402,5 @@ confirmation. The final transport schedule and save step remains in the shared e
 time must still be confirmed before saving. Advanced changes remain available in the shared editor after any
 item is created. Items are ordered and grouped by their timestamps in each viewer's local calendar.
 Edits use one trip-wide lock, so changes cannot race with an open editor. Persisted edit locks are cleared
-when a server process starts; the trip owner can also force close an active edit session from the Access
+when a server process starts; the sudo user can also force close an active edit session from the Access
 page when a browser session has become stuck.

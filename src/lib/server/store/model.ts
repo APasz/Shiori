@@ -14,7 +14,8 @@ export const preAccessBlockStoredDataVersion = 12;
 export const preSudoStoredDataVersion = 13;
 export const preAppearanceStoredDataVersion = 14;
 export const preFormatPreferencesStoredDataVersion = 15;
-export const storedDataVersion = 16;
+export const preSudoOwnedTripsStoredDataVersion = 16;
+export const storedDataVersion = 17;
 export const tripStructureLockTargetId = 'trip-structure';
 
 export const usernameSchema = z
@@ -72,6 +73,7 @@ const supportedStoredDataVersionSchema = z.union([
 	z.literal(preSudoStoredDataVersion),
 	z.literal(preAppearanceStoredDataVersion),
 	z.literal(preFormatPreferencesStoredDataVersion),
+	z.literal(preSudoOwnedTripsStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 
@@ -159,6 +161,7 @@ export const storedDataSchema = z
 		const userIds = new Set<string>();
 		const usernames = new Set<string>();
 		let sudoCount = 0;
+		let sudoUserId: string | undefined;
 		for (const [index, user] of data.users.entries()) {
 			if (userIds.has(user.id)) {
 				context.addIssue({
@@ -180,6 +183,7 @@ export const storedDataSchema = z
 			usernames.add(username);
 			if (user.isSudo) {
 				sudoCount += 1;
+				sudoUserId = user.id;
 			}
 		}
 		if (data.users.length > 0 && sudoCount !== 1) {
@@ -189,6 +193,7 @@ export const storedDataSchema = z
 				message: 'Exactly one account must be the sudo user.'
 			});
 		}
+		const hasSoleSudoUser = data.users.length > 0 && sudoCount === 1 && sudoUserId !== undefined;
 
 		const tripIds = new Set<string>();
 		const tripSlugs = new Set<string>();
@@ -216,6 +221,13 @@ export const storedDataSchema = z
 					code: 'custom',
 					path: ['trips', index, 'ownerId'],
 					message: 'A trip owner must reference an existing user.'
+				});
+			}
+			if (hasSoleSudoUser && trip.ownerId !== sudoUserId) {
+				context.addIssue({
+					code: 'custom',
+					path: ['trips', index, 'ownerId'],
+					message: 'Every trip must be owned by the sole sudo user.'
 				});
 			}
 		}
@@ -337,6 +349,5 @@ export type StoredUser = z.infer<typeof storedUserSchema>;
 export type StoredEditLock = z.infer<typeof storedEditLockSchema>;
 export type AuthenticatedUser = Pick<StoredUser, 'id' | 'username'>;
 export type AuthenticatedSessionUser = AuthenticatedUser & Pick<StoredUser, 'colourway' | 'formatPreferences'>;
-export type AccountManagementEntry = AuthenticatedUser & { ownsTrip: boolean };
 export type ShareRole = z.infer<typeof shareRoleSchema>;
 export type TripMemberRole = z.infer<typeof tripMemberRoleSchema>;

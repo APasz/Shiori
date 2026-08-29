@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
-	import type { AccountManagementEntry, AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
+	import type { AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
 	import type { OwnedTripOption } from '$lib/server/store/views';
 	import Icon from '$lib/visuals/Icon.svelte';
 
-	type ManagedAccount = AccountManagementEntry & { role: TripMemberRole | 'sudo' };
+	type ManagedAccount = AuthenticatedUser & { role: TripMemberRole | 'sudo' };
 	type AccountAdministrationForm = {
 		accountDeleted?: boolean;
 		accountDeletionError?: string;
@@ -80,7 +80,7 @@
 				<p>
 					{selectedTrip
 						? 'Access levels apply to the selected trip only.'
-						: 'You can manage global accounts, but trip access is managed by each trip owner.'}
+						: 'You can manage global accounts and trip access from this screen.'}
 				</p>
 			</div>
 			{#if selectedTrip}
@@ -152,17 +152,15 @@
 										<button class="shiori-form-button" form={`reset-password-${account.id}`} type="submit">
 											Reset password
 										</button>
-										{#if !account.ownsTrip}
-											<form
-												class="delete-account-form"
-												action={actionUrl('deleteAccount')}
-												method="POST"
-												onsubmit={(event) => confirmAccountDeletion(event, account.username)}
-											>
-												<input name="userId" type="hidden" value={account.id} />
-												<button class="delete-account-button" type="submit">Delete user</button>
-											</form>
-										{/if}
+										<form
+											class="delete-account-form"
+											action={actionUrl('deleteAccount')}
+											method="POST"
+											onsubmit={(event) => confirmAccountDeletion(event, account.username)}
+										>
+											<input name="userId" type="hidden" value={account.id} />
+											<button class="delete-account-button" type="submit">Delete user</button>
+										</form>
 									</div>
 								</div>
 							</details>
@@ -205,7 +203,7 @@
 		<p class="access-note">
 			{selectedTrip
 				? 'New accounts have no private-trip access until you assign it using the list above.'
-				: 'New accounts have no private-trip access until a trip owner grants it.'}
+				: 'New accounts have no private-trip access until you grant it.'}
 		</p>
 	</section>
 </div>

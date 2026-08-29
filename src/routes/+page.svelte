@@ -11,7 +11,7 @@
 	let { data }: { data: PageData } = $props();
 	let creatingTrip = $state(false);
 	const connectivity = new ConnectivityMonitor();
-	const canCreateTrip = $derived(connectivity.status === 'reachable');
+	const canCreateTrip = $derived(data.canManageAccounts && connectivity.status === 'reachable');
 
 	function beginTripCreation(): void {
 		if (canCreateTrip) {

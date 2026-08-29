@@ -81,7 +81,7 @@ export async function grantTripAccess(input: {
 				throw new StoreError(404, 'No account was found for that username.');
 			}
 			if (user.id === trip.ownerId) {
-				throw new StoreError(409, 'The trip owner already has access.');
+				throw new StoreError(409, 'The sudo user already has access.');
 			}
 			if (data.shares.some((share) => share.tripId === trip.id && share.userId === user.id)) {
 				throw new StoreError(409, 'That person already has access to this trip.');
@@ -130,7 +130,7 @@ export async function setTripMemberAccess(input: {
 				throw new StoreError(404, 'Account not found.');
 			}
 			if (user.id === trip.ownerId) {
-				throw new StoreError(403, 'The trip owner’s access cannot be changed.');
+				throw new StoreError(403, 'The sudo user’s access cannot be changed.');
 			}
 
 			const shareIndex = data.shares.findIndex((share) => share.tripId === trip.id && share.userId === input.userId);

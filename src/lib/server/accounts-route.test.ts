@@ -56,8 +56,8 @@ describe('account actions', () => {
 		expect(sudoAccountPage).toMatchObject({
 			administration: {
 				accounts: [
-					{ id: member.id, ownsTrip: false, role: 'none', username: member.username },
-					{ id: sudo.id, ownsTrip: false, role: 'none', username: sudo.username }
+					{ id: member.id, role: 'none', username: member.username },
+					{ id: sudo.id, role: 'none', username: sudo.username }
 				],
 				selectedTrip: null,
 				trips: []
@@ -184,7 +184,7 @@ describe('account actions', () => {
 	it('rejects oversized administration account requests before parsing them', async () => {
 		const store = await import('$lib/server/store');
 		const owner = await store.createInitialSudo('sudo', 'a strong test password');
-		const trip = await store.createTrip({ details: { title: 'Test trip', timeZone: 'UTC' }, ownerId: owner.id });
+		const trip = await store.createTrip({ actorId: owner.id, details: { title: 'Test trip', timeZone: 'UTC' } });
 		const { actions } = await import('../../routes/account/+page.server');
 		const oversizedRequest = (): Request =>
 			new Request('http://localhost/account', {
@@ -270,7 +270,7 @@ describe('account actions', () => {
 	it('creates an account through its named action', async () => {
 		const store = await import('$lib/server/store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
-		await store.createTrip({ details: { title: 'Test trip', timeZone: 'UTC' }, ownerId: owner.id });
+		await store.createTrip({ actorId: owner.id, details: { title: 'Test trip', timeZone: 'UTC' } });
 		const { actions } = await import('../../routes/account/+page.server');
 		const formData = new FormData();
 		formData.set('username', 'member');

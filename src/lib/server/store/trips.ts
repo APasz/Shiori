@@ -3,6 +3,7 @@ import { projectDetailedItinerary, projectPublicItinerary, type TripAccessRole }
 import { itinerarySchema, tripDetailsSchema, type Itinerary } from '$lib/itinerary/schema';
 import { createTripBackup, tripBackupSchema, type TripBackup } from '$lib/trip-backup';
 import { timingStartTimestamp } from '$lib/itinerary/timing';
+import { assertSudo } from './auth';
 import { StoreError } from './error';
 import type { AuthenticatedUser, StoredData, StoredTrip, TripMemberRole } from './model';
 import { readData, transaction } from './persistence';
@@ -23,7 +24,7 @@ export function requireTripById(data: StoredData, tripId: string): StoredTrip {
 
 export function assertTripOwner(trip: StoredTrip, userId: string): void {
 	if (trip.ownerId !== userId) {
-		throw new StoreError(403, 'Only the trip owner can edit this trip.');
+		throw new StoreError(403, 'Only the sudo user can edit this trip.');
 	}
 }
 
@@ -106,19 +107,12 @@ function uniqueTripSlug(trips: StoredTrip[], title: string): string {
 	}
 }
 
-function assertTripOwnerExists(data: StoredData, ownerId: string): void {
-	if (!data.users.some((user) => user.id === ownerId)) {
-		throw new StoreError(401, 'The signed-in account no longer exists.');
-	}
-}
-
-function addTrip(data: StoredData, ownerId: string, itinerary: Itinerary): TripReference {
-	assertTripOwnerExists(data, ownerId);
+function addTrip(data: StoredData, sudoUserId: string, itinerary: Itinerary): TripReference {
 	const createdAt = timestamp();
 	const trip: StoredTrip = {
 		id: randomUUID(),
 		slug: uniqueTripSlug(data.trips, itinerary.title),
-		ownerId,
+		ownerId: sudoUserId,
 		isPublic: false,
 		revision: 0,
 		itinerary,
@@ -197,29 +191,41 @@ export async function getTripView(slug: string, user: AuthenticatedUser | null):
 	};
 }
 
-export async function createTrip(input: { details: unknown; ownerId: string }): Promise<TripReference> {
+export async function createTrip(input: { actorId: string; details: unknown }): Promise<TripReference> {
 	const details = tripDetailsSchema.parse(input.details);
 
-	return transaction((data) => addTrip(data, input.ownerId, { ...details, expenses: [], items: [], notes: [] }), {
-		global: [],
-		tripIds: (trip) => [trip.id]
-	});
+	return transaction(
+		(data) => {
+			assertSudo(data, input.actorId);
+			return addTrip(data, input.actorId, { ...details, expenses: [], items: [], notes: [] });
+		},
+		{
+			global: [],
+			tripIds: (trip) => [trip.id]
+		}
+	);
 }
 
-/** Returns a complete backup only to the trip owner, never to shared users or visitors. */
+/** Returns a complete backup only to the sole sudo user, never to shared users or visitors. */
 export async function exportTripBackup(input: { tripId: string; userId: string }): Promise<TripBackup> {
 	const data = await readData();
 	const trip = getTripForMutation(data, input.tripId, input.userId);
 	return createTripBackup(trip.itinerary, timestamp());
 }
 
-/** Restores an itinerary as a new private trip owned by the importing account. */
-export async function importTripBackup(input: { backup: TripBackup; ownerId: string }): Promise<TripReference> {
+/** Restores an itinerary as a new private trip owned by the sole sudo account. */
+export async function importTripBackup(input: { actorId: string; backup: TripBackup }): Promise<TripReference> {
 	const backup = tripBackupSchema.parse(input.backup);
-	return transaction((data) => addTrip(data, input.ownerId, backup.itinerary), {
-		global: [],
-		tripIds: (trip) => [trip.id]
-	});
+	return transaction(
+		(data) => {
+			assertSudo(data, input.actorId);
+			return addTrip(data, input.actorId, backup.itinerary);
+		},
+		{
+			global: [],
+			tripIds: (trip) => [trip.id]
+		}
+	);
 }
 
 export async function listTripSwitchOptions(userId: string): Promise<TripSwitchOption[]> {

@@ -7,7 +7,7 @@ import { exportTripBackup } from '$lib/server/store/trips';
 export const GET: RequestHandler = async ({ locals, params }) => {
 	const user = locals.user;
 	if (!user) {
-		return json({ message: 'Sign in as the trip owner to back up a trip.' }, { status: 401 });
+		return json({ message: 'Sign in as the sudo user to back up a trip.' }, { status: 401 });
 	}
 
 	try {

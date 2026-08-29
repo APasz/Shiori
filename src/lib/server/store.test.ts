@@ -7,7 +7,7 @@ import { itinerarySchema } from '../itinerary/schema';
 import { defaultFormatPreferences } from '../format-preferences';
 import { defaultColourway } from '../theme/colourway';
 import { createTripBackup } from '../trip-backup';
-import { storedDataVersion, sudoPasswordResetPrefix } from './store/model';
+import { preSudoOwnedTripsStoredDataVersion, storedDataVersion, sudoPasswordResetPrefix } from './store/model';
 
 let dataDirectory = '';
 
@@ -60,15 +60,19 @@ function managedDataPath(filename: string): string {
 	return join(dataDirectory, filename);
 }
 
-async function createTestTrip(store: StoreModule, ownerId: string, itemIds: readonly string[] = []): Promise<TestTrip> {
+async function createTestTrip(
+	store: StoreModule,
+	sudoUserId: string,
+	itemIds: readonly string[] = []
+): Promise<TestTrip> {
 	const trip = await store.createTrip({
-		details: { title: 'Test trip', timeZone: 'UTC' },
-		ownerId
+		actorId: sudoUserId,
+		details: { title: 'Test trip', timeZone: 'UTC' }
 	});
 	let revision = 0;
 
 	for (const itemId of itemIds) {
-		const lock = await store.acquireTripStructureLock({ tripId: trip.id, userId: ownerId });
+		const lock = await store.acquireTripStructureLock({ tripId: trip.id, userId: sudoUserId });
 		const result = await store.createItem({
 			item: {
 				...createEmptyItineraryItem('activity', itemId, Date.UTC(2026, 0, 1)),
@@ -77,7 +81,7 @@ async function createTestTrip(store: StoreModule, ownerId: string, itemIds: read
 			lockToken: lock.token,
 			revision,
 			tripId: trip.id,
-			userId: ownerId
+			userId: sudoUserId
 		});
 		revision = result.revision;
 	}
@@ -106,7 +110,7 @@ describe('JSON store', () => {
 		await expect(store.listTripSwitchOptions(owner.id)).resolves.toEqual([]);
 	});
 
-	it('assigns global administration only to the initial sudo account', async () => {
+	it('restricts global administration and trip creation to the initial sudo account', async () => {
 		const store = await import('./store');
 		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
 		const person = await store.createAccount({
@@ -114,10 +118,15 @@ describe('JSON store', () => {
 			password: 'another strong test password',
 			username: 'person'
 		});
-		await store.createTrip({ details: { title: 'Person trip', timeZone: 'UTC' }, ownerId: person.id });
+		await expect(
+			store.createTrip({ actorId: person.id, details: { title: 'Person trip', timeZone: 'UTC' } })
+		).rejects.toMatchObject({ status: 403 });
+		const trip = await store.createTrip({ actorId: sudo.id, details: { title: 'Sudo trip', timeZone: 'UTC' } });
 
 		await expect(store.isSudoUser(sudo.id)).resolves.toBe(true);
 		await expect(store.isSudoUser(person.id)).resolves.toBe(false);
+		await expect(store.getTripView(trip.slug, sudo)).resolves.toMatchObject({ access: 'sudo' });
+		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
 		await expect(store.listAccounts(person.id)).rejects.toMatchObject({ status: 403 });
 		await expect(
 			store.createAccount({ actorId: person.id, password: 'third strong test password', username: 'third-person' })
@@ -146,7 +155,7 @@ describe('JSON store', () => {
 			password: 'another strong test password',
 			username: 'person'
 		});
-		const trip = await createTestTrip(store, person.id);
+		const trip = await createTestTrip(store, sudo.id);
 
 		const users: { users: Array<Record<string, unknown>>; version: number } = JSON.parse(
 			await readFile(managedDataPath('users.json'), 'utf8')
@@ -176,6 +185,55 @@ describe('JSON store', () => {
 				{ id: person.id, isSudo: false }
 			]
 		});
+	});
+
+	it('migrates version 16 trips to sole sudo ownership', async () => {
+		const store = await import('./store');
+		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
+		const person = await store.createAccount({
+			actorId: sudo.id,
+			password: 'another strong test password',
+			username: 'person'
+		});
+		const trip = await createTestTrip(store, sudo.id);
+		const tripPath = managedTripPath(trip.slug);
+		const persistedTrip: { trip: { ownerId: string | null }; version: number } = JSON.parse(
+			await readFile(tripPath, 'utf8')
+		);
+		persistedTrip.trip.ownerId = person.id;
+		persistedTrip.version = preSudoOwnedTripsStoredDataVersion;
+		await writeFile(tripPath, JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		await expect(restartedStore.getTripView(trip.slug, sudo)).resolves.toMatchObject({ access: 'sudo' });
+		await expect(restartedStore.getTripView(trip.slug, person)).resolves.toMatchObject({ access: 'admin' });
+		expect(JSON.parse(await readFile(tripPath, 'utf8'))).toMatchObject({
+			trip: { ownerId: sudo.id },
+			version: storedDataVersion
+		});
+		expect(JSON.parse(await readFile(managedDataPath('shares.json'), 'utf8'))).toMatchObject({
+			shares: [{ role: 'admin', tripId: trip.id, userId: person.id }]
+		});
+	});
+
+	it('rejects current-format trips owned by a non-sudo account', async () => {
+		const store = await import('./store');
+		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
+		const person = await store.createAccount({
+			actorId: sudo.id,
+			password: 'another strong test password',
+			username: 'person'
+		});
+		const trip = await createTestTrip(store, sudo.id);
+		const tripPath = managedTripPath(trip.slug);
+		const persistedTrip: { trip: { ownerId: string | null } } = JSON.parse(await readFile(tripPath, 'utf8'));
+		persistedTrip.trip.ownerId = person.id;
+		await writeFile(tripPath, JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		await expect(restartedStore.needsInitialSetup()).rejects.toThrow('Every trip must be owned by the sole sudo user.');
 	});
 
 	it('breaks legacy sudo-migration timestamp ties by account ID', async () => {
@@ -340,8 +398,8 @@ describe('JSON store', () => {
 		});
 
 		const imported = await store.importTripBackup({
-			backup: createTripBackup(sourceItinerary, Date.UTC(2026, 3, 1)),
-			ownerId: owner.id
+			actorId: owner.id,
+			backup: createTripBackup(sourceItinerary, Date.UTC(2026, 3, 1))
 		});
 		const restored = await store.getTripView(imported.slug, owner);
 		const reexported = await store.exportTripBackup({ tripId: imported.id, userId: owner.id });
@@ -362,6 +420,12 @@ describe('JSON store', () => {
 		await expect(store.exportTripBackup({ tripId: imported.id, userId: sharedUser.id })).rejects.toMatchObject({
 			status: 403
 		});
+		await expect(
+			store.importTripBackup({
+				actorId: sharedUser.id,
+				backup: createTripBackup(sourceItinerary, Date.UTC(2026, 3, 1))
+			})
+		).rejects.toMatchObject({ status: 403 });
 	});
 
 	it('persists global domains and trips as separate four-space JSON files', async () => {
@@ -391,8 +455,8 @@ describe('JSON store', () => {
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 		const firstTrip = await createTestTrip(store, owner.id);
 		const secondTrip = await store.createTrip({
-			details: { title: 'Second trip', timeZone: 'UTC' },
-			ownerId: owner.id
+			actorId: owner.id,
+			details: { title: 'Second trip', timeZone: 'UTC' }
 		});
 		const untouchedBackupPaths = [
 			...['users.json', 'shares.json', 'sessions.json', 'edit-locks.json'].map(
@@ -915,8 +979,8 @@ describe('JSON store', () => {
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 
 		const created = await store.createTrip({
-			details: { title: 'Summer in Montréal', timeZone: 'America/Toronto' },
-			ownerId: owner.id
+			actorId: owner.id,
+			details: { title: 'Summer in Montréal', timeZone: 'America/Toronto' }
 		});
 
 		expect(created.slug).toBe('summer-in-montreal');
@@ -1306,22 +1370,22 @@ describe('JSON store', () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 		await store.createTrip({
-			details: { title: 'First empty trip', timeZone: 'UTC' },
-			ownerId: owner.id
+			actorId: owner.id,
+			details: { title: 'First empty trip', timeZone: 'UTC' }
 		});
 
 		vi.setSystemTime(new Date('2027-01-02T00:00:00.000Z'));
 		await store.createTrip({
-			details: { title: 'Second empty trip', timeZone: 'UTC' },
-			ownerId: owner.id
+			actorId: owner.id,
+			details: { title: 'Second empty trip', timeZone: 'UTC' }
 		});
 		const earlierTrip = await store.createTrip({
-			details: { title: 'Earlier planned trip', timeZone: 'UTC' },
-			ownerId: owner.id
+			actorId: owner.id,
+			details: { title: 'Earlier planned trip', timeZone: 'UTC' }
 		});
 		const laterTrip = await store.createTrip({
-			details: { title: 'Later planned trip', timeZone: 'UTC' },
-			ownerId: owner.id
+			actorId: owner.id,
+			details: { title: 'Later planned trip', timeZone: 'UTC' }
 		});
 
 		for (const [trip, itemId, startAt] of [
@@ -1693,8 +1757,8 @@ describe('JSON store', () => {
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 		const firstTrip = await createTestTrip(store, owner.id);
 		const secondTrip = await store.createTrip({
-			details: { title: 'Second trip', timeZone: 'UTC' },
-			ownerId: owner.id
+			actorId: owner.id,
+			details: { title: 'Second trip', timeZone: 'UTC' }
 		});
 		const member = await store.createAccount({
 			actorId: owner.id,

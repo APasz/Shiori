@@ -63,7 +63,7 @@ async function readBackupRequestBody(request: Request): Promise<BackupRequestBod
 export const POST: RequestHandler = async ({ locals, request }) => {
 	const user = locals.user;
 	if (!user) {
-		return json({ message: 'Sign in to import a trip backup.' }, { status: 401 });
+		return json({ message: 'Sign in as the sudo user to import a trip backup.' }, { status: 401 });
 	}
 
 	const requestBody = await readBackupRequestBody(request);
@@ -77,7 +77,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	}
 
 	try {
-		return json(await importTripBackup({ backup: validation.backup, ownerId: user.id }), { status: 201 });
+		return json(await importTripBackup({ actorId: user.id, backup: validation.backup }), { status: 201 });
 	} catch (error: unknown) {
 		return storeErrorResponse(error);
 	}

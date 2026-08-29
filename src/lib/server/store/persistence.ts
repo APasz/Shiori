@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, open, readFile, readdir, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { itineraryIdentifierSchema } from '$lib/itinerary/schema';
-import { migrateStoredTripFile, migrateStoredUsersFile } from './migrations';
+import { migrateStoredTripFile, migrateStoredUsersFile, migrateTripsToSudoOwnership } from './migrations';
 import {
 	storedDataSchema,
 	storedDataVersion,
@@ -194,24 +194,29 @@ async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 		return storedTripSchema.parse({ ...trip, slug });
 	});
 
-	const data = storedDataSchema.parse({
+	const ownershipMigrationRequired =
+		migratedUsersFile.migrationRequired || migratedTripFiles.some((tripFile) => tripFile.migrationRequired);
+	const data: StoredData = {
 		version: storedDataVersion,
 		users: users.users,
 		trips,
 		shares: shares.shares,
 		sessions: sessions.sessions,
 		editLocks: editLocks.editLocks
-	});
-	const sudoPasswordResetConsumed = await consumeSudoPasswordReset(data);
+	};
+	const tripOwnershipMigrated = ownershipMigrationRequired ? migrateTripsToSudoOwnership(data) : false;
+	const validatedData = storedDataSchema.parse(data);
+	const sudoPasswordResetConsumed = await consumeSudoPasswordReset(validatedData);
 
 	return {
-		data,
+		data: validatedData,
 		migrationRequired:
 			migratedUsersFile.migrationRequired ||
 			shares.version !== storedDataVersion ||
 			sessions.version !== storedDataVersion ||
 			editLocks.version !== storedDataVersion ||
-			migratedTripFiles.some((tripFile) => tripFile.migrationRequired),
+			migratedTripFiles.some((tripFile) => tripFile.migrationRequired) ||
+			tripOwnershipMigrated,
 		sudoPasswordResetConsumed
 	};
 }

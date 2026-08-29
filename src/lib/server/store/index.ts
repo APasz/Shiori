@@ -55,13 +55,7 @@ export {
 	listTripSwitchOptions
 } from './trips';
 export type { ActiveSessionUser } from './sessions';
-export type {
-	AccountManagementEntry,
-	AuthenticatedSessionUser,
-	AuthenticatedUser,
-	ShareRole,
-	TripMemberRole
-} from './model';
+export type { AuthenticatedSessionUser, AuthenticatedUser, ShareRole, TripMemberRole } from './model';
 export type {
 	DetailedTripAccessRole,
 	PublicItinerary,

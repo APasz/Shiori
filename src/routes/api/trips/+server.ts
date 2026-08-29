@@ -7,7 +7,7 @@ import { createTrip } from '$lib/server/store/trips';
 export const POST: RequestHandler = async ({ locals, request }) => {
 	const user = locals.user;
 	if (!user) {
-		return json({ message: 'Sign in to create a trip.' }, { status: 401 });
+		return json({ message: 'Sign in as the sudo user to create a trip.' }, { status: 401 });
 	}
 
 	const payload = tripCreateRequestSchema.safeParse(await requestJson(request));
@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	}
 
 	try {
-		return json(await createTrip({ details: payload.data.details, ownerId: user.id }), {
+		return json(await createTrip({ actorId: user.id, details: payload.data.details }), {
 			status: 201
 		});
 	} catch (error: unknown) {

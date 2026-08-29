@@ -15,11 +15,13 @@ import {
 	legacyStoredDataVersion,
 	preAccessBlockStoredDataVersion,
 	preNotesStoredDataVersion,
+	preSudoOwnedTripsStoredDataVersion,
 	preSudoStoredDataVersion,
 	previousStoredDataVersion,
 	priorStoredDataVersion,
 	migratableStoredUserSchema,
-	storedDataVersion
+	storedDataVersion,
+	type StoredData
 } from './model';
 import { defaultColourway } from '$lib/theme/colourway';
 import { defaultFormatPreferences } from '$lib/format-preferences';
@@ -77,7 +79,8 @@ const migratableStoredTripFileEnvelopeSchema = z
 			z.literal(preAccessBlockStoredDataVersion),
 			z.literal(preSudoStoredDataVersion),
 			z.literal(preAppearanceStoredDataVersion),
-			z.literal(preFormatPreferencesStoredDataVersion)
+			z.literal(preFormatPreferencesStoredDataVersion),
+			z.literal(preSudoOwnedTripsStoredDataVersion)
 		]),
 		trip: z
 			.object({
@@ -104,7 +107,8 @@ const migratableStoredUsersFileSchema = z.strictObject({
 		z.literal(preAccessBlockStoredDataVersion),
 		z.literal(preSudoStoredDataVersion),
 		z.literal(preAppearanceStoredDataVersion),
-		z.literal(preFormatPreferencesStoredDataVersion)
+		z.literal(preFormatPreferencesStoredDataVersion),
+		z.literal(preSudoOwnedTripsStoredDataVersion)
 	]),
 	users: z.array(migratableStoredUserSchema)
 });
@@ -137,7 +141,8 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 	const firstUserId = earliestLegacyUserId(parsedFile.data.users);
 	const preservesSudoRole =
 		parsedFile.data.version === preAppearanceStoredDataVersion ||
-		parsedFile.data.version === preFormatPreferencesStoredDataVersion;
+		parsedFile.data.version === preFormatPreferencesStoredDataVersion ||
+		parsedFile.data.version === preSudoOwnedTripsStoredDataVersion;
 	return {
 		file: {
 			version: storedDataVersion,
@@ -150,6 +155,43 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 		},
 		migrationRequired: true
 	};
+}
+
+/**
+ * Moves legacy trips to the sole sudo user and retains former owners as read-only administrators.
+ * Persisted edit locks cannot remain valid after ownership changes, so startup discards them.
+ */
+export function migrateTripsToSudoOwnership(data: StoredData): boolean {
+	const sudoUser = data.users.find((user) => user.isSudo);
+	if (!sudoUser) {
+		return false;
+	}
+
+	const migratedTripIds = new Set<string>();
+	const formerOwnerIdsByTripId = new Map<string, string>();
+	for (const trip of data.trips) {
+		if (trip.ownerId === sudoUser.id) {
+			continue;
+		}
+
+		migratedTripIds.add(trip.id);
+		if (trip.ownerId !== null) {
+			formerOwnerIdsByTripId.set(trip.id, trip.ownerId);
+		}
+		trip.ownerId = sudoUser.id;
+	}
+	if (migratedTripIds.size === 0) {
+		return false;
+	}
+
+	data.shares = data.shares.filter((share) => !(migratedTripIds.has(share.tripId) && share.userId === sudoUser.id));
+	for (const [tripId, formerOwnerId] of formerOwnerIdsByTripId) {
+		if (!data.shares.some((share) => share.tripId === tripId && share.userId === formerOwnerId)) {
+			data.shares.push({ role: 'admin', tripId, userId: formerOwnerId });
+		}
+	}
+	data.editLocks = [];
+	return true;
 }
 
 function migrateLegacyCost(cost: unknown): unknown {
