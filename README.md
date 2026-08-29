@@ -341,8 +341,7 @@ global logout. Signed-in users can change their own username and password and sa
 at `/account`; password changes sign out their other active sessions. A trip owner can still manage access
 to that trip, but owning a trip does not grant global sudo privileges. A colourway follows its account
 across devices; dark, automatic, and light mode remain a per-device preference and default to dark on a
-new device. The sudo user can open `/accounts` from their
-account page to create accounts, then use `/settings/access` to grant read-only `user` or `admin`
+new device. The sudo user can use the Administration tab on `/account` to create accounts, then use `/settings/access` to grant read-only `user` or `admin`
 access to a specific trip or enable its public visitor schedule. Passwords are hashed with Node's
 `scrypt`; sessions are stored server-side and issued in HTTP-only cookies. Sessions expire after
 seven days without a persisted renewal; active sessions renew at most once every nine hours, so

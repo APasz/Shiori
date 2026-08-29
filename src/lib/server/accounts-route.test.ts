@@ -48,9 +48,19 @@ describe('account actions', () => {
 			currentUser: memberSession,
 			selectedTab: 'account'
 		});
-		await expect(
-			load({ locals: { user: sudoSession }, url: new URL('http://localhost/account?tab=administration') } as never)
-		).resolves.toMatchObject({
+		const sudoAccountPage = await load({
+			locals: { user: sudoSession },
+			url: new URL('http://localhost/account?tab=administration')
+		} as never);
+		expect(sudoAccountPage).toMatchObject({
+			administration: {
+				accounts: [
+					{ id: member.id, ownsTrip: false, role: 'none', username: member.username },
+					{ id: sudo.id, ownsTrip: false, role: 'none', username: sudo.username }
+				],
+				selectedTrip: null,
+				trips: []
+			},
 			canManageAccounts: true,
 			currentUser: sudoSession,
 			selectedTab: 'administration'
@@ -58,6 +68,7 @@ describe('account actions', () => {
 		await expect(
 			load({ locals: { user: memberSession }, url: new URL('http://localhost/account?tab=administration') } as never)
 		).resolves.toMatchObject({
+			administration: null,
 			selectedTab: 'appearance'
 		});
 		await expect(
@@ -158,7 +169,7 @@ describe('account actions', () => {
 		const store = await import('$lib/server/store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 		await store.createTrip({ details: { title: 'Test trip', timeZone: 'UTC' }, ownerId: owner.id });
-		const { actions } = await import('../../routes/accounts/+page.server');
+		const { actions } = await import('../../routes/account/+page.server');
 		const formData = new FormData();
 		formData.set('username', 'member');
 		formData.set('password', 'a second strong test password');
@@ -166,7 +177,7 @@ describe('account actions', () => {
 		expect(actions).not.toHaveProperty('default');
 		const result = await actions.createAccount({
 			locals: { user: owner },
-			request: new Request('http://localhost/accounts', { body: formData, method: 'POST' })
+			request: new Request('http://localhost/account?tab=administration', { body: formData, method: 'POST' })
 		} as never);
 
 		expect(result).toEqual({ createdAccount: 'member' });
@@ -176,17 +187,19 @@ describe('account actions', () => {
 		});
 	});
 
-	it('allows the sudo user to manage global accounts without owning a trip', async () => {
+	it('shows global account management in the sudo-only Administration tab without an owned trip', async () => {
 		const store = await import('$lib/server/store');
 		const sudo = await store.createInitialSudo('sudo', 'a strong test password');
-		const { load } = await import('../../routes/accounts/+page.server');
+		const { load } = await import('../../routes/account/+page.server');
 
 		await expect(
-			load({ locals: { user: sudo }, url: new URL('http://localhost/accounts') } as never)
+			load({ locals: { user: sudo }, url: new URL('http://localhost/account?tab=administration') } as never)
 		).resolves.toMatchObject({
-			accounts: [{ id: sudo.id, role: 'none', username: sudo.username }],
-			selectedTrip: null,
-			trips: []
+			administration: {
+				accounts: [{ id: sudo.id, role: 'none', username: sudo.username }],
+				selectedTrip: null,
+				trips: []
+			}
 		});
 	});
 });

@@ -1,15 +1,39 @@
 <script lang="ts">
-	import { browserPages, browserTitle } from '$lib/browser-title';
-	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
-	import PageTitle from '$lib/components/PageTitle.svelte';
+	import type { AccountManagementEntry, AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
+	import type { OwnedTripOption } from '$lib/server/store/views';
 	import Icon from '$lib/visuals/Icon.svelte';
-	import type { ActionData, PageData } from './$types';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	type ManagedAccount = AccountManagementEntry & { role: TripMemberRole | 'sudo' };
+	type AccountAdministrationForm = {
+		accountDeleted?: boolean;
+		accountDeletionError?: string;
+		createAccountError?: string;
+		createdAccount?: string;
+		memberAccessError?: string;
+		memberAccessUpdated?: boolean;
+		passwordReset?: boolean;
+		passwordResetError?: string;
+	};
+	type AdministrationAction = 'createAccount' | 'deleteAccount' | 'resetPassword' | 'setTripAccess';
 
-	function actionUrl(action: 'createAccount' | 'deleteAccount' | 'resetPassword' | 'setTripAccess'): string {
-		return data.selectedTrip ? `?trip=${encodeURIComponent(data.selectedTrip.slug)}&/${action}` : `?/${action}`;
+	let {
+		accounts,
+		currentUser,
+		form,
+		selectedTrip,
+		trips
+	}: {
+		accounts: readonly ManagedAccount[];
+		currentUser: Pick<AuthenticatedUser, 'id'>;
+		form: AccountAdministrationForm | null | undefined;
+		selectedTrip: OwnedTripOption | null;
+		trips: readonly OwnedTripOption[];
+	} = $props();
+
+	function actionUrl(action: AdministrationAction): string {
+		const tripParameter = selectedTrip ? `&trip=${encodeURIComponent(selectedTrip.slug)}` : '';
+		return `?tab=administration${tripParameter}&/${action}`;
 	}
 
 	function autoSubmit(event: Event): void {
@@ -35,17 +59,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{browserTitle(browserPages.accounts)}</title>
-</svelte:head>
-
-<TripTopbar activePage="accounts" canManageAccounts currentUser={data.currentUser} />
-
-<main>
-	<header class="page-heading">
-		<PageTitle title="Accounts" />
-	</header>
-
+<div class="administration">
 	{#if form?.accountDeleted}
 		<p class="success page-status" role="status">Account deleted.</p>
 	{:else if form?.memberAccessUpdated}
@@ -54,22 +68,28 @@
 		<p class="success page-status" role="status">Password reset.</p>
 	{/if}
 
+	<section aria-labelledby="administration-heading" class="administration-introduction">
+		<h2 id="administration-heading">Administration</h2>
+		<p>Manage global accounts and their access to your trips.</p>
+	</section>
+
 	<section aria-labelledby="users-heading">
 		<div class="section-heading">
 			<div>
-				<h2 id="users-heading">Users <span>{data.accounts.length}</span></h2>
+				<h2 id="users-heading">Users <span>{accounts.length}</span></h2>
 				<p>
-					{data.selectedTrip
+					{selectedTrip
 						? 'Access levels apply to the selected trip only.'
 						: 'You can manage global accounts, but trip access is managed by each trip owner.'}
 				</p>
 			</div>
-			{#if data.selectedTrip}
+			{#if selectedTrip}
 				<form class="trip-selector" method="GET">
+					<input name="tab" type="hidden" value="administration" />
 					<label>
 						<span class="visually-hidden">Trip for access management</span>
-						<select name="trip" onchange={autoSubmit} value={data.selectedTrip.slug}>
-							{#each data.trips as trip (trip.id)}
+						<select name="trip" onchange={autoSubmit} value={selectedTrip.slug}>
+							{#each trips as trip (trip.id)}
 								<option value={trip.slug}>{trip.title}</option>
 							{/each}
 						</select>
@@ -79,16 +99,16 @@
 		</div>
 
 		<ul class="account-list">
-			{#each data.accounts as account (account.id)}
+			{#each accounts as account (account.id)}
 				<li class="account-row">
 					<strong>{account.username}</strong>
 					<div class="account-controls">
 						{#if account.role === 'sudo'}
 							<span class="owner-badge">Owner</span>
-						{:else if account.id === data.currentUser.id}
+						{:else if account.id === currentUser.id}
 							<span class="owner-badge">Global sudo</span>
 						{:else}
-							{#if data.selectedTrip}
+							{#if selectedTrip}
 								<form action={actionUrl('setTripAccess')} method="POST">
 									<input name="userId" type="hidden" value={account.id} />
 									<label class="role-control">
@@ -109,6 +129,7 @@
 								</summary>
 								<div class="account-actions-panel">
 									<form
+										id={`reset-password-${account.id}`}
 										class="shiori-form"
 										action={actionUrl('resetPassword')}
 										method="POST"
@@ -126,18 +147,23 @@
 												type="password"
 											/>
 										</label>
-										<button class="shiori-form-button" type="submit">Reset password</button>
 									</form>
-									{#if !account.ownsTrip}
-										<form
-											action={actionUrl('deleteAccount')}
-											method="POST"
-											onsubmit={(event) => confirmAccountDeletion(event, account.username)}
-										>
-											<input name="userId" type="hidden" value={account.id} />
-											<button class="delete-account-button" type="submit">Delete user</button>
-										</form>
-									{/if}
+									<div class="account-action-buttons">
+										<button class="shiori-form-button" form={`reset-password-${account.id}`} type="submit">
+											Reset password
+										</button>
+										{#if !account.ownsTrip}
+											<form
+												class="delete-account-form"
+												action={actionUrl('deleteAccount')}
+												method="POST"
+												onsubmit={(event) => confirmAccountDeletion(event, account.username)}
+											>
+												<input name="userId" type="hidden" value={account.id} />
+												<button class="delete-account-button" type="submit">Delete user</button>
+											</form>
+										{/if}
+									</div>
 								</div>
 							</details>
 						{/if}
@@ -177,18 +203,16 @@
 			<button class="shiori-form-button" type="submit">Create account</button>
 		</form>
 		<p class="access-note">
-			{data.selectedTrip
+			{selectedTrip
 				? 'New accounts have no private-trip access until you assign it using the list above.'
 				: 'New accounts have no private-trip access until a trip owner grants it.'}
 		</p>
 	</section>
-</main>
+</div>
 
 <style>
-	main {
-		margin: 0 auto;
-		padding: 0 1rem clamp(2rem, 6vw, 5rem);
-		width: min(100%, 46rem);
+	.administration {
+		text-align: left;
 	}
 
 	h2,
@@ -207,7 +231,17 @@
 		font-weight: 500;
 	}
 
-	section {
+	.administration-introduction {
+		margin-top: 1.5rem;
+	}
+
+	.administration-introduction p {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+		margin-top: 0.375rem;
+	}
+
+	.administration section:not(.administration-introduction) {
 		border-top: 1px solid var(--color-border-default);
 		margin-top: 1.5rem;
 		padding-top: 1.25rem;
@@ -336,6 +370,16 @@
 
 	.account-actions-panel .shiori-form {
 		gap: 0.75rem;
+		margin: 0;
+	}
+
+	.account-action-buttons {
+		align-items: center;
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.delete-account-form {
 		margin: 0;
 	}
 

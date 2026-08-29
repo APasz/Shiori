@@ -20,7 +20,6 @@
 	const inlineThemeToggleRoutes = new Set([
 		'/',
 		'/account',
-		'/accounts',
 		'/settings/access',
 		'/trips/[slug]',
 		'/trips/[slug]/notes',

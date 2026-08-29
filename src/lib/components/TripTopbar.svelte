@@ -10,7 +10,7 @@
 	import OfflineTripControl from './OfflineTripControl.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
-	type TopbarPage = 'account' | 'access' | 'accounts' | 'admin' | 'costs' | 'itinerary' | 'notes' | 'trips';
+	type TopbarPage = 'account' | 'access' | 'admin' | 'costs' | 'itinerary' | 'notes' | 'trips';
 	type TopbarTrip = Pick<TripView, 'access' | 'itinerary' | 'slug'>;
 	type TopbarUser = Pick<AuthenticatedUser, 'username'>;
 

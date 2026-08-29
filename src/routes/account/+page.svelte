@@ -3,6 +3,7 @@
 	import { availableAccountTabs, type AccountTab } from '$lib/account/tabs';
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
 	import { browserPages, browserTitle } from '$lib/browser-title';
+	import AccountAdministration from '$lib/account/AccountAdministration.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import ThemeModePicker from '$lib/components/ThemeModePicker.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
@@ -43,7 +44,7 @@
 
 <TripTopbar activePage="account" canManageAccounts={data.canManageAccounts} currentUser={data.currentUser} />
 
-<main>
+<main class:administration-page={data.selectedTab === 'administration'}>
 	<header class="page-heading">
 		<PageTitle title="Account" />
 	</header>
@@ -195,12 +196,14 @@
 				</form>
 			</section>
 		</div>
-	{:else if data.canManageAccounts}
-		<section aria-labelledby="administration-heading" class="account-panel">
-			<h2 id="administration-heading">Administration</h2>
-			<p>Manage global accounts and their access to your trips.</p>
-			<a class="accounts-link" href={resolve('/accounts')}>Accounts</a>
-		</section>
+	{:else if data.administration}
+		<AccountAdministration
+			accounts={data.administration.accounts}
+			currentUser={data.currentUser}
+			{form}
+			selectedTrip={data.administration.selectedTrip}
+			trips={data.administration.trips}
+		/>
 	{/if}
 </main>
 
@@ -210,6 +213,10 @@
 		padding: 0 1rem clamp(2rem, 6vw, 5rem);
 		text-align: center;
 		width: min(100%, 42rem);
+	}
+
+	main.administration-page {
+		width: min(100%, 46rem);
 	}
 
 	h2,
@@ -277,7 +284,6 @@
 		padding-top: 1.25rem;
 	}
 
-	.account-panel > p,
 	.account-section > p {
 		color: var(--color-text-secondary);
 		font-size: 0.875rem;
@@ -504,25 +510,6 @@
 
 	.success {
 		color: var(--color-state-success);
-	}
-
-	.accounts-link {
-		border: 1px solid var(--color-state-selection);
-		color: inherit;
-		display: inline-block;
-		margin-top: 0.75rem;
-		padding: 0.625rem 1rem;
-		text-decoration: none;
-	}
-
-	.accounts-link:hover {
-		background: var(--color-surface-subtle);
-	}
-
-	.accounts-link:focus-visible {
-		border-color: var(--color-state-focus);
-		outline: 2px solid var(--color-state-focus);
-		outline-offset: 2px;
 	}
 
 	@media (max-width: 30rem) {
