@@ -228,7 +228,13 @@
 	{#if showTimeZonePicker}
 		<div class="shiori-form-label">
 			<label for={`${id}-time-zone`}>Time zone <span class="field-hint">{timeZoneHint}</span></label>
-			<TimeZonePicker id={`${id}-time-zone`} onSelect={onTimeZoneChange} options={timeZoneOptions} value={timeZone} />
+			<TimeZonePicker
+				id={`${id}-time-zone`}
+				label={`${label} time zone`}
+				onSelect={onTimeZoneChange}
+				options={timeZoneOptions}
+				value={timeZone}
+			/>
 		</div>
 	{/if}
 </div>

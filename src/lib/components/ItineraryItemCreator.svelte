@@ -1077,15 +1077,16 @@
 					onDateRangeChange={setAccommodationDateRange}
 					portalTarget={dialogElement}
 				/>
-				<label class="shiori-form-label">
-					Property time zone
+				<div class="shiori-form-label">
+					<label for="accommodation-time-zone">Property time zone</label>
 					<TimeZonePicker
 						id="accommodation-time-zone"
+						label="Property time zone"
 						onSelect={(timeZone) => (accommodationTimeZone = timeZone)}
 						options={accommodationTimeZoneOptions}
 						value={accommodationTimeZone}
 					/>
-				</label>
+				</div>
 				<label class="toggle-label">
 					<input bind:checked={accommodationTimesKnown} type="checkbox" />
 					I know the check-in and check-out times

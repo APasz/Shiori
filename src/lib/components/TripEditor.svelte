@@ -322,16 +322,17 @@
 			Trip name
 			<input class="shiori-form-control" bind:value={title} required />
 		</label>
-		<label class="shiori-form-label" for="trip-time-zone">
-			Default time zone
+		<div class="shiori-form-label">
+			<label for="trip-time-zone">Default time zone</label>
 			<span class="field-hint">Used for itinerary items without their own time zone.</span>
 			<TimeZonePicker
 				id="trip-time-zone"
+				label="Default time zone"
 				onSelect={(value) => (timeZone = value)}
 				options={timeZoneOptions}
 				value={timeZone}
 			/>
-		</label>
+		</div>
 		<label class="shiori-form-label">
 			Local currency
 			<span class="field-hint">Newly paid costs are converted to this currency and saved at that rate.</span>

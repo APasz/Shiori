@@ -32,6 +32,7 @@
 	let {
 		defaultTimeZone,
 		initialNote,
+		isServerReachable,
 		localCurrency,
 		notesEndpoint,
 		onDismiss,
@@ -41,6 +42,7 @@
 	}: {
 		defaultTimeZone: string;
 		initialNote: ItineraryNote | undefined;
+		isServerReachable: boolean;
 		localCurrency: CurrencyCode;
 		notesEndpoint: string;
 		onDismiss: () => void;
@@ -65,7 +67,8 @@
 	const targetLabel = $derived(itineraryNoteTargetLabel(target));
 	const draftFingerprint = $derived(itineraryNoteDraftFingerprint(draft));
 	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
-	const saveIsDisabled = $derived(editorState !== 'editing' || !hasUnsavedChanges);
+	const canMutate = $derived(editorState === 'editing' && isServerReachable);
+	const saveIsDisabled = $derived(!canMutate || !hasUnsavedChanges);
 
 	function addEntry(): void {
 		draft.entries = [...draft.entries, emptyNoteEntryDraft(crypto.randomUUID())];
@@ -122,7 +125,7 @@
 	}
 
 	async function deleteNote(): Promise<void> {
-		if (!initialNote || editorState !== 'editing' || !window.confirm(`Delete ${targetTitle}?`)) {
+		if (!initialNote || !canMutate || !window.confirm(`Delete ${targetTitle}?`)) {
 			return;
 		}
 
@@ -187,16 +190,21 @@
 			<textarea bind:value={draft.text} class="shiori-form-control" disabled={editorState !== 'editing'} rows="6"
 			></textarea>
 		</label>
-		<label class="shiori-form-label" for="note-time-zone">
-			Note time zone
+		<div class="shiori-form-label">
+			<label for="note-time-zone">Note time zone</label>
 			<span class="field-hint">Entry times use this time zone. It starts with the trip’s time zone.</span>
 			<TimeZonePicker
+				disabled={editorState !== 'editing'}
 				id="note-time-zone"
+				label="Note time zone"
 				onSelect={(value) => (draft.timeZone = value)}
 				options={timeZoneOptions}
 				value={draft.timeZone}
 			/>
-		</label>
+		</div>
+		{#if !isServerReachable}
+			<p class="connection-warning" role="status">Connection lost. Your draft remains open; reconnect to save it.</p>
+		{/if}
 
 		<section aria-labelledby="note-entries-heading" class="entries">
 			<div class="section-heading">
@@ -235,7 +243,7 @@
 
 		{#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
 		{#if initialNote}
-			<button class="delete-note" disabled={editorState !== 'editing'} onclick={() => void deleteNote()} type="button"
+			<button class="delete-note" disabled={!canMutate} onclick={() => void deleteNote()} type="button"
 				>Delete note</button
 			>
 		{/if}
@@ -284,6 +292,7 @@
 	}
 
 	.eyebrow,
+	.connection-warning,
 	.field-hint,
 	.introduction,
 	.empty-entries {
@@ -298,10 +307,16 @@
 		text-transform: uppercase;
 	}
 
+	.connection-warning,
 	.field-hint,
 	.introduction,
 	.empty-entries {
 		font-size: 0.875rem;
+	}
+
+	.connection-warning {
+		color: var(--color-state-warning);
+		margin: 0.5rem 0 0;
 	}
 
 	.introduction,

@@ -1,6 +1,26 @@
 import { defaultFormatPreferences, type DateFormat } from '$lib/format-preferences';
 import { formatCalendarDate, type CalendarLocale } from './calendar';
-import type { ItineraryNoteTarget } from './schema';
+import type { ItineraryNote, ItineraryNoteTarget } from './schema';
+
+export type DayNoteSummary = Readonly<{
+	entryCount: number;
+	hasFreeformText: boolean;
+}>;
+
+export function dayNoteSummariesByDate(notes: readonly ItineraryNote[]): ReadonlyMap<string, DayNoteSummary> {
+	const summaries = new Map<string, DayNoteSummary>();
+	for (const note of notes) {
+		if (note.kind === 'day') {
+			summaries.set(note.date, { entryCount: note.entries.length, hasFreeformText: note.text.trim() !== '' });
+		}
+	}
+	return summaries;
+}
+
+export function dayNoteActionLabel(summary: DayNoteSummary | undefined): string {
+	const entryCount = summary?.entryCount ?? 0;
+	return `Notes${entryCount > 0 ? ` ${entryCount}` : ''}${summary?.hasFreeformText ? ' 日' : ''}`;
+}
 
 export function itineraryNoteTargetTitle(
 	target: ItineraryNoteTarget,

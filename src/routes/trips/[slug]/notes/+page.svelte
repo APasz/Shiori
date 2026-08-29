@@ -45,12 +45,6 @@
 		refreshOfflineTripPage();
 	}
 
-	$effect(() => {
-		if (connectivity.status !== 'reachable') {
-			editingNote = null;
-		}
-	});
-
 	onMount(() => connectivity.start());
 </script>
 
@@ -131,6 +125,7 @@
 	<ItineraryNoteEditor
 		defaultTimeZone={data.trip.itinerary.timeZone}
 		initialNote={editingNote.note}
+		isServerReachable={connectivity.status === 'reachable'}
 		localCurrency={data.trip.itinerary.localCurrency}
 		{notesEndpoint}
 		onDismiss={() => (editingNote = null)}

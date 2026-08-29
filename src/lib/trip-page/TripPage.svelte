@@ -177,10 +177,11 @@
 		/>
 	{/if}
 
-	{#if detailedTrip && canModifyItinerary && editingNote}
+	{#if detailedTrip && editingNote}
 		<ItineraryNoteEditor
 			defaultTimeZone={detailedTrip.itinerary.timeZone}
 			initialNote={editingNote.note}
+			isServerReachable={connectivity.status === 'reachable'}
 			localCurrency={detailedTrip.itinerary.localCurrency}
 			{notesEndpoint}
 			onDismiss={() => (editingNote = null)}

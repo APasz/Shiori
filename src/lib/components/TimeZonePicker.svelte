@@ -4,12 +4,16 @@
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
 
 	let {
+		disabled = false,
 		id,
+		label = 'Time zone',
 		options,
 		value,
 		onSelect
 	}: {
+		disabled?: boolean;
 		id: string;
+		label?: string;
 		options: TimeZoneSearchOption[];
 		value: string;
 		onSelect: (timeZone: string) => void;
@@ -31,7 +35,16 @@
 		}
 	});
 
+	$effect(() => {
+		if (disabled) {
+			isOpen = false;
+		}
+	});
+
 	function select(option: TimeZoneSearchOption): void {
+		if (disabled) {
+			return;
+		}
 		query = option.timeZone;
 		isOpen = false;
 		onSelect(option.timeZone);
@@ -39,6 +52,10 @@
 
 	function closeAfterFocusChange(): void {
 		setTimeout(() => {
+			if (disabled) {
+				isOpen = false;
+				return;
+			}
 			if (pickerElement.contains(document.activeElement)) {
 				return;
 			}
@@ -52,6 +69,9 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
+		if (disabled) {
+			return;
+		}
 		if (event.key === 'ArrowDown') {
 			event.preventDefault();
 			isOpen = true;
@@ -85,8 +105,9 @@
 		aria-autocomplete="list"
 		aria-controls={`${id}-options`}
 		aria-expanded={isOpen}
-		aria-label="Time zone search"
+		aria-label={label}
 		class="shiori-form-control"
+		{disabled}
 		{id}
 		placeholder="Search AEST, JST, CST, or a place"
 		role="combobox"
@@ -110,7 +131,12 @@
 			{:else}
 				{#each matches as option, index (option.timeZone)}
 					<li aria-selected={index === activeOptionIndex} role="option">
-						<button onclick={() => select(option)} onmousedown={(event) => event.preventDefault()} type="button">
+						<button
+							{disabled}
+							onclick={() => select(option)}
+							onmousedown={(event) => event.preventDefault()}
+							type="button"
+						>
 							<span class="time-zone">{option.timeZone}</span>
 							<span>{option.places.join(' · ')}</span>
 							{#if option.aliases.length > 0}
@@ -159,6 +185,11 @@
 
 	button {
 		cursor: pointer;
+	}
+
+	button:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
 	}
 
 	li[aria-selected='true'] button,

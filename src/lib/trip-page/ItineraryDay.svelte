@@ -12,6 +12,7 @@
 		date,
 		dayNumber,
 		items,
+		noteActionLabel,
 		tripTimeZone,
 		isOpen,
 		canModifyItinerary,
@@ -25,6 +26,7 @@
 		date: string;
 		dayNumber: number;
 		items: DayItem[];
+		noteActionLabel: string;
 		tripTimeZone: string;
 		isOpen: boolean;
 		canModifyItinerary: boolean;
@@ -176,10 +178,10 @@
 		{#if canModifyItinerary}
 			<div
 				class="add-item-actions"
-				aria-label={`Add an item on ${formatLocalDay(date, 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)}`}
+				aria-label={`Day actions for ${formatLocalDay(date, 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)}`}
 			>
 				<button onclick={() => onCreateItem(date)} type="button">Add item</button>
-				<button onclick={() => onEditDayNote(date)} type="button">Notes</button>
+				<button onclick={() => onEditDayNote(date)} type="button">{noteActionLabel}</button>
 			</div>
 		{/if}
 	</div>

@@ -70,24 +70,28 @@
 			<textarea bind:value={entry.note} class="shiori-form-control" {disabled} rows="3"></textarea>
 		</label>
 		<div class="time-range">
-			<label class="shiori-form-label" for={`${entry.id}-start-time`}>
-				Start time <span class="field-hint">Optional</span>
+			<div class="shiori-form-label">
+				<span>Start time <span class="field-hint">Optional</span></span>
 				<TimePicker
+					{disabled}
 					id={`${entry.id}-start-time`}
+					label="Start time"
 					timeFormat={viewerContext.formatPreferences.timeFormat}
 					value={entry.startTime}
 					onChange={(value) => (entry.startTime = value)}
 				/>
-			</label>
-			<label class="shiori-form-label" for={`${entry.id}-end-time`}>
-				End time <span class="field-hint">Optional</span>
+			</div>
+			<div class="shiori-form-label">
+				<span>End time <span class="field-hint">Optional</span></span>
 				<TimePicker
+					{disabled}
 					id={`${entry.id}-end-time`}
+					label="End time"
 					timeFormat={viewerContext.formatPreferences.timeFormat}
 					value={entry.endTime}
 					onChange={(value) => (entry.endTime = value)}
 				/>
-			</label>
+			</div>
 		</div>
 		<section aria-label={`Estimated costs for ${entry.title || `entry ${entryNumber}`}`} class="estimated-costs">
 			<div class="cost-heading">

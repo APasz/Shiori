@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { addCalendarDays, calendarMonthForDate } from '$lib/itinerary/calendar';
+	import { dayNoteActionLabel, dayNoteSummariesByDate, type DayNoteSummary } from '$lib/itinerary/note-presentation';
 	import { formatLocalDay, getItineraryDateRange, getLocalItineraryDays } from '$lib/itinerary/presentation';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import type { TripView } from '$lib/server/store/views';
 	import ItineraryDay from './ItineraryDay.svelte';
+
+	const emptyDayNoteSummaries: ReadonlyMap<string, DayNoteSummary> = new Map();
 
 	let {
 		tripId,
@@ -34,6 +37,9 @@
 	const localDays = $derived(localScheduleReady ? getLocalItineraryDays(itinerary.items, viewerContext.timeZone) : []);
 	const dateRange = $derived(
 		localScheduleReady ? getItineraryDateRange(itinerary.items, viewerContext.timeZone) : null
+	);
+	const dayNoteSummaries = $derived(
+		canModifyItinerary && 'notes' in itinerary ? dayNoteSummariesByDate(itinerary.notes) : emptyDayNoteSummaries
 	);
 
 	function storageKey(): string {
@@ -151,10 +157,12 @@
 		{:else}
 			<div class="days">
 				{#each localDays as day, index (day.date)}
+					{@const dayNoteSummary = dayNoteSummaries.get(day.date)}
 					<ItineraryDay
 						date={day.date}
 						dayNumber={index + 1}
 						items={day.items}
+						noteActionLabel={dayNoteActionLabel(dayNoteSummary)}
 						tripTimeZone={itinerary.timeZone}
 						isOpen={isDayOpen(day.date)}
 						{canModifyItinerary}

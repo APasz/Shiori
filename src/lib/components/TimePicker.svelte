@@ -7,12 +7,14 @@
 	const localTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 	let {
+		disabled = false,
 		id,
 		label,
 		timeFormat = defaultFormatPreferences.timeFormat,
 		value,
 		onChange
 	}: {
+		disabled?: boolean;
 		id: string;
 		label?: string;
 		timeFormat?: TimeFormat;
@@ -33,12 +35,15 @@
 	}
 
 	function setTime(value: Time | undefined): void {
+		if (disabled) {
+			return;
+		}
 		onChange(value?.toString().slice(0, 5) ?? '');
 	}
 </script>
 
 <div class="time-picker">
-	<TimeField.Root {hourCycle} onValueChange={setTime} value={parsedTime(value)}>
+	<TimeField.Root {disabled} {hourCycle} onValueChange={setTime} value={parsedTime(value)}>
 		<TimeField.Input aria-label={label ?? 'Time'} class="shiori-form-control time-field" {id}>
 			{#snippet children({ segments })}
 				{#each segments as { part, value: segmentValue }, index (`${part}-${index}`)}
@@ -54,6 +59,7 @@
 			<button
 				aria-pressed={value === time}
 				class:selected={value === time}
+				{disabled}
 				onclick={() => onChange(time)}
 				type="button"
 			>
@@ -121,6 +127,11 @@
 	.quick-times button:focus-visible,
 	.quick-times button.selected {
 		border-color: var(--color-state-selection);
+	}
+
+	.quick-times button:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
 	}
 
 	.quick-times button.selected {
