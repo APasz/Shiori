@@ -30,6 +30,29 @@ function release_directory_for() {
 	printf '%s/release-%s\n' "$releases_directory" "$release_sha"
 }
 
+function release_environment_contents() {
+	local release_directory="$1"
+	local release_sha="$2"
+	local short_release_sha
+
+	short_release_sha="$(git -C "$release_directory" rev-parse --short=7 "$release_sha")" || return 1
+	printf 'SHIORI_RELEASE_ID=%s\nSHIORI_RELEASE_SHORT_SHA=%s' "$release_sha" "$short_release_sha"
+}
+
+function release_environment_is_valid() {
+	local release_directory="$1"
+	local release_sha="$2"
+	local expected_environment
+	local recorded_environment
+
+	recorded_environment="$(<"$release_directory/.release.env")"
+	if [[ "$recorded_environment" == "SHIORI_RELEASE_ID=$release_sha" ]]; then
+		return 0
+	fi
+	expected_environment="$(release_environment_contents "$release_directory" "$release_sha")" || return 1
+	[[ "$recorded_environment" == "$expected_environment" ]]
+}
+
 function is_release_directory() {
 	local release_directory="$1"
 	local release_name="${release_directory##*/}"
@@ -47,8 +70,8 @@ function release_is_ready() {
 		[[ -f "$release_directory/.release-ready" ]] &&
 		[[ -f "$release_directory/.release.env" ]] &&
 		[[ "$(<"$release_directory/.release-ready")" == "$release_sha" ]] &&
-		[[ "$(<"$release_directory/.release.env")" == "SHIORI_RELEASE_ID=$release_sha" ]] &&
-		[[ "$(git -C "$release_directory" rev-parse --verify HEAD)" == "$release_sha" ]]
+		[[ "$(git -C "$release_directory" rev-parse --verify HEAD)" == "$release_sha" ]] &&
+		release_environment_is_valid "$release_directory" "$release_sha"
 }
 
 function current_release_directory() {
@@ -74,6 +97,7 @@ function current_release_directory() {
 
 function prepare_release() {
 	local release_directory="$1"
+	local release_environment
 
 	if release_is_ready "$release_directory" "$commit_sha"; then
 		echo "Reusing prepared release $commit_sha."
@@ -93,7 +117,11 @@ function prepare_release() {
 		cd "$release_directory"
 		npm ci
 		npm run build
-		printf 'SHIORI_RELEASE_ID=%s\n' "$commit_sha" > .release.env
+		if ! release_environment="$(release_environment_contents "$release_directory" "$commit_sha")"; then
+			echo "Unable to generate deployment metadata for $commit_sha." >&2
+			exit 1
+		fi
+		printf '%s\n' "$release_environment" > .release.env
 		printf '%s\n' "$commit_sha" > .release-ready
 	)
 }

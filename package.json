@@ -2,6 +2,7 @@
 	"name": "shiori",
 	"private": true,
 	"version": "1.0.0",
+	"repository": "https://github.com/APasz/Shiori",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",

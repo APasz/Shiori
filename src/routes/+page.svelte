@@ -38,33 +38,59 @@
 	<meta name="description" content="Your available Shiori travel itineraries." />
 </svelte:head>
 
-<TripTopbar
-	activePage="trips"
-	canManageAccounts={data.canManageAccounts}
-	currentUser={data.currentUser}
-	isOffline={connectivity.status === 'unreachable'}
-/>
+<div class="home-layout">
+	<TripTopbar
+		activePage="trips"
+		canManageAccounts={data.canManageAccounts}
+		currentUser={data.currentUser}
+		isOffline={connectivity.status === 'unreachable'}
+	/>
 
-<main>
-	<ul class="trip-list">
-		{#each data.trips as trip (trip.slug)}
-			<li>
-				<a href={resolve('/trips/[slug]', { slug: trip.slug })}>
-					<strong>{trip.title}</strong>
-					<small>{trip.latestItemStartAt === null ? 'No itinerary items yet' : 'Itinerary available'}</small>
-				</a>
-			</li>
-		{/each}
-		{#if canCreateTrip}
-			<li>
-				<button class="new-trip-button" onclick={beginTripCreation} type="button">
-					<strong>New trip</strong>
-					<small>Create a private trip</small>
-				</button>
-			</li>
-		{/if}
-	</ul>
-</main>
+	<div class="home-page">
+		<main>
+			<ul class="trip-list">
+				{#each data.trips as trip (trip.slug)}
+					<li>
+						<a href={resolve('/trips/[slug]', { slug: trip.slug })}>
+							<strong>{trip.title}</strong>
+							<small>{trip.latestItemStartAt === null ? 'No itinerary items yet' : 'Itinerary available'}</small>
+						</a>
+					</li>
+				{/each}
+				{#if canCreateTrip}
+					<li>
+						<button class="new-trip-button" onclick={beginTripCreation} type="button">
+							<strong>New trip</strong>
+							<small>Create a private trip</small>
+						</button>
+					</li>
+				{/if}
+			</ul>
+		</main>
+
+		<footer class="page-subtext">
+			<small>
+				<a
+					aria-label="View Shiori on GitHub"
+					href={data.repositoryUrl}
+					rel="external noopener noreferrer"
+					target="_blank">v{data.appVersion}</a
+				>
+				{#if data.releaseCommitUrl && data.releaseShortSha}
+					<span aria-hidden="true">·</span>
+					<a
+						aria-label={`View GitHub commit ${data.releaseShortSha}`}
+						href={data.releaseCommitUrl}
+						rel="external noopener noreferrer"
+						target="_blank">{data.releaseShortSha}</a
+					>
+				{/if}
+				<span aria-hidden="true">·</span>
+				<span>MIT APasz</span>
+			</small>
+		</footer>
+	</div>
+</div>
 
 {#if creatingTrip}
 	<TripEditor mode="create" trip={null} onCompleted={finishTripCreation} onDismiss={() => (creatingTrip = false)} />
@@ -77,7 +103,23 @@
 		outline-offset: 2px;
 	}
 
+	.home-layout,
+	.home-page {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.home-layout {
+		min-height: 100vh;
+		min-height: 100dvh;
+	}
+
+	.home-page {
+		flex: 1;
+	}
+
 	main {
+		flex: 1;
 		margin: 0 auto;
 		padding: 1rem;
 		width: min(100%, 44rem);
@@ -123,5 +165,31 @@
 
 	.trip-list small {
 		color: var(--color-text-muted);
+	}
+
+	.page-subtext {
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		margin: 0 auto;
+		padding: 0 1rem 1rem;
+		text-align: center;
+		width: min(100%, 44rem);
+	}
+
+	.page-subtext small {
+		align-items: center;
+		display: inline-flex;
+		font-size: inherit;
+		gap: 0.25rem;
+	}
+
+	.page-subtext a {
+		color: inherit;
+		text-underline-offset: 0.125em;
+	}
+
+	.page-subtext a:focus-visible {
+		outline: 3px solid var(--color-state-focus);
+		outline-offset: 2px;
 	}
 </style>
