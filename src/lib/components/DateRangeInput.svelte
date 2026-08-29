@@ -3,6 +3,8 @@
 	import { DateRangePicker, Portal } from 'bits-ui';
 	import { parseDate, today, type CalendarDate, type DateValue } from '@internationalized/date';
 	import './date-picker.css';
+	import { datePickerDateSeparator, datePickerLocale } from '$lib/itinerary/calendar';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import Icon from '$lib/visuals/Icon.svelte';
 
 	type DateRangeChange = Readonly<{
@@ -31,7 +33,10 @@
 		onDateRangeChange: (range: DateRangeChange) => void;
 		portalTarget?: HTMLElement;
 	} = $props();
-	let locale = $state('en-AU');
+	const locale = $derived(datePickerLocale(viewerContext.locale, viewerContext.formatPreferences.dateFormat));
+	const dateSeparator = $derived(
+		datePickerDateSeparator(viewerContext.locale, viewerContext.formatPreferences.dateFormat)
+	);
 	let numberOfMonths = $state(1);
 
 	const startValue = $derived(calendarDate(checkInDate));
@@ -40,7 +45,6 @@
 	const calendarPlaceholder = $derived(startValue ?? endValue ?? today('UTC'));
 
 	onMount(() => {
-		locale = navigator.language || locale;
 		const desktopQuery = window.matchMedia('(min-width: 46rem)');
 		const updateNumberOfMonths = (): void => {
 			numberOfMonths = desktopQuery.matches ? 2 : 1;
@@ -90,7 +94,7 @@
 				{#snippet children({ segments })}
 					{#each segments as { part, value }, index (`start-${part}-${index}`)}
 						<DateRangePicker.Segment class={`date-segment${part === 'literal' ? ' literal' : ''}`} {part}>
-							{value}
+							{part === 'literal' && dateSeparator ? dateSeparator : value}
 						</DateRangePicker.Segment>
 					{/each}
 				{/snippet}
@@ -105,7 +109,7 @@
 				{#snippet children({ segments })}
 					{#each segments as { part, value }, index (`end-${part}-${index}`)}
 						<DateRangePicker.Segment class={`date-segment${part === 'literal' ? ' literal' : ''}`} {part}>
-							{value}
+							{part === 'literal' && dateSeparator ? dateSeparator : value}
 						</DateRangePicker.Segment>
 					{/each}
 				{/snippet}

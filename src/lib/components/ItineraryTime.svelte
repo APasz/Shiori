@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { formatTime } from '$lib/format-preferences';
 	import { formatTimestampInTimeZone, type FormattedLocalTimestamp } from '$lib/itinerary/time';
-	import { formatCalendarDate, type CalendarDateFormat } from '$lib/itinerary/calendar';
+	import { formatCalendarDateTime, type CalendarDateFormat } from '$lib/itinerary/calendar';
 	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { onMount } from 'svelte';
@@ -27,10 +28,16 @@
 
 	function timestampLabel(timestamp: FormattedLocalTimestamp): string {
 		if (!includeDate) {
-			return timestamp.time;
+			return formatTime(timestamp.time, viewerContext.formatPreferences.timeFormat);
 		}
-		const date = formatCalendarDate(timestamp.date, calendarDateFormat);
-		return date ? `${date}, ${timestamp.time}` : timestamp.time;
+		return formatCalendarDateTime(
+			timestamp.date,
+			timestamp.time,
+			calendarDateFormat,
+			viewerContext.locale,
+			viewerContext.formatPreferences.dateFormat,
+			viewerContext.formatPreferences.timeFormat
+		);
 	}
 
 	onMount(() => {

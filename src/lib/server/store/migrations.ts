@@ -10,6 +10,7 @@ import {
 import {
 	dailyExpenseStoredDataVersion,
 	preAppearanceStoredDataVersion,
+	preFormatPreferencesStoredDataVersion,
 	freeformExpenseStoredDataVersion,
 	legacyStoredDataVersion,
 	preAccessBlockStoredDataVersion,
@@ -21,6 +22,7 @@ import {
 	storedDataVersion
 } from './model';
 import { defaultColourway } from '$lib/theme/colourway';
+import { defaultFormatPreferences } from '$lib/format-preferences';
 
 const legacyMonetaryAmountSchema = z.strictObject({
 	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
@@ -74,7 +76,8 @@ const migratableStoredTripFileEnvelopeSchema = z
 			z.literal(preNotesStoredDataVersion),
 			z.literal(preAccessBlockStoredDataVersion),
 			z.literal(preSudoStoredDataVersion),
-			z.literal(preAppearanceStoredDataVersion)
+			z.literal(preAppearanceStoredDataVersion),
+			z.literal(preFormatPreferencesStoredDataVersion)
 		]),
 		trip: z
 			.object({
@@ -100,7 +103,8 @@ const migratableStoredUsersFileSchema = z.strictObject({
 		z.literal(preNotesStoredDataVersion),
 		z.literal(preAccessBlockStoredDataVersion),
 		z.literal(preSudoStoredDataVersion),
-		z.literal(preAppearanceStoredDataVersion)
+		z.literal(preAppearanceStoredDataVersion),
+		z.literal(preFormatPreferencesStoredDataVersion)
 	]),
 	users: z.array(migratableStoredUserSchema)
 });
@@ -131,13 +135,16 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 	}
 
 	const firstUserId = earliestLegacyUserId(parsedFile.data.users);
-	const preservesSudoRole = parsedFile.data.version === preAppearanceStoredDataVersion;
+	const preservesSudoRole =
+		parsedFile.data.version === preAppearanceStoredDataVersion ||
+		parsedFile.data.version === preFormatPreferencesStoredDataVersion;
 	return {
 		file: {
 			version: storedDataVersion,
 			users: parsedFile.data.users.map((user) => ({
 				...user,
 				colourway: user.colourway ?? defaultColourway,
+				formatPreferences: user.formatPreferences ?? { ...defaultFormatPreferences },
 				isSudo: preservesSudoRole ? (user.isSudo ?? user.id === firstUserId) : user.id === firstUserId
 			}))
 		},

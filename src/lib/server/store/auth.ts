@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { defaultFormatPreferences, type FormatPreferences } from '$lib/format-preferences';
 import { defaultColourway, colourwaySchema, type Colourway } from '$lib/theme/colourway';
 import { StoreError } from './error';
 import {
+	formatPreferencesSchema,
 	passwordSchema,
 	storedUserSchema,
 	usernameIdentityKey,
@@ -20,6 +22,7 @@ export { preparePasswordHash };
 function newStoredUser(account: { isSudo: boolean; passwordHash: string; username: string }): StoredUser {
 	return storedUserSchema.parse({
 		colourway: defaultColourway,
+		formatPreferences: { ...defaultFormatPreferences },
 		id: randomUUID(),
 		isSudo: account.isSudo,
 		username: account.username,
@@ -135,6 +138,26 @@ export async function updateOwnColourway(input: { colourway: unknown; userId: st
 			const user = accountForId(data, input.userId);
 			user.colourway = colourway;
 			return user.colourway;
+		},
+		{ global: ['users'], tripIds: [] }
+	);
+}
+
+export async function updateOwnFormatPreferences(input: {
+	dateFormat: unknown;
+	timeFormat: unknown;
+	userId: string;
+}): Promise<FormatPreferences> {
+	const formatPreferences = formatPreferencesSchema.parse({
+		dateFormat: input.dateFormat,
+		timeFormat: input.timeFormat
+	});
+
+	return transaction(
+		(data) => {
+			const user = accountForId(data, input.userId);
+			user.formatPreferences = formatPreferences;
+			return user.formatPreferences;
 		},
 		{ global: ['users'], tripIds: [] }
 	);

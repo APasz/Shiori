@@ -1,6 +1,7 @@
 import type { ResolveOptions } from '@sveltejs/kit';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionCookieName, sessionLifetimeSeconds } from '$lib/server/session';
+import { defaultFormatPreferences } from '$lib/format-preferences';
 import { defaultColourway } from '$lib/theme/colourway';
 
 const refreshSession = vi.hoisted(() => vi.fn());
@@ -56,7 +57,12 @@ describe('server hook', () => {
 		};
 		refreshSession.mockResolvedValue({
 			renewed: true,
-			user: { colourway: defaultColourway, id: 'user-1', username: 'owner' }
+			user: {
+				colourway: defaultColourway,
+				formatPreferences: defaultFormatPreferences,
+				id: 'user-1',
+				username: 'owner'
+			}
 		});
 
 		const response = await handle(handleInput(cookies));
@@ -81,7 +87,12 @@ describe('server hook', () => {
 		};
 		refreshSession.mockResolvedValue({
 			renewed: false,
-			user: { colourway: defaultColourway, id: 'user-1', username: 'owner' }
+			user: {
+				colourway: defaultColourway,
+				formatPreferences: defaultFormatPreferences,
+				id: 'user-1',
+				username: 'owner'
+			}
 		});
 
 		await handle(handleInput(cookies));
@@ -99,7 +110,7 @@ describe('server hook', () => {
 		let resolveOptions: ResolveOptions | undefined;
 		refreshSession.mockResolvedValue({
 			renewed: false,
-			user: { colourway: 'violet', id: 'user-1', username: 'owner' }
+			user: { colourway: 'violet', formatPreferences: defaultFormatPreferences, id: 'user-1', username: 'owner' }
 		});
 
 		await handle(handleInput(cookies, new Response(), (_event, options) => (resolveOptions = options)));
@@ -122,12 +133,22 @@ describe('server hook', () => {
 		let resolveOptions: ResolveOptions | undefined;
 		refreshSession.mockResolvedValue({
 			renewed: false,
-			user: { colourway: defaultColourway, id: 'user-1', username: 'owner' }
+			user: {
+				colourway: defaultColourway,
+				formatPreferences: defaultFormatPreferences,
+				id: 'user-1',
+				username: 'owner'
+			}
 		});
 
 		await handle(
 			handleInput(cookies, new Response(), (event, options) => {
-				event.locals.user = { colourway: 'sunset', id: 'user-1', username: 'owner' };
+				event.locals.user = {
+					colourway: 'sunset',
+					formatPreferences: defaultFormatPreferences,
+					id: 'user-1',
+					username: 'owner'
+				};
 				resolveOptions = options;
 			})
 		);

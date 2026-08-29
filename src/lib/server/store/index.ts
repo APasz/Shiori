@@ -10,6 +10,7 @@ export {
 	needsInitialSetup,
 	resetAccountPassword,
 	updateOwnColourway,
+	updateOwnFormatPreferences,
 	updateOwnUsername
 } from './auth';
 export { StoreError } from './error';

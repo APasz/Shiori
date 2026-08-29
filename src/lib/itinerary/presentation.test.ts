@@ -87,6 +87,26 @@ describe('browser-local itinerary presentation', () => {
 		});
 	});
 
+	it('does not keep a completed stay above later days', () => {
+		const date = '2026-04-13';
+		const timeZone = 'Australia/Melbourne';
+		const completedStay = {
+			id: 'checked-out-hotel',
+			timing: {
+				endAt: requiredZonedTimestamp('2026-04-12T14:00', timeZone),
+				kind: 'exact' as const,
+				startAt: requiredZonedTimestamp('2026-04-11T15:00', timeZone)
+			},
+			type: 'accommodation' as const
+		};
+
+		expect(partitionDayItems([completedStay], date, timeZone)).toEqual({
+			arrivingStays: [],
+			ongoingStays: [],
+			timelineEntries: []
+		});
+	});
+
 	it('groups exact, approximate, and window timings on every local day they cover', () => {
 		const morning = requiredTimestamp('2026-04-12T09:00');
 		const afternoon = requiredTimestamp('2026-04-12T14:00');

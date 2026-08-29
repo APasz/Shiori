@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defaultFormatPreferences } from '$lib/format-preferences';
 import { defaultColourway } from '$lib/theme/colourway';
 import { maximumAccountRequestBytes } from './request-size';
 
@@ -35,8 +36,8 @@ describe('account actions', () => {
 			password: 'member strong test password',
 			username: 'member'
 		});
-		const sudoSession = { ...sudo, colourway: defaultColourway };
-		const memberSession = { ...member, colourway: defaultColourway };
+		const sudoSession = { ...sudo, colourway: defaultColourway, formatPreferences: defaultFormatPreferences };
+		const memberSession = { ...member, colourway: defaultColourway, formatPreferences: defaultFormatPreferences };
 		const { actions, load } = await import('../../routes/account/+page.server');
 		const usernameForm = new FormData();
 		usernameForm.set('username', 'renamed-member');
@@ -92,7 +93,30 @@ describe('account actions', () => {
 				request: formRequest('http://localhost/account', colourwayForm)
 			} as never)
 		).resolves.toEqual({ colourwayUpdated: 'violet' });
-		expect(colourwayLocals.user).toEqual({ colourway: 'violet', id: member.id, username: 'renamed-member' });
+		expect(colourwayLocals.user).toEqual({
+			colourway: 'violet',
+			formatPreferences: defaultFormatPreferences,
+			id: member.id,
+			username: 'renamed-member'
+		});
+
+		const formatPreferences = { dateFormat: 'day-month-year', timeFormat: 'twelve-hour' } as const;
+		const formatPreferencesForm = new FormData();
+		formatPreferencesForm.set('dateFormat', formatPreferences.dateFormat);
+		formatPreferencesForm.set('timeFormat', formatPreferences.timeFormat);
+		const formatPreferencesLocals = { user: colourwayLocals.user };
+		await expect(
+			actions.changeFormatPreferences({
+				locals: formatPreferencesLocals,
+				request: formRequest('http://localhost/account', formatPreferencesForm)
+			} as never)
+		).resolves.toEqual({ formatPreferencesUpdated: formatPreferences });
+		expect(formatPreferencesLocals.user).toEqual({
+			colourway: 'violet',
+			formatPreferences,
+			id: member.id,
+			username: 'renamed-member'
+		});
 
 		const passwordForm = new FormData();
 		passwordForm.set('currentPassword', 'member strong test password');
@@ -102,7 +126,9 @@ describe('account actions', () => {
 		await expect(
 			actions.changePassword({
 				cookies,
-				locals: { user: { colourway: 'violet', id: member.id, username: 'renamed-member' } },
+				locals: {
+					user: { colourway: 'violet', formatPreferences, id: member.id, username: 'renamed-member' }
+				},
 				request: formRequest('http://localhost/account', passwordForm),
 				url: new URL('http://localhost/account')
 			} as never)
@@ -120,13 +146,17 @@ describe('account actions', () => {
 
 		const sessionId = await store.createSession(member.id);
 		await expect(store.refreshSession(sessionId)).resolves.toMatchObject({
-			user: { colourway: 'violet', id: member.id, username: 'renamed-member' }
+			user: { colourway: 'violet', formatPreferences, id: member.id, username: 'renamed-member' }
 		});
 	});
 
 	it('rejects oversized self-service account requests before parsing them', async () => {
 		const store = await import('$lib/server/store');
-		const user = { ...(await store.createInitialSudo('sudo', 'a strong test password')), colourway: defaultColourway };
+		const user = {
+			...(await store.createInitialSudo('sudo', 'a strong test password')),
+			colourway: defaultColourway,
+			formatPreferences: defaultFormatPreferences
+		};
 		const { actions } = await import('../../routes/account/+page.server');
 		const request = new Request('http://localhost/account', {
 			headers: { 'content-length': `${maximumAccountRequestBytes + 1}` },
@@ -143,6 +173,10 @@ describe('account actions', () => {
 		});
 		await expect(actions.changeColourway({ locals: { user }, request } as never)).resolves.toMatchObject({
 			data: { colourwayError: 'The colour update request is too large.' },
+			status: 413
+		});
+		await expect(actions.changeFormatPreferences({ locals: { user }, request } as never)).resolves.toMatchObject({
+			data: { formatPreferencesError: 'The format preferences request is too large.' },
 			status: 413
 		});
 	});
@@ -190,7 +224,11 @@ describe('account actions', () => {
 
 	it('rejects an unsupported colourway', async () => {
 		const store = await import('$lib/server/store');
-		const user = { ...(await store.createInitialSudo('sudo', 'a strong test password')), colourway: defaultColourway };
+		const user = {
+			...(await store.createInitialSudo('sudo', 'a strong test password')),
+			colourway: defaultColourway,
+			formatPreferences: defaultFormatPreferences
+		};
 		const { actions } = await import('../../routes/account/+page.server');
 		const formData = new FormData();
 		formData.set('colourway', 'unknown');
@@ -202,6 +240,29 @@ describe('account actions', () => {
 			} as never)
 		).resolves.toMatchObject({
 			data: { colourwayError: expect.any(String) },
+			status: 400
+		});
+	});
+
+	it('rejects unsupported display formats', async () => {
+		const store = await import('$lib/server/store');
+		const user = {
+			...(await store.createInitialSudo('sudo', 'a strong test password')),
+			colourway: defaultColourway,
+			formatPreferences: defaultFormatPreferences
+		};
+		const { actions } = await import('../../routes/account/+page.server');
+		const formData = new FormData();
+		formData.set('dateFormat', 'day-first');
+		formData.set('timeFormat', 'twelve-hour');
+
+		await expect(
+			actions.changeFormatPreferences({
+				locals: { user },
+				request: formRequest('http://localhost/account', formData)
+			} as never)
+		).resolves.toMatchObject({
+			data: { formatPreferencesError: expect.any(String) },
 			status: 400
 		});
 	});

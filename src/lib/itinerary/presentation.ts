@@ -1,4 +1,5 @@
-import { addCalendarDays, formatCalendarDate, type CalendarDateFormat } from './calendar';
+import { addCalendarDays, formatCalendarDate, type CalendarDateFormat, type CalendarLocale } from './calendar';
+import { defaultFormatPreferences, type DateFormat } from '$lib/format-preferences';
 import type { ItineraryItem, ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
@@ -74,6 +75,16 @@ function isTimestampOnDay(timestamp: number, bounds: DayBounds): boolean {
 	return timestamp >= bounds.dayStart && timestamp < bounds.dayEnd;
 }
 
+function isOngoingAccommodation(timing: ItineraryTiming, bounds: DayBounds): boolean {
+	if (timingStartTimestamp(timing) >= bounds.dayStart) {
+		return false;
+	}
+	if (timing.kind === 'exact' && timing.endAt === undefined) {
+		return true;
+	}
+	return timingEndTimestamp(timing) >= bounds.dayStart;
+}
+
 /** Places continuing stays above a day and new check-ins below it, with known stay boundaries in chronological order. */
 export function partitionDayItems<Item extends TimedItemWithType>(
 	items: readonly Item[],
@@ -88,9 +99,9 @@ export function partitionDayItems<Item extends TimedItemWithType>(
 	for (const item of items) {
 		if (item.type === 'accommodation') {
 			const checkInAt = timingStartTimestamp(item.timing);
-			if (checkInAt < bounds.dayStart) {
+			if (isOngoingAccommodation(item.timing, bounds)) {
 				ongoingStays.push(item);
-			} else if (checkInAt < bounds.dayEnd) {
+			} else if (isTimestampOnDay(checkInAt, bounds)) {
 				arrivingStays.push(item);
 			}
 
@@ -205,8 +216,13 @@ export function groupItemsByLocalDay<Item extends TimedItem>(
 		.map(([date, dayItems]) => ({ date, items: dayItems }));
 }
 
-export function formatLocalDay(date: string, format: CalendarDateFormat = 'date'): string {
-	const formatted = formatCalendarDate(date, format);
+export function formatLocalDay(
+	date: string,
+	format: CalendarDateFormat = 'date',
+	locale: CalendarLocale = null,
+	dateFormat: DateFormat = defaultFormatPreferences.dateFormat
+): string {
+	const formatted = formatCalendarDate(date, format, locale, dateFormat);
 	if (!formatted) {
 		throw new Error(`Calendar day ${date} cannot be formatted.`);
 	}

@@ -1,3 +1,5 @@
+import { defaultFormatPreferences, formatTime, type DateFormat, type TimeFormat } from '$lib/format-preferences';
+
 export type CalendarDay = Readonly<{
 	date: string;
 	day: number;
@@ -11,7 +13,16 @@ export type CalendarMonth = Readonly<{
 
 export type CalendarDateFormat = 'date' | 'date-with-weekday';
 
+export type CalendarLocale = string | null;
+
+/** A locale whose short date representation uses the ISO calendar order. */
+export const isoDateLocale = 'en-CA-u-ca-iso8601';
+
 const calendarDatePattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/;
+const calendarFormatters = new Map<string, Intl.DateTimeFormat>();
+const australianEnglishLocales = new Map<string, boolean>();
+
+type CalendarFormatterFormat = CalendarDateFormat | 'month' | 'weekday';
 
 function padded(value: number): string {
 	return String(value).padStart(2, '0');
@@ -72,31 +83,139 @@ export function calendarDays(month: CalendarMonth): CalendarDay[] {
 	});
 }
 
-export function formatCalendarMonth(month: CalendarMonth): string {
-	return new Intl.DateTimeFormat('en-AU', {
-		month: 'long',
-		timeZone: 'UTC',
-		year: 'numeric'
-	}).format(new Date(Date.UTC(month.year, month.month - 1, 1)));
+export function isAustralianEnglishLocale(locale: CalendarLocale): boolean {
+	if (locale === null) {
+		return false;
+	}
+	const existing = australianEnglishLocales.get(locale);
+	if (existing !== undefined) {
+		return existing;
+	}
+
+	let isAustralianEnglish = false;
+	try {
+		const parsed = new Intl.Locale(locale);
+		isAustralianEnglish = parsed.language === 'en' && parsed.region === 'AU';
+	} catch {
+		// An invalid locale uses the ISO fallback instead.
+	}
+
+	australianEnglishLocales.set(locale, isAustralianEnglish);
+	return isAustralianEnglish;
 }
 
-export function formatCalendarDate(value: string, format: CalendarDateFormat = 'date'): string | null {
+/** Returns the locale that gives a date picker the selected field order. */
+export function datePickerLocale(
+	locale: CalendarLocale,
+	dateFormat: DateFormat = defaultFormatPreferences.dateFormat
+): string {
+	switch (dateFormat) {
+		case 'day-month-year':
+			return 'en-AU';
+		case 'month-day-year':
+			return 'en-US';
+		case 'year-month-day':
+			return isoDateLocale;
+		case 'locale':
+			return locale ?? isoDateLocale;
+	}
+}
+
+/** Returns the hyphen separator used by fixed-format and Australian English date pickers. */
+export function datePickerDateSeparator(
+	locale: CalendarLocale,
+	dateFormat: DateFormat = defaultFormatPreferences.dateFormat
+): '-' | null {
+	return dateFormat === 'locale' && !isAustralianEnglishLocale(locale) ? null : '-';
+}
+
+function calendarFormatterOptions(format: CalendarFormatterFormat): Intl.DateTimeFormatOptions {
+	switch (format) {
+		case 'date':
+			return { dateStyle: 'medium', timeZone: 'UTC' };
+		case 'date-with-weekday':
+			return { day: 'numeric', month: 'short', timeZone: 'UTC', weekday: 'short', year: 'numeric' };
+		case 'month':
+			return { month: 'long', timeZone: 'UTC', year: 'numeric' };
+		case 'weekday':
+			return { timeZone: 'UTC', weekday: 'short' };
+	}
+}
+
+function calendarFormatter(locale: CalendarLocale, format: CalendarFormatterFormat): Intl.DateTimeFormat | null {
+	if (locale === null) {
+		return null;
+	}
+	const key = `${locale}:${format}`;
+	const existing = calendarFormatters.get(key);
+	if (existing) {
+		return existing;
+	}
+
+	try {
+		const formatter = new Intl.DateTimeFormat(locale, calendarFormatterOptions(format));
+		calendarFormatters.set(key, formatter);
+		return formatter;
+	} catch {
+		return null;
+	}
+}
+
+export function formatCalendarMonth(month: CalendarMonth, locale: CalendarLocale = null): string {
+	const date = new Date(Date.UTC(month.year, month.month - 1, 1));
+	return calendarFormatter(locale, 'month')?.format(date) ?? `${month.year}-${padded(month.month)}`;
+}
+
+function fixedDateLabel(
+	parts: Readonly<{ day: number; month: number; year: number }>,
+	dateFormat: DateFormat
+): string | null {
+	switch (dateFormat) {
+		case 'locale':
+			return null;
+		case 'day-month-year':
+			return `${padded(parts.day)}-${padded(parts.month)}-${parts.year}`;
+		case 'month-day-year':
+			return `${padded(parts.month)}-${padded(parts.day)}-${parts.year}`;
+		case 'year-month-day':
+			return `${parts.year}-${padded(parts.month)}-${padded(parts.day)}`;
+	}
+}
+
+/** Formats a canonical date using the selected order, the user's locale, or ISO when no locale is available. */
+export function formatCalendarDate(
+	value: string,
+	format: CalendarDateFormat = 'date',
+	locale: CalendarLocale = null,
+	dateFormat: DateFormat = defaultFormatPreferences.dateFormat
+): string | null {
 	const parts = calendarDateParts(value);
 	if (!parts) {
 		return null;
 	}
 
 	const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
-	const dateLabel = new Intl.DateTimeFormat('en-AU', {
-		day: '2-digit',
-		month: 'short',
-		timeZone: 'UTC',
-		year: 'numeric'
-	}).format(date);
-	if (format === 'date') {
-		return dateLabel;
+	const dateLabel =
+		fixedDateLabel(parts, dateFormat) ??
+		(isAustralianEnglishLocale(locale) ? `${padded(parts.day)}-${padded(parts.month)}-${parts.year}` : null);
+	if (dateLabel) {
+		if (format === 'date') {
+			return dateLabel;
+		}
+		const weekday = calendarFormatter(locale, 'weekday')?.format(date);
+		return weekday ? `${dateLabel} (${weekday})` : dateLabel;
 	}
+	return calendarFormatter(locale, format)?.format(date) ?? value;
+}
 
-	const weekday = new Intl.DateTimeFormat('en-AU', { timeZone: 'UTC', weekday: 'short' }).format(date);
-	return `${dateLabel} (${weekday})`;
+/** Combines the selected calendar date and clock display conventions. */
+export function formatCalendarDateTime(
+	date: string,
+	time: string,
+	format: CalendarDateFormat = 'date',
+	locale: CalendarLocale = null,
+	dateFormat: DateFormat = defaultFormatPreferences.dateFormat,
+	timeFormat: TimeFormat = defaultFormatPreferences.timeFormat
+): string {
+	return `${formatCalendarDate(date, format, locale, dateFormat) ?? date}, ${formatTime(time, timeFormat)}`;
 }

@@ -29,10 +29,11 @@
 
 	$effect(() => {
 		setDocumentColourway(data.colourway);
+		viewerContext.setFormatPreferences(data.formatPreferences);
 	});
 
 	onMount(() => {
-		viewerContext.initialize();
+		viewerContext.initialize(data.formatPreferences);
 		if (!dev) {
 			registerOfflineSupport();
 		}

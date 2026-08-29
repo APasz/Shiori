@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { CurrencyCode, NoteEntryState } from '$lib/itinerary/schema';
 	import { emptyNoteEstimatedCostDraft, emptyNoteLinkDraft, type NoteEntryDraft } from '$lib/itinerary/note-draft';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import TimePicker from './TimePicker.svelte';
 
 	let {
@@ -73,13 +74,19 @@
 				Start time <span class="field-hint">Optional</span>
 				<TimePicker
 					id={`${entry.id}-start-time`}
+					timeFormat={viewerContext.formatPreferences.timeFormat}
 					value={entry.startTime}
 					onChange={(value) => (entry.startTime = value)}
 				/>
 			</label>
 			<label class="shiori-form-label" for={`${entry.id}-end-time`}>
 				End time <span class="field-hint">Optional</span>
-				<TimePicker id={`${entry.id}-end-time`} value={entry.endTime} onChange={(value) => (entry.endTime = value)} />
+				<TimePicker
+					id={`${entry.id}-end-time`}
+					timeFormat={viewerContext.formatPreferences.timeFormat}
+					value={entry.endTime}
+					onChange={(value) => (entry.endTime = value)}
+				/>
 			</label>
 		</div>
 		<section aria-label={`Estimated costs for ${entry.title || `entry ${entryNumber}`}`} class="estimated-costs">

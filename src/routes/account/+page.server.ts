@@ -13,6 +13,7 @@ import {
 	listAccountsForManagement,
 	resetAccountPassword,
 	updateOwnColourway,
+	updateOwnFormatPreferences,
 	updateOwnUsername
 } from '$lib/server/store/auth';
 import { StoreError } from '$lib/server/store/error';
@@ -148,6 +149,33 @@ export const actions: Actions = {
 			}
 			if (error instanceof ZodError) {
 				return fail(400, { colourwayError: validationMessage(error, 'Choose a valid colour.') });
+			}
+			throw error;
+		}
+	},
+	changeFormatPreferences: async ({ locals, request }) => {
+		const currentUser = requireAccount(locals.user);
+		if (accountRequestIsTooLarge(request)) {
+			return fail(413, { formatPreferencesError: 'The format preferences request is too large.' });
+		}
+
+		try {
+			const formData = await request.formData();
+			const formatPreferences = await updateOwnFormatPreferences({
+				dateFormat: formDataText(formData, 'dateFormat'),
+				timeFormat: formDataText(formData, 'timeFormat'),
+				userId: currentUser.id
+			});
+			locals.user = { ...currentUser, formatPreferences };
+			return { formatPreferencesUpdated: formatPreferences };
+		} catch (error: unknown) {
+			if (error instanceof StoreError) {
+				return fail(error.status, { formatPreferencesError: error.message });
+			}
+			if (error instanceof ZodError) {
+				return fail(400, {
+					formatPreferencesError: validationMessage(error, 'Choose valid date and time display formats.')
+				});
 			}
 			throw error;
 		}

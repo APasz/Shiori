@@ -121,7 +121,12 @@
 			<p class="dates">Localizing itinerary…</p>
 		{:else if dateRange}
 			<p class="dates">
-				{formatLocalDay(dateRange[0])} – {formatLocalDay(dateRange[1])}
+				{formatLocalDay(dateRange[0], 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)} – {formatLocalDay(
+					dateRange[1],
+					'date',
+					viewerContext.locale,
+					viewerContext.formatPreferences.dateFormat
+				)}
 			</p>
 		{/if}
 

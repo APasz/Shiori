@@ -130,7 +130,7 @@
 
 {#snippet stayBlock(stays: DayItem[], position: 'arriving' | 'ongoing')}
 	<section
-		aria-label={`${position === 'ongoing' ? 'Continuing stays' : 'Check-ins'} on ${formatLocalDay(date)}`}
+		aria-label={`${position === 'ongoing' ? 'Continuing stays' : 'Check-ins'} on ${formatLocalDay(date, 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)}`}
 		class="stay-block"
 	>
 		<h4>{position === 'ongoing' ? 'Continuing stays' : 'Check-ins'}</h4>
@@ -143,7 +143,16 @@
 {/snippet}
 
 <details class="day" open={isOpen} ontoggle={(event) => onDisclosureChange(date, event)}>
-	<summary><h3>Day {dayNumber}: {formatLocalDay(date, 'date-with-weekday')}</h3></summary>
+	<summary
+		><h3>
+			Day {dayNumber}: {formatLocalDay(
+				date,
+				'date-with-weekday',
+				viewerContext.locale,
+				viewerContext.formatPreferences.dateFormat
+			)}
+		</h3></summary
+	>
 	<div class="day-content">
 		{#if dayItems.ongoingStays.length > 0}
 			{@render stayBlock(dayItems.ongoingStays, 'ongoing')}
@@ -165,7 +174,10 @@
 			{@render stayBlock(dayItems.arrivingStays, 'arriving')}
 		{/if}
 		{#if canModifyItinerary}
-			<div class="add-item-actions" aria-label={`Add an item on ${formatLocalDay(date)}`}>
+			<div
+				class="add-item-actions"
+				aria-label={`Add an item on ${formatLocalDay(date, 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)}`}
+			>
 				<button onclick={() => onCreateItem(date)} type="button">Add item</button>
 				<button onclick={() => onEditDayNote(date)} type="button">Notes</button>
 			</div>

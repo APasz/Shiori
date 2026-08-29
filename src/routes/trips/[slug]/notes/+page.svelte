@@ -9,6 +9,7 @@
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { ItineraryNote, ItineraryNoteTarget } from '$lib/itinerary/schema';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { refreshOfflineTripPage } from '$lib/offline';
 	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
 	import type { PageData } from './$types';
@@ -110,7 +111,12 @@
 					{#each dayNotes as note (note.date)}
 						<ItineraryNoteView
 							defaultTimeZone={data.trip.itinerary.timeZone}
-							heading={formatCalendarDate(note.date, 'date-with-weekday') ?? note.date}
+							heading={formatCalendarDate(
+								note.date,
+								'date-with-weekday',
+								viewerContext.locale,
+								viewerContext.formatPreferences.dateFormat
+							) ?? note.date}
 							{note}
 							onEdit={canModifyNotes ? () => beginEditing({ date: note.date, kind: 'day' }, note) : undefined}
 						/>

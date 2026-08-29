@@ -2,7 +2,7 @@
 	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
-	import { formatCalendarDate } from '$lib/itinerary/calendar';
+	import { formatCalendarDate, formatCalendarDateTime } from '$lib/itinerary/calendar';
 	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
 	import {
 		itemLocationFlow,
@@ -11,6 +11,8 @@
 	} from '$lib/itinerary/item-location-flow';
 	import type { Cost, CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
+	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { formatMonetaryAmount } from '$lib/money';
 	import { itemTypeAccentStyle, reservationStatusStyle } from '$lib/theme/palette';
 	import { onMount } from 'svelte';
@@ -68,14 +70,18 @@
 	}
 
 	function paidAtLabel(paidAt: number): string {
-		return new Intl.DateTimeFormat(undefined, {
-			day: '2-digit',
-			hour: 'numeric',
-			minute: '2-digit',
-			month: 'short',
-			weekday: 'short',
-			year: 'numeric'
-		}).format(paidAt);
+		const timestamp = formatTimestampInTimeZone(paidAt, viewerContext.timeZone);
+		if (!timestamp) {
+			return new Date(paidAt).toISOString();
+		}
+		return formatCalendarDateTime(
+			timestamp.date,
+			timestamp.time,
+			'date-with-weekday',
+			viewerContext.locale,
+			viewerContext.formatPreferences.dateFormat,
+			viewerContext.formatPreferences.timeFormat
+		);
 	}
 
 	function exchangeRateLabel(exchangeRate: number): string {
@@ -264,7 +270,9 @@
 							<p class="cost-payment-detail">
 								Paid {paidAtLabel(item.cost.payment.paidAt)} · Rate on {formatCalendarDate(
 									item.cost.payment.rateDate,
-									'date-with-weekday'
+									'date-with-weekday',
+									viewerContext.locale,
+									viewerContext.formatPreferences.dateFormat
 								)}
 							</p>
 							<p class="cost-rate">
@@ -279,7 +287,12 @@
 						{/if}
 					{:else if item.cost.scheduledPaymentDate}
 						<p class="cost-payment-detail">
-							Due {formatCalendarDate(item.cost.scheduledPaymentDate, 'date-with-weekday')}
+							Due {formatCalendarDate(
+								item.cost.scheduledPaymentDate,
+								'date-with-weekday',
+								viewerContext.locale,
+								viewerContext.formatPreferences.dateFormat
+							)}
 						</p>
 					{/if}
 				</div>

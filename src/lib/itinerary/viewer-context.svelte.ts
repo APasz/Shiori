@@ -1,4 +1,6 @@
 import { browser } from '$app/environment';
+import { page } from '$app/state';
+import { defaultFormatPreferences, type FormatPreferences } from '$lib/format-preferences';
 import { isValidIanaTimeZone } from './zoned-time';
 
 function detectedTimeZone(): string {
@@ -6,10 +8,34 @@ function detectedTimeZone(): string {
 	return isValidIanaTimeZone(resolved) ? resolved : 'UTC';
 }
 
+function detectedLocale(): string | null {
+	try {
+		const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+		return locale && locale !== 'und' ? locale : null;
+	} catch {
+		return null;
+	}
+}
+
+function persistedFormatPreferences(): FormatPreferences {
+	try {
+		return page.data.formatPreferences ?? defaultFormatPreferences;
+	} catch {
+		// Isolated component rendering has no request-bound page data.
+		return defaultFormatPreferences;
+	}
+}
+
 class ViewerContext {
+	locale = $state<string | null>(null);
 	timeZone = $state('UTC');
 	revision = $state(0);
+	#formatPreferences = $state<FormatPreferences | null>(null);
 	#overrideTimestamp = $state<number | null>(null);
+
+	get formatPreferences(): FormatPreferences {
+		return this.#formatPreferences ?? persistedFormatPreferences();
+	}
 
 	get currentTimestamp(): number {
 		return this.#overrideTimestamp ?? Date.now();
@@ -19,10 +45,19 @@ class ViewerContext {
 		return this.#overrideTimestamp !== null;
 	}
 
-	initialize(): void {
-		if (browser && !this.isSimulated) {
+	initialize(formatPreferences: FormatPreferences = defaultFormatPreferences): void {
+		this.setFormatPreferences(formatPreferences);
+		if (!browser) {
+			return;
+		}
+		this.locale = detectedLocale();
+		if (!this.isSimulated) {
 			this.timeZone = detectedTimeZone();
 		}
+	}
+
+	setFormatPreferences(formatPreferences: FormatPreferences): void {
+		this.#formatPreferences = formatPreferences;
 	}
 
 	setSimulated(timestamp: number, timeZone: string): void {
@@ -39,6 +74,7 @@ class ViewerContext {
 
 	resetToBrowser(): void {
 		this.#overrideTimestamp = null;
+		this.locale = detectedLocale();
 		this.timeZone = detectedTimeZone();
 		this.revision += 1;
 	}

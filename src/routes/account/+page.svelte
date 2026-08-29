@@ -3,23 +3,36 @@
 	import { availableAccountTabs, type AccountTab } from '$lib/account/tabs';
 	import { minimumPasswordLength } from '$lib/auth/password-policy';
 	import { browserPages, browserTitle } from '$lib/browser-title';
+	import {
+		dateFormatOptions,
+		defaultFormatPreferences,
+		timeFormatOptions,
+		type DateFormat,
+		type FormatPreferences,
+		type TimeFormat
+	} from '$lib/format-preferences';
 	import AccountAdministration from '$lib/account/AccountAdministration.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import ThemeModePicker from '$lib/components/ThemeModePicker.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { colourwayLabels, type Colourway } from '$lib/theme/colourway';
 	import { colourwayOptions } from '$lib/theme/palette';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let showPasswords = $state(false);
 	let selectedColourway = $state<Colourway | null>(null);
 	let previousSavedColourway = $state<Colourway | undefined>(undefined);
+	let selectedDateFormat = $state<DateFormat>(defaultFormatPreferences.dateFormat);
+	let selectedTimeFormat = $state<TimeFormat>(defaultFormatPreferences.timeFormat);
+	let previousSavedFormatPreferences = $state<FormatPreferences | undefined>(undefined);
 	const previewColourway = $derived(selectedColourway ?? data.currentUser.colourway);
 	const visibleTabs = $derived(availableAccountTabs(data.canManageAccounts));
 
 	const accountActionTabs = {
 		changeColourway: 'appearance',
+		changeFormatPreferences: 'appearance',
 		changePassword: 'account',
 		changeUsername: 'account'
 	} as const satisfies Record<string, AccountTab>;
@@ -34,6 +47,23 @@
 		if (savedColourway !== previousSavedColourway) {
 			selectedColourway = null;
 			previousSavedColourway = savedColourway;
+		}
+	});
+
+	$effect(() => {
+		const savedFormatPreferences = data.currentUser.formatPreferences;
+		if (savedFormatPreferences !== previousSavedFormatPreferences) {
+			selectedDateFormat = savedFormatPreferences.dateFormat;
+			selectedTimeFormat = savedFormatPreferences.timeFormat;
+			previousSavedFormatPreferences = savedFormatPreferences;
+		}
+	});
+
+	$effect(() => {
+		if (form?.formatPreferencesUpdated) {
+			selectedDateFormat = form.formatPreferencesUpdated.dateFormat;
+			selectedTimeFormat = form.formatPreferencesUpdated.timeFormat;
+			viewerContext.setFormatPreferences(form.formatPreferencesUpdated);
 		}
 	});
 </script>
@@ -126,6 +156,35 @@
 				{#if form?.colourwayError}<p class="error" role="alert">{form.colourwayError}</p>{/if}
 				{#if form?.colourwayUpdated}<p class="success" role="status">Colour updated.</p>{/if}
 				<button class="shiori-form-button" type="submit">Save colour</button>
+			</form>
+
+			<form action={actionUrl('changeFormatPreferences')} class="shiori-form appearance-form" method="POST">
+				<fieldset class="format-preferences-fields">
+					<legend>Date and time</legend>
+					<p class="format-preferences-description">Choose how dates and times are displayed throughout Shiori.</p>
+					<div class="format-preferences-controls">
+						<label class="shiori-form-label">
+							Date format
+							<select bind:value={selectedDateFormat} class="shiori-form-control" name="dateFormat">
+								{#each dateFormatOptions as option (option.value)}
+									<option value={option.value}>{option.label}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="shiori-form-label">
+							Time format
+							<select bind:value={selectedTimeFormat} class="shiori-form-control" name="timeFormat">
+								{#each timeFormatOptions as option (option.value)}
+									<option value={option.value}>{option.label}</option>
+								{/each}
+							</select>
+						</label>
+					</div>
+				</fieldset>
+
+				{#if form?.formatPreferencesError}<p class="error" role="alert">{form.formatPreferencesError}</p>{/if}
+				{#if form?.formatPreferencesUpdated}<p class="success" role="status">Date and time formats updated.</p>{/if}
+				<button class="shiori-form-button" type="submit">Save date and time formats</button>
 			</form>
 		</section>
 	{:else if data.selectedTab === 'account'}
@@ -304,6 +363,23 @@
 	.appearance-theme :global(.theme-mode-picker) {
 		margin-top: 0.75rem;
 		margin-inline: auto;
+	}
+
+	.format-preferences-description {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+		margin: 0;
+	}
+
+	.format-preferences-fields {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.format-preferences-controls {
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	fieldset {
@@ -518,6 +594,10 @@
 		}
 
 		.colourway-options {
+			grid-template-columns: 1fr;
+		}
+
+		.format-preferences-controls {
 			grid-template-columns: 1fr;
 		}
 	}

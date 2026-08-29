@@ -1,26 +1,13 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
+	import { formatCalendarDateTime } from '$lib/itinerary/calendar';
+	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	let browserReady = $state(false);
-	const sessionRenewedFormatter = $derived(
-		browserReady
-			? new Intl.DateTimeFormat(undefined, {
-					dateStyle: 'medium',
-					timeStyle: 'short',
-					timeZone: viewerContext.timeZone
-				})
-			: null
-	);
-
-	onMount(() => {
-		browserReady = true;
-	});
 
 	function confirmForceClose(event: SubmitEvent): void {
 		if (!window.confirm('Close all active edit sessions? Unsaved changes will be lost.')) {
@@ -35,7 +22,17 @@
 	}
 
 	function sessionRenewedLabel(sessionRenewedAt: number): string {
-		return sessionRenewedFormatter?.format(sessionRenewedAt) ?? 'Localizing…';
+		const timestamp = formatTimestampInTimeZone(sessionRenewedAt, viewerContext.timeZone);
+		return timestamp
+			? formatCalendarDateTime(
+					timestamp.date,
+					timestamp.time,
+					'date',
+					viewerContext.locale,
+					viewerContext.formatPreferences.dateFormat,
+					viewerContext.formatPreferences.timeFormat
+				)
+			: new Date(sessionRenewedAt).toISOString();
 	}
 </script>
 

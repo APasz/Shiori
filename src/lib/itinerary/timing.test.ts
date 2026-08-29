@@ -10,6 +10,25 @@ import {
 } from './timing';
 
 describe('daily itinerary timing', () => {
+	it('applies date and time display preferences to timing labels', () => {
+		const timing = {
+			kind: 'exact' as const,
+			startAt: Date.UTC(2026, 9, 29, 6, 0),
+			endAt: Date.UTC(2026, 9, 29, 8, 30)
+		};
+		const formatPreferences = { dateFormat: 'day-month-year', timeFormat: 'twelve-hour' } as const;
+
+		expect(formatItineraryTiming(timing, true, 'Asia/Tokyo', 'date', 'en-US', formatPreferences)).toBe(
+			'3:00 pm–5:30 pm'
+		);
+		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo', 'date', 'en-US', formatPreferences)).toBe(
+			'29-10-2026, 3:00 pm'
+		);
+		expect(formatItineraryTimingForDay(timing, '2026-10-29', 'Asia/Tokyo', 'Asia/Tokyo', formatPreferences)).toBe(
+			'3:00 pm–5:30 pm'
+		);
+	});
+
 	it('shows an overnight item start and end time only on their applicable days', () => {
 		const timing = {
 			kind: 'exact' as const,
@@ -50,10 +69,13 @@ describe('daily itinerary timing', () => {
 			timeZone: 'Asia/Tokyo'
 		};
 
-		expect(formatItineraryTiming(timing, true, 'Asia/Tokyo')).toBe('29 Oct 2026 – 01 Nov 2026 · times unknown');
+		expect(formatItineraryTiming(timing, true, 'Asia/Tokyo')).toBe('2026-10-29 – 2026-11-01 · times unknown');
 		expect(formatItineraryTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in time unknown');
 		expect(formatItineraryTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBe('Stay continues');
 		expect(formatItineraryTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out time unknown');
+		expect(formatAccommodationTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in time unknown');
+		expect(formatAccommodationTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBeNull();
+		expect(formatAccommodationTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out time unknown');
 	});
 
 	it('labels accommodation check-in and check-out boundaries', () => {
@@ -64,18 +86,19 @@ describe('daily itinerary timing', () => {
 		};
 
 		expect(formatAccommodationTiming(timing, true, 'Asia/Tokyo')).toBe(
-			'Check-in 29 Oct 2026, 15:00 · Check-out 01 Nov 2026, 10:00'
+			'Check-in 2026-10-29, 15:00 · Check-out 2026-11-01, 10:00'
 		);
 		expect(formatAccommodationTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in 15:00');
-		expect(formatAccommodationTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBe('Stay continues');
+		expect(formatAccommodationTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBeNull();
 		expect(formatAccommodationTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out 10:00');
 		expect(formatAccommodationTimingParts(timing, true, 'Asia/Tokyo')).toEqual([
-			{ label: 'Check-in', value: '29 Oct 2026, 15:00' },
-			{ label: 'Check-out', value: '01 Nov 2026, 10:00' }
+			{ label: 'Check-in', value: '2026-10-29, 15:00' },
+			{ label: 'Check-out', value: '2026-11-01, 10:00' }
 		]);
 		expect(formatAccommodationTimingForDayParts(timing, '2026-11-01', 'Asia/Tokyo')).toEqual([
 			{ label: 'Check-out', value: '10:00' }
 		]);
+		expect(formatAccommodationTimingForDayParts(timing, '2026-10-30', 'Asia/Tokyo')).toBeNull();
 	});
 
 	it('formats exact timing boundaries independently', () => {
@@ -85,10 +108,13 @@ describe('daily itinerary timing', () => {
 			endAt: Date.UTC(2026, 10, 1, 1, 0)
 		};
 
-		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo')).toBe('29 Oct 2026, 15:00');
-		expect(formatItineraryTimingBoundary(timing, 'end', true, 'Asia/Tokyo')).toBe('01 Nov 2026, 10:00');
+		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo')).toBe('2026-10-29, 15:00');
+		expect(formatItineraryTimingBoundary(timing, 'end', true, 'Asia/Tokyo')).toBe('2026-11-01, 10:00');
 		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo', 'date-with-weekday')).toBe(
-			'29 Oct 2026 (Thu), 15:00'
+			'2026-10-29, 15:00'
+		);
+		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo', 'date-with-weekday', 'en-US')).toBe(
+			'Thu, Oct 29, 2026, 15:00'
 		);
 	});
 
@@ -101,7 +127,7 @@ describe('daily itinerary timing', () => {
 			timeZone: 'Asia/Tokyo'
 		};
 
-		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo')).toBe('29 Oct 2026 · time unknown');
-		expect(formatItineraryTimingBoundary(timing, 'end', true, 'Asia/Tokyo')).toBe('01 Nov 2026 · time unknown');
+		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo')).toBe('2026-10-29 · time unknown');
+		expect(formatItineraryTimingBoundary(timing, 'end', true, 'Asia/Tokyo')).toBe('2026-11-01 · time unknown');
 	});
 });

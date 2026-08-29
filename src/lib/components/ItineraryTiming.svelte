@@ -39,16 +39,38 @@
 
 	function formatTiming(displayTimeZone: string, dayTimeZone?: string): string | null {
 		if (display !== 'full') {
-			return formatItineraryTimingBoundary(timing, display, includeDate, displayTimeZone, calendarDateFormat);
+			return formatItineraryTimingBoundary(
+				timing,
+				display,
+				includeDate,
+				displayTimeZone,
+				calendarDateFormat,
+				viewerContext.locale,
+				viewerContext.formatPreferences
+			);
 		}
 		if (day) {
 			return itemType === 'accommodation'
-				? formatAccommodationTimingForDay(timing, day, displayTimeZone, dayTimeZone)
-				: formatItineraryTimingForDay(timing, day, displayTimeZone, dayTimeZone);
+				? formatAccommodationTimingForDay(timing, day, displayTimeZone, dayTimeZone, viewerContext.formatPreferences)
+				: formatItineraryTimingForDay(timing, day, displayTimeZone, dayTimeZone, viewerContext.formatPreferences);
 		}
 		return itemType === 'accommodation'
-			? formatAccommodationTiming(timing, includeDate, displayTimeZone, calendarDateFormat)
-			: formatItineraryTiming(timing, includeDate, displayTimeZone, calendarDateFormat);
+			? formatAccommodationTiming(
+					timing,
+					includeDate,
+					displayTimeZone,
+					calendarDateFormat,
+					viewerContext.locale,
+					viewerContext.formatPreferences
+				)
+			: formatItineraryTiming(
+					timing,
+					includeDate,
+					displayTimeZone,
+					calendarDateFormat,
+					viewerContext.locale,
+					viewerContext.formatPreferences
+				);
 	}
 
 	function formatTimingParts(displayTimeZone: string, dayTimeZone?: string): readonly TimingDisplayPart[] | null {
@@ -56,8 +78,15 @@
 			return null;
 		}
 		return day
-			? formatAccommodationTimingForDayParts(timing, day, displayTimeZone, dayTimeZone)
-			: formatAccommodationTimingParts(timing, includeDate, displayTimeZone, calendarDateFormat);
+			? formatAccommodationTimingForDayParts(timing, day, displayTimeZone, dayTimeZone, viewerContext.formatPreferences)
+			: formatAccommodationTimingParts(
+					timing,
+					includeDate,
+					displayTimeZone,
+					calendarDateFormat,
+					viewerContext.locale,
+					viewerContext.formatPreferences
+				);
 	}
 
 	const viewerParts = $derived(browserReady ? formatTimingParts(viewerContext.timeZone, viewerContext.timeZone) : null);
@@ -66,6 +95,9 @@
 		browserReady && !viewerParts ? formatTiming(viewerContext.timeZone, viewerContext.timeZone) : null
 	);
 	const localLabel = $derived(browserReady && !localParts ? formatTiming(timeZone, viewerContext.timeZone) : null);
+	const hasDisplayedTiming = $derived(
+		!browserReady || viewerParts !== null || viewerLabel !== null || localParts !== null || localLabel !== null
+	);
 	const showLocalTime = $derived(timeZone !== viewerContext.timeZone);
 	const displayTimestamp = $derived(display === 'end' ? timingEndTimestamp(timing) : timingStartTimestamp(timing));
 	const localTimeZoneOffset = $derived(timeZoneOffsetLabel(timeZone, displayTimestamp));
@@ -75,37 +107,41 @@
 	});
 </script>
 
-<span class:uncertain={timing.kind === 'approximate' || timing.kind === 'window'} class="itinerary-timing">
-	{#if viewerParts}
-		<span class="timing-parts">
-			{#each viewerParts as part (`${part.label ?? ''}:${part.value}`)}
-				<span class="timing-part">
-					{#if part.label}<span class="timing-context">{part.label}</span>{/if}
-					<span>{part.value}</span>
-				</span>
-			{/each}
-		</span>
-	{:else}
-		<span>{viewerLabel ?? 'Localizing…'}</span>
-	{/if}
-	{#if showLocalTime && (localParts || localLabel)}
-		{#if localParts}
-			<span class="local-time timing-parts" title={localTimeZoneOffset ?? undefined}>
-				{#each localParts as part (`${part.label ?? ''}:${part.value}`)}
+{#if hasDisplayedTiming}
+	<span class:uncertain={timing.kind === 'approximate' || timing.kind === 'window'} class="itinerary-timing">
+		{#if viewerParts}
+			<span class="timing-parts">
+				{#each viewerParts as part (`${part.label ?? ''}:${part.value}`)}
 					<span class="timing-part">
+						{#if part.label}<span class="timing-context">{part.label}</span>{/if}
 						<span>{part.value}</span>
 					</span>
 				{/each}
-				<span class="time-zone-label">{timeZoneShortLabel(timeZone, timingStartTimestamp(timing))}</span>
 			</span>
-		{:else}
-			<span class="local-time" title={localTimeZoneOffset ?? undefined}>
-				{localLabel}
-				{timeZoneShortLabel(timeZone, displayTimestamp)}
-			</span>
+		{:else if viewerLabel}
+			<span>{viewerLabel}</span>
+		{:else if !browserReady}
+			<span>Localizing…</span>
 		{/if}
-	{/if}
-</span>
+		{#if showLocalTime && (localParts || localLabel)}
+			{#if localParts}
+				<span class="local-time timing-parts" title={localTimeZoneOffset ?? undefined}>
+					{#each localParts as part (`${part.label ?? ''}:${part.value}`)}
+						<span class="timing-part">
+							<span>{part.value}</span>
+						</span>
+					{/each}
+					<span class="time-zone-label">{timeZoneShortLabel(timeZone, timingStartTimestamp(timing))}</span>
+				</span>
+			{:else}
+				<span class="local-time" title={localTimeZoneOffset ?? undefined}>
+					{localLabel}
+					{timeZoneShortLabel(timeZone, displayTimestamp)}
+				</span>
+			{/if}
+		{/if}
+	</span>
+{/if}
 
 <style>
 	.itinerary-timing {

@@ -16,7 +16,12 @@ export type ActiveSessionUser = AuthenticatedUser & {
 };
 
 function authenticatedSessionUser(user: StoredUser): AuthenticatedSessionUser {
-	return { colourway: user.colourway, id: user.id, username: user.username };
+	return {
+		colourway: user.colourway,
+		formatPreferences: user.formatPreferences,
+		id: user.id,
+		username: user.username
+	};
 }
 
 export async function createSession(userId: string): Promise<string> {

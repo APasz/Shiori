@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { TimeField } from 'bits-ui';
 	import { parseTime, type Time } from '@internationalized/date';
+	import { defaultFormatPreferences, formatTime, type TimeFormat } from '$lib/format-preferences';
 
 	const quickTimes = ['09:00', '12:00', '15:00', '18:00'] as const;
 	const localTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -8,14 +9,17 @@
 	let {
 		id,
 		label,
+		timeFormat = defaultFormatPreferences.timeFormat,
 		value,
 		onChange
 	}: {
 		id: string;
 		label?: string;
+		timeFormat?: TimeFormat;
 		value: string;
 		onChange: (time: string) => void;
 	} = $props();
+	const hourCycle = $derived(timeFormat === 'twelve-hour' ? 12 : 24);
 
 	function parsedTime(value: string): Time | undefined {
 		if (!localTimePattern.test(value)) {
@@ -34,7 +38,7 @@
 </script>
 
 <div class="time-picker">
-	<TimeField.Root hourCycle={24} onValueChange={setTime} value={parsedTime(value)}>
+	<TimeField.Root {hourCycle} onValueChange={setTime} value={parsedTime(value)}>
 		<TimeField.Input aria-label={label ?? 'Time'} class="shiori-form-control time-field" {id}>
 			{#snippet children({ segments })}
 				{#each segments as { part, value: segmentValue }, index (`${part}-${index}`)}
@@ -53,7 +57,7 @@
 				onclick={() => onChange(time)}
 				type="button"
 			>
-				{time}
+				{formatTime(time, timeFormat)}
 			</button>
 		{/each}
 	</div>

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { minimumPasswordLength, passwordMinimumMessage } from '$lib/auth/password-policy';
+import { dateFormatValues, timeFormatValues } from '$lib/format-preferences';
 import { itineraryIdentifierSchema, itinerarySchema, unixTimestampSchema } from '$lib/itinerary/schema';
 import { colourwaySchema } from '$lib/theme/colourway';
 
@@ -12,7 +13,8 @@ export const preNotesStoredDataVersion = 11;
 export const preAccessBlockStoredDataVersion = 12;
 export const preSudoStoredDataVersion = 13;
 export const preAppearanceStoredDataVersion = 14;
-export const storedDataVersion = 15;
+export const preFormatPreferencesStoredDataVersion = 15;
+export const storedDataVersion = 16;
 export const tripStructureLockTargetId = 'trip-structure';
 
 export const usernameSchema = z
@@ -54,6 +56,10 @@ const storedPasswordHashSchema = z
 	);
 export const shareRoleSchema = z.enum(['user', 'admin']);
 export const tripMemberRoleSchema = z.union([z.literal('none'), shareRoleSchema]);
+export const formatPreferencesSchema = z.strictObject({
+	dateFormat: z.enum(dateFormatValues),
+	timeFormat: z.enum(timeFormatValues)
+});
 
 const supportedStoredDataVersionSchema = z.union([
 	z.literal(legacyStoredDataVersion),
@@ -65,6 +71,7 @@ const supportedStoredDataVersionSchema = z.union([
 	z.literal(preAccessBlockStoredDataVersion),
 	z.literal(preSudoStoredDataVersion),
 	z.literal(preAppearanceStoredDataVersion),
+	z.literal(preFormatPreferencesStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 
@@ -76,10 +83,12 @@ const storedUserBaseSchema = z.strictObject({
 });
 export const storedUserSchema = storedUserBaseSchema.extend({
 	colourway: colourwaySchema,
+	formatPreferences: formatPreferencesSchema,
 	isSudo: z.boolean()
 });
 export const migratableStoredUserSchema = storedUserBaseSchema.extend({
 	colourway: colourwaySchema.optional(),
+	formatPreferences: formatPreferencesSchema.optional(),
 	isSudo: z.boolean().optional()
 });
 
@@ -327,7 +336,7 @@ export type PersistedTrip = z.infer<typeof persistedTripSchema>;
 export type StoredUser = z.infer<typeof storedUserSchema>;
 export type StoredEditLock = z.infer<typeof storedEditLockSchema>;
 export type AuthenticatedUser = Pick<StoredUser, 'id' | 'username'>;
-export type AuthenticatedSessionUser = AuthenticatedUser & Pick<StoredUser, 'colourway'>;
+export type AuthenticatedSessionUser = AuthenticatedUser & Pick<StoredUser, 'colourway' | 'formatPreferences'>;
 export type AccountManagementEntry = AuthenticatedUser & { ownsTrip: boolean };
 export type ShareRole = z.infer<typeof shareRoleSchema>;
 export type TripMemberRole = z.infer<typeof tripMemberRoleSchema>;

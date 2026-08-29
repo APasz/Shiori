@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyItineraryItem } from '../itinerary/draft';
 import { itinerarySchema } from '../itinerary/schema';
+import { defaultFormatPreferences } from '../format-preferences';
 import { defaultColourway } from '../theme/colourway';
 import { createTripBackup } from '../trip-backup';
 import { storedDataVersion, sudoPasswordResetPrefix } from './store/model';
@@ -195,6 +196,7 @@ describe('JSON store', () => {
 					{
 						colourway: defaultColourway,
 						createdAt: 0,
+						formatPreferences: defaultFormatPreferences,
 						id: 'z-user',
 						isSudo: false,
 						passwordHash: testPasswordHash,
@@ -203,6 +205,7 @@ describe('JSON store', () => {
 					{
 						colourway: defaultColourway,
 						createdAt: 0,
+						formatPreferences: defaultFormatPreferences,
 						id: 'a-user',
 						isSudo: true,
 						passwordHash: testPasswordHash,
@@ -229,8 +232,51 @@ describe('JSON store', () => {
 			file: {
 				version: storedDataVersion,
 				users: [
-					{ colourway: defaultColourway, id: 'z-user', isSudo: false },
-					{ colourway: defaultColourway, id: 'a-user', isSudo: true }
+					{
+						colourway: defaultColourway,
+						formatPreferences: defaultFormatPreferences,
+						id: 'z-user',
+						isSudo: false
+					},
+					{
+						colourway: defaultColourway,
+						formatPreferences: defaultFormatPreferences,
+						id: 'a-user',
+						isSudo: true
+					}
+				]
+			},
+			migrationRequired: true
+		});
+	});
+
+	it('adds default display formats to version 15 accounts without changing their other preferences', async () => {
+		const { migrateStoredUsersFile } = await import('./store/migrations');
+
+		const migrated = migrateStoredUsersFile({
+			version: 15,
+			users: [
+				{
+					colourway: 'violet',
+					createdAt: 0,
+					id: 'sudo-user',
+					isSudo: true,
+					passwordHash: testPasswordHash,
+					username: 'sudo'
+				}
+			]
+		});
+
+		expect(migrated).toMatchObject({
+			file: {
+				version: storedDataVersion,
+				users: [
+					{
+						colourway: 'violet',
+						formatPreferences: defaultFormatPreferences,
+						id: 'sudo-user',
+						isSudo: true
+					}
 				]
 			},
 			migrationRequired: true
@@ -800,14 +846,14 @@ describe('JSON store', () => {
 		vi.setSystemTime(new Date('2026-01-01T08:59:00.000Z'));
 		await expect(store.refreshSession(sessionId)).resolves.toEqual({
 			renewed: false,
-			user: { ...user, colourway: defaultColourway }
+			user: { ...user, colourway: defaultColourway, formatPreferences: defaultFormatPreferences }
 		});
 		expect(await readFile(managedDataPath('sessions.json'), 'utf8')).toBe(beforeRefresh);
 
 		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
 		await expect(store.refreshSession(sessionId)).resolves.toEqual({
 			renewed: true,
-			user: { ...user, colourway: defaultColourway }
+			user: { ...user, colourway: defaultColourway, formatPreferences: defaultFormatPreferences }
 		});
 
 		const persisted: { sessions: Array<{ expiresAt: number; id: string }> } = JSON.parse(
@@ -1438,7 +1484,12 @@ describe('JSON store', () => {
 		).rejects.toMatchObject({ status: 400 });
 		await expect(store.refreshSession(sessionId)).resolves.toEqual({
 			renewed: false,
-			user: { colourway: defaultColourway, id: person.id, username: 'Renamed' }
+			user: {
+				colourway: defaultColourway,
+				formatPreferences: defaultFormatPreferences,
+				id: person.id,
+				username: 'Renamed'
+			}
 		});
 
 		await store.changeOwnPassword({
@@ -1462,7 +1513,12 @@ describe('JSON store', () => {
 		await expect(store.updateOwnColourway({ colourway: 'violet', userId: user.id })).resolves.toBe('violet');
 		await expect(store.refreshSession(sessionId)).resolves.toEqual({
 			renewed: false,
-			user: { colourway: 'violet', id: user.id, username: user.username }
+			user: {
+				colourway: 'violet',
+				formatPreferences: defaultFormatPreferences,
+				id: user.id,
+				username: user.username
+			}
 		});
 
 		const persisted: { users: Array<{ colourway: string; id: string }> } = JSON.parse(
@@ -1470,6 +1526,28 @@ describe('JSON store', () => {
 		);
 		expect(persisted.users).toEqual(
 			expect.arrayContaining([expect.objectContaining({ colourway: 'violet', id: user.id })])
+		);
+	});
+
+	it('persists account-wide display formats and exposes them to active sessions', async () => {
+		const store = await import('./store');
+		const user = await store.createInitialSudo('owner', 'a strong test password');
+		const sessionId = await store.createSession(user.id);
+		const formatPreferences = { dateFormat: 'day-month-year', timeFormat: 'twelve-hour' } as const;
+
+		await expect(store.updateOwnFormatPreferences({ ...formatPreferences, userId: user.id })).resolves.toEqual(
+			formatPreferences
+		);
+		await expect(store.refreshSession(sessionId)).resolves.toEqual({
+			renewed: false,
+			user: { colourway: defaultColourway, formatPreferences, id: user.id, username: user.username }
+		});
+
+		const persisted: { users: Array<{ formatPreferences: unknown; id: string }> } = JSON.parse(
+			await readFile(managedDataPath('users.json'), 'utf8')
+		);
+		expect(persisted.users).toEqual(
+			expect.arrayContaining([expect.objectContaining({ formatPreferences, id: user.id })])
 		);
 	});
 

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { formatMonetaryAmount } from '$lib/money';
+	import { formatTime } from '$lib/format-preferences';
 	import type { ItineraryNote } from '$lib/itinerary/schema';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 
 	let {
 		defaultTimeZone,
@@ -16,9 +18,10 @@
 
 	function entryTime(entry: ItineraryNote['entries'][number]): string | undefined {
 		if (entry.startTime !== undefined && entry.endTime !== undefined) {
-			return `${entry.startTime}–${entry.endTime}`;
+			return `${formatTime(entry.startTime, viewerContext.formatPreferences.timeFormat)}–${formatTime(entry.endTime, viewerContext.formatPreferences.timeFormat)}`;
 		}
-		return entry.startTime ?? entry.endTime;
+		const time = entry.startTime ?? entry.endTime;
+		return time ? formatTime(time, viewerContext.formatPreferences.timeFormat) : undefined;
 	}
 
 	function estimatedCostsSummary(entry: ItineraryNote['entries'][number]): string | undefined {

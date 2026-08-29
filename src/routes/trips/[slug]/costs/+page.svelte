@@ -29,6 +29,7 @@
 	import { amountInputValue, amountMinorFromInput, convertAmountMinor, formatMonetaryAmount } from '$lib/money';
 	import { refreshOfflineTripPage } from '$lib/offline';
 	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageData } from './$types';
@@ -493,8 +494,12 @@
 				{:else if conversionStatus === 'unavailable'}
 					{conversionError} Showing the original currencies instead.
 				{:else if conversionEffectiveDate}
-					Converted to {summaryCurrency} using ECB reference rates from {formatCalendarDate(conversionEffectiveDate) ??
-						conversionEffectiveDate}.
+					Converted to {summaryCurrency} using ECB reference rates from {formatCalendarDate(
+						conversionEffectiveDate,
+						'date',
+						viewerContext.locale,
+						viewerContext.formatPreferences.dateFormat
+					) ?? conversionEffectiveDate}.
 				{:else}
 					No costs have been entered yet.
 				{/if}
@@ -545,10 +550,19 @@
 								>
 								<td>{expenseCategoryLabels[expense.category]}</td>
 								<td>{formatMonetaryAmount(expense.amountMinor, expense.currency)}</td>
-								<td>{expense.useDate ? (formatCalendarDate(expense.useDate) ?? expense.useDate) : '—'}</td>
+								<td
+									>{expense.useDate
+										? (formatCalendarDate(
+												expense.useDate,
+												'date',
+												viewerContext.locale,
+												viewerContext.formatPreferences.dateFormat
+											) ?? expense.useDate)
+										: '—'}</td
+								>
 								<td>
 									{expense.status === 'paid'
-										? `Paid · ${formatCalendarDate(expense.paidDate) ?? expense.paidDate}`
+										? `Paid · ${formatCalendarDate(expense.paidDate, 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat) ?? expense.paidDate}`
 										: 'Unpaid'}
 									{#if expense.availableForItemCosts}<span class="expense-availability">Available to items</span>{/if}
 								</td>

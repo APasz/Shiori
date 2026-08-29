@@ -86,8 +86,8 @@
 	}
 
 	button.system-theme-active {
-		outline: 1px solid var(--color-state-selection);
-		outline-offset: -1px;
+		outline: 1.25px solid var(--color-state-selection);
+		outline-offset: -1.25px;
 		position: relative;
 		z-index: 1;
 	}

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { DatePicker } from 'bits-ui';
 	import { parseDate, today, type CalendarDate, type DateValue } from '@internationalized/date';
 	import './date-picker.css';
 	import TimePicker from '$lib/components/TimePicker.svelte';
 	import TimeZonePicker from '$lib/components/TimeZonePicker.svelte';
-	import { formatCalendarDate } from '$lib/itinerary/calendar';
+	import { datePickerDateSeparator, datePickerLocale, formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import Icon from '$lib/visuals/Icon.svelte';
 
 	type PickerPresentation = 'popover' | 'dialog';
@@ -46,7 +46,10 @@
 		onDateTimeChange: (value: string) => void;
 		onTimeZoneChange?: (timeZone: string) => void;
 	} = $props();
-	let locale = $state('en-AU');
+	const locale = $derived(datePickerLocale(viewerContext.locale, viewerContext.formatPreferences.dateFormat));
+	const dateSeparator = $derived(
+		datePickerDateSeparator(viewerContext.locale, viewerContext.formatPreferences.dateFormat)
+	);
 
 	const dateValue = $derived(calendarDate(datePart(dateTime)));
 	const minimumDateValue = $derived(calendarDate(minimumDate ?? ''));
@@ -54,10 +57,6 @@
 	const calendarContentClass = $derived(
 		`calendar-content${pickerPresentation === 'dialog' ? ` calendar-dialog ${_dialogPlacement}` : ''}`
 	);
-
-	onMount(() => {
-		locale = navigator.language || locale;
-	});
 
 	function datePart(value: string): string {
 		return value.slice(0, 10);
@@ -106,11 +105,24 @@
 		<div class="date-time-picker shiori-form-label">
 			<span>
 				{label}
-				{#if formatCalendarDate(datePart(dateTime))}
-					<span class="field-hint">Date fixed as {formatCalendarDate(datePart(dateTime))}</span>
+				{#if formatCalendarDate(datePart(dateTime), 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)}
+					<span class="field-hint"
+						>Date fixed as {formatCalendarDate(
+							datePart(dateTime),
+							'date',
+							viewerContext.locale,
+							viewerContext.formatPreferences.dateFormat
+						)}</span
+					>
 				{/if}
 			</span>
-			<TimePicker {id} {label} onChange={setTime} value={timePart(dateTime)} />
+			<TimePicker
+				{id}
+				{label}
+				onChange={setTime}
+				timeFormat={viewerContext.formatPreferences.timeFormat}
+				value={timePart(dateTime)}
+			/>
 		</div>
 	{:else}
 		<DatePicker.Root
@@ -133,7 +145,7 @@
 					{#snippet children({ segments })}
 						{#each segments as { part, value: segmentValue }, index (`${part}-${index}`)}
 							<DatePicker.Segment class={`date-segment${part === 'literal' ? ' literal' : ''}`} {part}>
-								{segmentValue}
+								{part === 'literal' && dateSeparator ? dateSeparator : segmentValue}
 							</DatePicker.Segment>
 						{/each}
 						<DatePicker.Trigger aria-label={`Open calendar for ${label}`} class="calendar-trigger">
@@ -198,8 +210,19 @@
 	{/if}
 	{#if pickerMode === 'date-time'}
 		<div class="date-time-picker shiori-form-label">
-			<span>Time <span class="field-hint">24-hour time</span></span>
-			<TimePicker id={`${id}-time`} label={`${label} time`} onChange={setTime} value={timePart(dateTime)} />
+			<span>
+				Time
+				<span class="field-hint"
+					>{viewerContext.formatPreferences.timeFormat === 'twelve-hour' ? '12-hour time' : '24-hour time'}</span
+				>
+			</span>
+			<TimePicker
+				id={`${id}-time`}
+				label={`${label} time`}
+				onChange={setTime}
+				timeFormat={viewerContext.formatPreferences.timeFormat}
+				value={timePart(dateTime)}
+			/>
 		</div>
 	{/if}
 	{#if showTimeZonePicker}

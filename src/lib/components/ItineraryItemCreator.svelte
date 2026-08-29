@@ -13,7 +13,8 @@
 		type ItineraryItemImport
 	} from '$lib/editing/contracts';
 	import { accommodationStayDraft, type AccommodationStayValidation } from '$lib/itinerary/accommodation-stay';
-	import { addCalendarDays, formatCalendarDate } from '$lib/itinerary/calendar';
+	import { formatTime } from '$lib/format-preferences';
+	import { addCalendarDays, formatCalendarDate, formatCalendarDateTime } from '$lib/itinerary/calendar';
 	import {
 		transportJourneyDraftFromImport,
 		transportJourneyDraftSchema,
@@ -24,6 +25,7 @@
 	import type { TransportJourneySchedule } from '$lib/itinerary/transport-schedule';
 	import { formatTimestampForTimeZoneInput } from '$lib/itinerary/zoned-time';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import Icon from '$lib/visuals/Icon.svelte';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import {
@@ -763,7 +765,21 @@
 	}
 
 	function scheduleTimeLabel(point: TransportJourneySchedule['departure']): string {
-		return formatTimestampForTimeZoneInput(point.scheduledAt, point.timeZone)?.replace('T', ' ') ?? 'Unavailable';
+		const dateTime = formatTimestampForTimeZoneInput(point.scheduledAt, point.timeZone);
+		if (!dateTime) {
+			return 'Unavailable';
+		}
+		const [date, time] = dateTime.split('T', 2);
+		return date && time
+			? formatCalendarDateTime(
+					date,
+					time,
+					'date',
+					viewerContext.locale,
+					viewerContext.formatPreferences.dateFormat,
+					viewerContext.formatPreferences.timeFormat
+				)
+			: 'Unavailable';
 	}
 
 	onMount(() => {
@@ -1188,8 +1204,17 @@
 						<div>
 							<dt>Stay</dt>
 							<dd>
-								{formatCalendarDate(accommodationCheckInDate) ?? accommodationCheckInDate} to {formatCalendarDate(
-									accommodationCheckOutDate
+								{formatCalendarDate(
+									accommodationCheckInDate,
+									'date',
+									viewerContext.locale,
+									viewerContext.formatPreferences.dateFormat
+								) ?? accommodationCheckInDate} to
+								{formatCalendarDate(
+									accommodationCheckOutDate,
+									'date',
+									viewerContext.locale,
+									viewerContext.formatPreferences.dateFormat
 								) ?? accommodationCheckOutDate}
 							</dd>
 						</div>
@@ -1200,7 +1225,9 @@
 						<div>
 							<dt>Times</dt>
 							<dd>
-								{accommodationTimesKnown ? `${accommodationCheckInTime} to ${accommodationCheckOutTime}` : 'Unknown'}
+								{accommodationTimesKnown
+									? `${formatTime(accommodationCheckInTime, viewerContext.formatPreferences.timeFormat)} to ${formatTime(accommodationCheckOutTime, viewerContext.formatPreferences.timeFormat)}`
+									: 'Unknown'}
 							</dd>
 						</div>
 					</dl>

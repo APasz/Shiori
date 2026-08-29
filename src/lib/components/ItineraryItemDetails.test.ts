@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'svelte/server';
+import type { FormatPreferences } from '$lib/format-preferences';
 import { itineraryItemSchema, type ItineraryItem } from '$lib/itinerary/schema';
 import ItineraryItemDetails from './ItineraryItemDetails.svelte';
 
-function renderDetails(item: ItineraryItem, canEdit = false): string {
+function renderDetails(item: ItineraryItem, canEdit = false, formatPreferences?: FormatPreferences): string {
 	return render(ItineraryItemDetails, {
+		context: formatPreferences ? new Map([['__request__', { page: { data: { formatPreferences } } }]]) : undefined,
 		props: {
 			item,
 			expenses: [],
@@ -157,7 +159,7 @@ describe('itinerary item details', () => {
 		expect(sameCurrencyHtml).not.toContain('≈');
 		expect(sameCurrencyHtml).not.toContain('Rate on');
 		expect(convertedHtml).toContain('≈');
-		expect(convertedHtml).toContain('Rate on 12 Aug 2026');
+		expect(convertedHtml).toContain('Rate on 2026-08-12');
 		expect(convertedHtml).toMatch(/1 AUD = 5\.2\s+HKD/);
 	});
 
@@ -173,7 +175,21 @@ describe('itinerary item details', () => {
 		const html = renderDetails(item, true);
 
 		expect(html).toContain('Scheduled');
-		expect(html).toContain('Due 26 Oct 2026');
+		expect(html).toContain('Due 2026-10-26');
 		expect(html).toContain('Mark cost paid');
+	});
+
+	it('uses saved display formats during server rendering', () => {
+		const item = itineraryItemSchema.parse({
+			id: 'formatted-cost',
+			cost: { amountMinor: 56_700, currency: 'HKD', scheduledPaymentDate: '2026-10-26', status: 'unpaid' },
+			timing: { kind: 'exact', startAt: Date.UTC(2026, 9, 26, 9) },
+			title: 'Hotel booking',
+			type: 'accommodation'
+		});
+
+		const html = renderDetails(item, true, { dateFormat: 'day-month-year', timeFormat: 'twelve-hour' });
+
+		expect(html).toContain('Due 26-10-2026');
 	});
 });

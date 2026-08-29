@@ -22,6 +22,7 @@
 		itineraryNoteTargetTitle
 	} from '$lib/itinerary/note-presentation';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import ItineraryNoteEntryEditor from './ItineraryNoteEntryEditor.svelte';
 	import TimeZonePicker from './TimeZonePicker.svelte';
@@ -57,7 +58,9 @@
 
 	const stateOptions = noteEntryStateSchema.options;
 	const currencyOptions = currencyCodeSchema.options;
-	const targetTitle = $derived(itineraryNoteTargetTitle(target));
+	const targetTitle = $derived(
+		itineraryNoteTargetTitle(target, viewerContext.locale, viewerContext.formatPreferences.dateFormat)
+	);
 	const targetDescription = $derived(itineraryNoteTargetDescription(target));
 	const targetLabel = $derived(itineraryNoteTargetLabel(target));
 	const draftFingerprint = $derived(itineraryNoteDraftFingerprint(draft));
