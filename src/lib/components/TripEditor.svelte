@@ -58,6 +58,7 @@
 
 	const draftFingerprint = $derived(JSON.stringify(detailsCandidate()));
 	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
+	const saveIsDisabled = $derived(editorState !== 'editing' || (props.mode === 'edit' && !hasUnsavedChanges));
 	const currencyOptions = currencyCodeSchema.options;
 
 	function browserTimeZone(): string {
@@ -189,6 +190,9 @@
 
 	async function saveEditing(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
+		if (saveIsDisabled) {
+			return;
+		}
 		const validation = validateDetails();
 		if (!validation.valid) {
 			errorMessage = validation.error;
@@ -298,24 +302,9 @@
 				<h2 id="trip-editor-heading">
 					{props.mode === 'create' ? 'Create a trip' : props.trip.itinerary.title}
 				</h2>
-				<p
-					class:changed={hasUnsavedChanges}
-					class="editor-status"
-					data-brand-feedback={editorState === 'editing' ? undefined : 'loading'}
-				>
-					{editorState === 'saving'
-						? 'Saving changes…'
-						: editorState === 'deleting'
-							? 'Deleting trip…'
-							: editorState === 'importing'
-								? 'Importing trip…'
-								: hasUnsavedChanges
-									? 'Unsaved changes'
-									: 'All changes saved'}
-				</p>
 			</div>
 			<div class="editor-actions">
-				<button class="save-button shiori-form-button" disabled={editorState !== 'editing'} type="submit">
+				<button class="save-button shiori-form-button" disabled={saveIsDisabled} type="submit">
 					{editorState === 'saving' ? 'Saving…' : props.mode === 'create' ? 'Create trip' : 'Save changes'}
 				</button>
 				<button
@@ -457,8 +446,7 @@
 		flex-shrink: 0;
 	}
 
-	.eyebrow,
-	.editor-status {
+	.eyebrow {
 		color: var(--color-text-muted);
 		font-size: 0.75rem;
 	}
@@ -473,14 +461,6 @@
 	h2 {
 		font-size: 1.25rem;
 		margin: 0;
-	}
-
-	.editor-status {
-		margin: 0.5rem 0 0;
-	}
-
-	.editor-status.changed {
-		color: var(--color-state-warning);
 	}
 
 	.save-button {

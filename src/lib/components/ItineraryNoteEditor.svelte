@@ -65,6 +65,7 @@
 	const targetLabel = $derived(itineraryNoteTargetLabel(target));
 	const draftFingerprint = $derived(itineraryNoteDraftFingerprint(draft));
 	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
+	const saveIsDisabled = $derived(editorState !== 'editing' || !hasUnsavedChanges);
 
 	function addEntry(): void {
 		draft.entries = [...draft.entries, emptyNoteEntryDraft(crypto.randomUUID())];
@@ -92,7 +93,7 @@
 
 	async function saveNote(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		if (editorState !== 'editing') {
+		if (saveIsDisabled) {
 			return;
 		}
 
@@ -163,22 +164,9 @@
 			<div>
 				<p class="eyebrow">{targetLabel}</p>
 				<h2 id="note-editor-heading">{targetTitle}</h2>
-				<p
-					class:changed={hasUnsavedChanges}
-					class="editor-status"
-					data-brand-feedback={editorState === 'editing' ? undefined : 'loading'}
-				>
-					{editorState === 'saving'
-						? 'Saving changes…'
-						: editorState === 'deleting'
-							? 'Deleting note…'
-							: hasUnsavedChanges
-								? 'Unsaved changes'
-								: 'All changes saved'}
-				</p>
 			</div>
 			<div class="editor-actions">
-				<button class="save-button shiori-form-button" disabled={editorState !== 'editing'} type="submit">
+				<button class="save-button shiori-form-button" disabled={saveIsDisabled} type="submit">
 					{editorState === 'saving' ? 'Saving…' : 'Save note'}
 				</button>
 				<button
@@ -296,7 +284,6 @@
 	}
 
 	.eyebrow,
-	.editor-status,
 	.field-hint,
 	.introduction,
 	.empty-entries {
@@ -311,21 +298,15 @@
 		text-transform: uppercase;
 	}
 
-	.editor-status,
 	.field-hint,
 	.introduction,
 	.empty-entries {
 		font-size: 0.875rem;
 	}
 
-	.editor-status,
 	.introduction,
 	.empty-entries {
 		margin: 0.5rem 0 0;
-	}
-
-	.editor-status.changed {
-		color: var(--color-state-warning);
 	}
 
 	h2,

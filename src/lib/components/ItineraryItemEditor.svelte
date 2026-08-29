@@ -165,6 +165,7 @@
 	let heartbeat: ReturnType<typeof setInterval> | undefined;
 	const draftFingerprint = $derived(JSON.stringify(itemCandidate()));
 	const hasUnsavedChanges = $derived(initialDraftFingerprint !== null && draftFingerprint !== initialDraftFingerprint);
+	const saveIsDisabled = $derived(editorState !== 'editing' || (mode === 'edit' && !hasUnsavedChanges));
 
 	const itemTypeOptions = itineraryItemTypeSchema.options;
 	const locationRoleOptions = locationRoleSchema.options;
@@ -972,6 +973,9 @@
 
 	async function saveEditing(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
+		if (saveIsDisabled) {
+			return;
+		}
 		const token = lockToken;
 		if (!token) {
 			return;
@@ -1037,19 +1041,10 @@
 			<div>
 				<p class="eyebrow">{mode === 'create' ? 'New itinerary item' : `Edit ${itemType}`}</p>
 				<h2 id="item-editor-heading">{mode === 'create' ? 'Add item' : item.title}</h2>
-				{#if editorState === 'editing' || editorState === 'saving'}
-					<p
-						class:changed={hasUnsavedChanges}
-						class="editor-status"
-						data-brand-feedback={editorState === 'saving' ? 'loading' : undefined}
-					>
-						{editorState === 'saving' ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
-					</p>
-				{/if}
 			</div>
 			<div class="editor-actions">
 				{#if editorState === 'editing' || editorState === 'saving'}
-					<button class="save-button shiori-form-button" disabled={editorState === 'saving'} type="submit">
+					<button class="save-button shiori-form-button" disabled={saveIsDisabled} type="submit">
 						{editorState === 'saving' ? 'Saving…' : mode === 'create' ? 'Create item' : 'Save changes'}
 					</button>
 				{/if}
@@ -1668,16 +1663,6 @@
 		flex-wrap: wrap;
 		gap: 0.5rem;
 		justify-content: end;
-	}
-
-	.editor-status {
-		color: var(--color-text-muted);
-		font-size: 0.8125rem;
-		margin: 0.5rem 0 0;
-	}
-
-	.editor-status.changed {
-		color: var(--color-state-warning);
 	}
 
 	.editor-layout {
