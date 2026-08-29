@@ -6,9 +6,11 @@ import { createEmptyItineraryItem } from '../itinerary/draft';
 import { itinerarySchema } from '../itinerary/schema';
 import { defaultColourway } from '../theme/colourway';
 import { createTripBackup } from '../trip-backup';
-import { storedDataVersion } from './store/model';
+import { storedDataVersion, sudoPasswordResetPrefix } from './store/model';
 
 let dataDirectory = '';
+
+const testPasswordHash = `${'0'.repeat(32)}.${'0'.repeat(128)}`;
 
 type StoreModule = typeof import('./store');
 
@@ -181,8 +183,8 @@ describe('JSON store', () => {
 		const migrated = migrateStoredUsersFile({
 			version: 13,
 			users: [
-				{ createdAt: 0, id: 'z-user', passwordHash: 'hash', username: 'zuser' },
-				{ createdAt: 0, id: 'a-user', passwordHash: 'hash', username: 'auser' }
+				{ createdAt: 0, id: 'z-user', passwordHash: testPasswordHash, username: 'zuser' },
+				{ createdAt: 0, id: 'a-user', passwordHash: testPasswordHash, username: 'auser' }
 			]
 		});
 
@@ -195,7 +197,7 @@ describe('JSON store', () => {
 						createdAt: 0,
 						id: 'z-user',
 						isSudo: false,
-						passwordHash: 'hash',
+						passwordHash: testPasswordHash,
 						username: 'zuser'
 					},
 					{
@@ -203,7 +205,7 @@ describe('JSON store', () => {
 						createdAt: 0,
 						id: 'a-user',
 						isSudo: true,
-						passwordHash: 'hash',
+						passwordHash: testPasswordHash,
 						username: 'auser'
 					}
 				]
@@ -218,8 +220,8 @@ describe('JSON store', () => {
 		const migrated = migrateStoredUsersFile({
 			version: 14,
 			users: [
-				{ createdAt: 0, id: 'z-user', isSudo: false, passwordHash: 'hash', username: 'zuser' },
-				{ createdAt: 1, id: 'a-user', isSudo: true, passwordHash: 'hash', username: 'auser' }
+				{ createdAt: 0, id: 'z-user', isSudo: false, passwordHash: testPasswordHash, username: 'zuser' },
+				{ createdAt: 1, id: 'a-user', isSudo: true, passwordHash: testPasswordHash, username: 'auser' }
 			]
 		});
 
@@ -375,6 +377,98 @@ describe('JSON store', () => {
 		await expect(restartedStore.getTripView('renamed-trip', owner)).resolves.toMatchObject({
 			slug: 'renamed-trip'
 		});
+	});
+
+	it('consumes a server sudo password reset marker without retaining its password in a backup', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'original strong server password');
+		await store.createAccount({
+			actorId: owner.id,
+			password: 'another strong test password',
+			username: 'person'
+		});
+		const sessionId = await store.createSession(owner.id);
+		const usersPath = managedDataPath('users.json');
+		const preservedBackup = await readFile(`${usersPath}.backup`, 'utf8');
+		const replacementPassword = 'replacement strong server password';
+		const persistedUsers: { users: Array<{ id: string; isSudo: boolean; passwordHash: string }> } = JSON.parse(
+			await readFile(usersPath, 'utf8')
+		);
+		const sudoUser = persistedUsers.users.find((user) => user.id === owner.id);
+		if (!sudoUser) {
+			throw new Error('The test sudo account should be persisted.');
+		}
+		sudoUser.passwordHash = `${sudoPasswordResetPrefix}${replacementPassword}`;
+		await writeFile(usersPath, JSON.stringify(persistedUsers, null, 4), 'utf8');
+
+		vi.resetModules();
+		const { initializeStore } = await import('./store/persistence');
+		await initializeStore();
+		const rewrittenUsers = await readFile(usersPath, 'utf8');
+		const rewrittenBackup = await readFile(`${usersPath}.backup`, 'utf8');
+		expect(rewrittenUsers).not.toContain(replacementPassword);
+		expect(rewrittenBackup).toBe(preservedBackup);
+		expect(rewrittenBackup).not.toContain(replacementPassword);
+		expect(JSON.parse(rewrittenUsers)).toMatchObject({
+			users: expect.arrayContaining([
+				expect.objectContaining({
+					id: owner.id,
+					passwordHash: expect.stringMatching(/^[0-9a-f]{32}\.[0-9a-f]{128}$/)
+				})
+			])
+		});
+
+		const restartedStore = await import('./store');
+		await expect(restartedStore.authenticate(owner.username, 'original strong server password')).resolves.toBeNull();
+		await expect(restartedStore.authenticate(owner.username, replacementPassword)).resolves.toEqual(owner);
+		await expect(restartedStore.refreshSession(sessionId)).resolves.toBeNull();
+	});
+
+	it('rejects a server sudo password reset marker for a non-sudo account', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const person = await store.createAccount({
+			actorId: owner.id,
+			password: 'another strong test password',
+			username: 'person'
+		});
+		const usersPath = managedDataPath('users.json');
+		const persistedUsers: { users: Array<{ id: string; passwordHash: string }> } = JSON.parse(
+			await readFile(usersPath, 'utf8')
+		);
+		const managedUser = persistedUsers.users.find((user) => user.id === person.id);
+		if (!managedUser) {
+			throw new Error('The test managed account should be persisted.');
+		}
+		managedUser.passwordHash = `${sudoPasswordResetPrefix}replacement strong password`;
+		await writeFile(usersPath, JSON.stringify(persistedUsers, null, 4), 'utf8');
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		await expect(restartedStore.needsInitialSetup()).rejects.toThrow(
+			'The reset: password marker may only be used for the single sudo account.'
+		);
+	});
+
+	it('requires an explicit marker for server sudo password recovery', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const usersPath = managedDataPath('users.json');
+		const persistedUsers: { users: Array<{ id: string; passwordHash: string }> } = JSON.parse(
+			await readFile(usersPath, 'utf8')
+		);
+		const sudoUser = persistedUsers.users.find((user) => user.id === owner.id);
+		if (!sudoUser) {
+			throw new Error('The test sudo account should be persisted.');
+		}
+		sudoUser.passwordHash = 'replacement strong password';
+		await writeFile(usersPath, JSON.stringify(persistedUsers, null, 4), 'utf8');
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		await expect(restartedStore.needsInitialSetup()).rejects.toThrow(
+			'Use a valid password hash or an explicit sudo password reset marker.'
+		);
 	});
 
 	it('uses cached validated data until the server process restarts', async () => {
@@ -660,7 +754,7 @@ describe('JSON store', () => {
 							{
 								id: 'owner',
 								username: 'owner',
-								passwordHash: 'test-password-hash',
+								passwordHash: testPasswordHash,
 								createdAt: 1_767_225_600_000
 							}
 						]
@@ -1273,6 +1367,22 @@ describe('JSON store', () => {
 			store.removeTripAccess({ actorId: owner.id, tripId: trip.id, userId: person.id })
 		).rejects.toMatchObject({
 			status: 404
+		});
+	});
+
+	it('reserves sudo password resets for server recovery', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+
+		await expect(
+			store.resetAccountPassword({
+				actorId: owner.id,
+				password: 'replacement strong password',
+				userId: owner.id
+			})
+		).rejects.toMatchObject({
+			message: 'Reset the sudo account password through the server recovery procedure.',
+			status: 409
 		});
 	});
 

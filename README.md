@@ -349,6 +349,23 @@ their effective idle timeout can be up to nine hours shorter than the browser's 
 When upgrading existing data, Shiori promotes the earliest-created account (breaking timestamp ties
 by account ID) to the sole global sudo user.
 
+If the sudo account password is lost, a server administrator can reset it without exposing a public
+recovery endpoint. Stop Shiori, use `sudoedit` to change that account's `passwordHash` in
+`/srv/shiori/data/users.json` to a JSON string beginning `reset:`, then start Shiori again:
+
+```bash
+sudo systemctl stop shiori
+sudoedit /srv/shiori/data/users.json
+sudo systemctl start shiori
+```
+
+For example, set the sole sudo user's field to
+`"passwordHash": "reset:choose-a-new-strong-password"`. On startup Shiori validates and hashes the
+password, revokes that account's sessions, and removes the marker. The marker is accepted only for
+the sole sudo account; Shiori preserves the existing `users.json.backup` rather than save the
+temporary plaintext there. Complete the procedure promptly on a trusted host—ordinary host backups
+can still capture the file while it contains the marker.
+
 Visitors receive only each item's start time, type, and title. Standard `user` accounts can view
 normal details, while documents, reservations, transport seat assignments, and platform data are
 withheld until `admin` or `sudo` access. This visibility policy is centralized in

@@ -89,6 +89,10 @@ function selectedMemberRole(value: string): TripMemberRole | null | undefined {
 	return undefined;
 }
 
+function accountRequestIsTooLarge(request: Request): boolean {
+	return !hasBodySizeAtMost(request, maximumAccountRequestBytes);
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const currentUser = requireAccount(locals.user);
 	const canManageAccounts = await isSudoUser(currentUser.id);
@@ -104,7 +108,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
 	changeUsername: async ({ locals, request }) => {
 		const currentUser = requireAccount(locals.user);
-		if (!hasBodySizeAtMost(request, maximumAccountRequestBytes)) {
+		if (accountRequestIsTooLarge(request)) {
 			return fail(413, { usernameError: 'The username update request is too large.' });
 		}
 
@@ -127,7 +131,7 @@ export const actions: Actions = {
 	},
 	changeColourway: async ({ locals, request }) => {
 		const currentUser = requireAccount(locals.user);
-		if (!hasBodySizeAtMost(request, maximumAccountRequestBytes)) {
+		if (accountRequestIsTooLarge(request)) {
 			return fail(413, { colourwayError: 'The colour update request is too large.' });
 		}
 
@@ -150,7 +154,7 @@ export const actions: Actions = {
 	},
 	changePassword: async ({ cookies, locals, request, url }) => {
 		const currentUser = requireAccount(locals.user);
-		if (!hasBodySizeAtMost(request, maximumAccountRequestBytes)) {
+		if (accountRequestIsTooLarge(request)) {
 			return fail(413, { passwordError: 'The password update request is too large.' });
 		}
 		const formData = await request.formData();
@@ -180,6 +184,9 @@ export const actions: Actions = {
 	},
 	createAccount: async ({ locals, request }) => {
 		const manager = await requireSudo(locals.user);
+		if (accountRequestIsTooLarge(request)) {
+			return fail(413, { createAccountError: 'The account creation request is too large.' });
+		}
 		const formData = await request.formData();
 
 		try {
@@ -201,6 +208,9 @@ export const actions: Actions = {
 	},
 	resetPassword: async ({ locals, request }) => {
 		const manager = await requireSudo(locals.user);
+		if (accountRequestIsTooLarge(request)) {
+			return fail(413, { passwordResetError: 'The password reset request is too large.' });
+		}
 		const formData = await request.formData();
 		const userId = formDataText(formData, 'userId');
 		if (userId === manager.id) {
@@ -222,6 +232,9 @@ export const actions: Actions = {
 	},
 	setTripAccess: async ({ locals, request, url }) => {
 		const context = await requireAdministrationContext(locals.user, url);
+		if (accountRequestIsTooLarge(request)) {
+			return fail(413, { memberAccessError: 'The trip access request is too large.' });
+		}
 		if (!context.selectedTrip) {
 			return fail(400, { memberAccessError: 'Choose a trip you own before changing trip access.' });
 		}
@@ -248,6 +261,9 @@ export const actions: Actions = {
 	},
 	deleteAccount: async ({ locals, request }) => {
 		const manager = await requireSudo(locals.user);
+		if (accountRequestIsTooLarge(request)) {
+			return fail(413, { accountDeletionError: 'The account deletion request is too large.' });
+		}
 		const userId = formDataText(await request.formData(), 'userId');
 		if (userId === manager.id) {
 			return fail(400, { accountDeletionError: 'You cannot delete your own account.' });

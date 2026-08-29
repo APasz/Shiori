@@ -29,6 +29,29 @@ export const passwordSchema = z
 	.string()
 	.min(minimumPasswordLength, passwordMinimumMessage())
 	.max(1024, 'Use at most 1,024 characters for a password.');
+
+export const passwordHashSaltBytes = 16;
+export const passwordHashKeyBytes = 64;
+const passwordHashPattern = new RegExp(
+	`^[0-9a-f]{${passwordHashSaltBytes * 2}}\\.[0-9a-f]{${passwordHashKeyBytes * 2}}$`
+);
+export const sudoPasswordResetPrefix = 'reset:';
+
+export function isPasswordHash(value: string): boolean {
+	return passwordHashPattern.test(value);
+}
+
+/** Returns a one-time server recovery password, when the stored value explicitly contains one. */
+export function sudoPasswordResetPassword(value: string): string | undefined {
+	return value.startsWith(sudoPasswordResetPrefix) ? value.slice(sudoPasswordResetPrefix.length) : undefined;
+}
+
+const storedPasswordHashSchema = z
+	.string()
+	.refine(
+		(value) => isPasswordHash(value) || sudoPasswordResetPassword(value) !== undefined,
+		'Use a valid password hash or an explicit sudo password reset marker.'
+	);
 export const shareRoleSchema = z.enum(['user', 'admin']);
 export const tripMemberRoleSchema = z.union([z.literal('none'), shareRoleSchema]);
 
@@ -48,7 +71,7 @@ const supportedStoredDataVersionSchema = z.union([
 const storedUserBaseSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
 	username: usernameSchema,
-	passwordHash: z.string().min(1),
+	passwordHash: storedPasswordHashSchema,
 	createdAt: unixTimestampSchema
 });
 export const storedUserSchema = storedUserBaseSchema.extend({

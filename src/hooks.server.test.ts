@@ -4,10 +4,12 @@ import { sessionCookieName, sessionLifetimeSeconds } from '$lib/server/session';
 import { defaultColourway } from '$lib/theme/colourway';
 
 const refreshSession = vi.hoisted(() => vi.fn());
+const initializeStore = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/store/sessions', () => ({ refreshSession }));
+vi.mock('$lib/server/store/persistence', () => ({ initializeStore }));
 
-import { handle } from './hooks.server';
+import { handle, init } from './hooks.server';
 
 type HandleInput = Parameters<typeof handle>[0];
 type TestCookies = {
@@ -37,6 +39,13 @@ function handleInput(
 describe('server hook', () => {
 	beforeEach(() => {
 		refreshSession.mockReset();
+		initializeStore.mockReset();
+	});
+
+	it('initializes the store before accepting requests', async () => {
+		await init();
+
+		expect(initializeStore).toHaveBeenCalledOnce();
 	});
 
 	it('refreshes the browser cookie when the authenticated session is renewed', async () => {

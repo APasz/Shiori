@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { defaultColourway, colourwaySchema, type Colourway } from '$lib/theme/colourway';
 import { StoreError } from './error';
 import {
@@ -11,26 +11,11 @@ import {
 	type StoredData,
 	type StoredUser
 } from './model';
+import { hashPassword, preparePasswordHash, verifyPassword } from './password';
 import { readData, transaction } from './persistence';
 import { timestamp } from './time';
 
-function derivePasswordKey(password: string, salt: Buffer, keyLength: number): Promise<Buffer> {
-	return new Promise((resolve, reject) => {
-		scryptCallback(password, salt, keyLength, (error, derivedKey) => {
-			if (error) {
-				reject(error);
-				return;
-			}
-			resolve(derivedKey);
-		});
-	});
-}
-
-async function hashPassword(password: string): Promise<string> {
-	const salt = randomBytes(16);
-	const key = await derivePasswordKey(password, salt, 64);
-	return `${salt.toString('hex')}.${key.toString('hex')}`;
-}
+export { preparePasswordHash };
 
 function newStoredUser(account: { isSudo: boolean; passwordHash: string; username: string }): StoredUser {
 	return storedUserSchema.parse({
@@ -79,27 +64,6 @@ export async function isSudoUser(userId: string): Promise<boolean> {
 	return isSudo(await readData(), userId);
 }
 
-export async function preparePasswordHash(passwordInput: string): Promise<string> {
-	const password = passwordSchema.parse(passwordInput);
-	return hashPassword(password);
-}
-
-async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
-	const [saltHex, keyHex, ...remainder] = passwordHash.split('.');
-	if (saltHex === undefined || keyHex === undefined || remainder.length > 0) {
-		return false;
-	}
-
-	const salt = Buffer.from(saltHex, 'hex');
-	const expectedKey = Buffer.from(keyHex, 'hex');
-	if (salt.length === 0 || expectedKey.length === 0) {
-		return false;
-	}
-
-	const actualKey = await derivePasswordKey(password, salt, expectedKey.length);
-	return actualKey.length === expectedKey.length && timingSafeEqual(actualKey, expectedKey);
-}
-
 export async function needsInitialSetup(): Promise<boolean> {
 	const data = await readData();
 	return data.users.length === 0;
@@ -107,8 +71,7 @@ export async function needsInitialSetup(): Promise<boolean> {
 
 export async function createInitialSudo(usernameInput: string, passwordInput: string): Promise<AuthenticatedUser> {
 	const username = usernameSchema.parse(usernameInput);
-	const password = passwordSchema.parse(passwordInput);
-	const passwordHash = await hashPassword(password);
+	const passwordHash = await preparePasswordHash(passwordInput);
 
 	return transaction(
 		(data) => {
@@ -234,6 +197,9 @@ export async function resetAccountPassword(input: {
 		(data) => {
 			assertSudo(data, input.actorId);
 			const user = accountForId(data, input.userId);
+			if (user.isSudo) {
+				throw new StoreError(409, 'Reset the sudo account password through the server recovery procedure.');
+			}
 			user.passwordHash = passwordHash;
 			data.sessions = data.sessions.filter((session) => session.userId !== user.id);
 		},

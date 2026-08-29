@@ -1,10 +1,18 @@
-import type { Handle } from '@sveltejs/kit';
+import { building } from '$app/environment';
+import type { Handle, ServerInit } from '@sveltejs/kit';
 import { assertProductionConfiguration } from '$lib/server/production-config';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
+import { initializeStore } from '$lib/server/store/persistence';
 import { refreshSession } from '$lib/server/store/sessions';
 import { defaultColourway } from '$lib/theme/colourway';
 
 assertProductionConfiguration(process.env);
+
+export const init: ServerInit = async () => {
+	if (!building) {
+		await initializeStore();
+	}
+};
 
 const securityHeaders = {
 	'cross-origin-opener-policy': 'same-origin',

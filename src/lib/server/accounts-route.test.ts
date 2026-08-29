@@ -147,6 +147,47 @@ describe('account actions', () => {
 		});
 	});
 
+	it('rejects oversized administration account requests before parsing them', async () => {
+		const store = await import('$lib/server/store');
+		const owner = await store.createInitialSudo('sudo', 'a strong test password');
+		const trip = await store.createTrip({ details: { title: 'Test trip', timeZone: 'UTC' }, ownerId: owner.id });
+		const { actions } = await import('../../routes/account/+page.server');
+		const oversizedRequest = (): Request =>
+			new Request('http://localhost/account', {
+				headers: { 'content-length': `${maximumAccountRequestBytes + 1}` },
+				method: 'POST'
+			});
+
+		await expect(
+			actions.createAccount({ locals: { user: owner }, request: oversizedRequest() } as never)
+		).resolves.toMatchObject({
+			data: { createAccountError: 'The account creation request is too large.' },
+			status: 413
+		});
+		await expect(
+			actions.resetPassword({ locals: { user: owner }, request: oversizedRequest() } as never)
+		).resolves.toMatchObject({
+			data: { passwordResetError: 'The password reset request is too large.' },
+			status: 413
+		});
+		await expect(
+			actions.setTripAccess({
+				locals: { user: owner },
+				request: oversizedRequest(),
+				url: new URL(`http://localhost/account?tab=administration&trip=${trip.slug}`)
+			} as never)
+		).resolves.toMatchObject({
+			data: { memberAccessError: 'The trip access request is too large.' },
+			status: 413
+		});
+		await expect(
+			actions.deleteAccount({ locals: { user: owner }, request: oversizedRequest() } as never)
+		).resolves.toMatchObject({
+			data: { accountDeletionError: 'The account deletion request is too large.' },
+			status: 413
+		});
+	});
+
 	it('rejects an unsupported colourway', async () => {
 		const store = await import('$lib/server/store');
 		const user = { ...(await store.createInitialSudo('sudo', 'a strong test password')), colourway: defaultColourway };
@@ -177,7 +218,7 @@ describe('account actions', () => {
 		expect(actions).not.toHaveProperty('default');
 		const result = await actions.createAccount({
 			locals: { user: owner },
-			request: new Request('http://localhost/account?tab=administration', { body: formData, method: 'POST' })
+			request: formRequest('http://localhost/account?tab=administration', formData)
 		} as never);
 
 		expect(result).toEqual({ createdAccount: 'member' });

@@ -13,10 +13,14 @@ import {
 	storedTripFileSchema,
 	storedTripSchema,
 	storedUsersFileSchema,
+	sudoPasswordResetPrefix,
+	sudoPasswordResetPassword,
 	type PersistedTrip,
 	type StoredData,
-	type StoredTrip
+	type StoredTrip,
+	type StoredUser
 } from './model';
+import { preparePasswordHash } from './password';
 import { isExpired } from './time';
 
 const jsonIndentation = 4;
@@ -60,6 +64,7 @@ type ManagedTripDataFile = {
 type ReadStoredDataResult = {
 	data: StoredData;
 	migrationRequired: boolean;
+	sudoPasswordResetConsumed: boolean;
 };
 type SessionData = Pick<StoredData, 'sessions' | 'users'>;
 type SessionTransactionResult<Result> = {
@@ -74,9 +79,17 @@ type ResolvedDataWriteScope = {
 	global: readonly GlobalDataDomain[];
 	tripIds: 'all' | readonly string[];
 };
+type DataWriteOptions = {
+	firstGlobalDomain?: GlobalDataDomain;
+	preserveGlobalBackups?: readonly GlobalDataDomain[];
+};
+type PendingSudoPasswordReset = {
+	password: string;
+	user: StoredUser;
+};
 
 let transactionTail: Promise<void> = Promise.resolve();
-let startupLockCleanup: Promise<void> | undefined;
+let startupInitialization: Promise<void> | undefined;
 let cachedData: StoredData | undefined;
 let pendingDataRead: Promise<StoredData> | undefined;
 
@@ -125,6 +138,27 @@ async function tripDataFiles(): Promise<ManagedTripDataFile[]> {
 		}));
 }
 
+async function consumeSudoPasswordReset(data: StoredData): Promise<boolean> {
+	let pendingReset: PendingSudoPasswordReset | undefined;
+	for (const user of data.users) {
+		const password = sudoPasswordResetPassword(user.passwordHash);
+		if (password === undefined) {
+			continue;
+		}
+		if (!user.isSudo || pendingReset) {
+			throw new Error(`The ${sudoPasswordResetPrefix} password marker may only be used for the single sudo account.`);
+		}
+		pendingReset = { password, user };
+	}
+	if (!pendingReset) {
+		return false;
+	}
+
+	pendingReset.user.passwordHash = await preparePasswordHash(pendingReset.password);
+	data.sessions = data.sessions.filter((session) => session.userId !== pendingReset.user.id);
+	return true;
+}
+
 async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 	const missingFiles = globalDataPaths.filter((filePath) => !existsSync(filePath));
 	if (missingFiles.length > 0) {
@@ -160,21 +194,25 @@ async function readSplitStoredData(): Promise<ReadStoredDataResult> {
 		return storedTripSchema.parse({ ...trip, slug });
 	});
 
+	const data = storedDataSchema.parse({
+		version: storedDataVersion,
+		users: users.users,
+		trips,
+		shares: shares.shares,
+		sessions: sessions.sessions,
+		editLocks: editLocks.editLocks
+	});
+	const sudoPasswordResetConsumed = await consumeSudoPasswordReset(data);
+
 	return {
-		data: storedDataSchema.parse({
-			version: storedDataVersion,
-			users: users.users,
-			trips,
-			shares: shares.shares,
-			sessions: sessions.sessions,
-			editLocks: editLocks.editLocks
-		}),
+		data,
 		migrationRequired:
 			migratedUsersFile.migrationRequired ||
 			shares.version !== storedDataVersion ||
 			sessions.version !== storedDataVersion ||
 			editLocks.version !== storedDataVersion ||
-			migratedTripFiles.some((tripFile) => tripFile.migrationRequired)
+			migratedTripFiles.some((tripFile) => tripFile.migrationRequired),
+		sudoPasswordResetConsumed
 	};
 }
 
@@ -182,7 +220,7 @@ async function readStoredData(): Promise<ReadStoredDataResult> {
 	if (hasSplitData()) {
 		return readSplitStoredData();
 	}
-	return { data: defaultData(), migrationRequired: false };
+	return { data: defaultData(), migrationRequired: false, sudoPasswordResetConsumed: false };
 }
 
 async function readCachedData(): Promise<StoredData> {
@@ -272,9 +310,9 @@ function persistTrip(trip: StoredTrip): PersistedTrip {
 	};
 }
 
-async function writeManagedJsonFile(filePath: string, data: unknown): Promise<void> {
+async function writeManagedJsonFile(filePath: string, data: unknown, preserveExistingBackup = false): Promise<void> {
 	await mkdir(dirname(filePath), { recursive: true });
-	if (existsSync(filePath)) {
+	if (existsSync(filePath) && !preserveExistingBackup) {
 		await writeDurableFile(`${filePath}.backup`, await readFile(filePath, 'utf8'));
 	}
 	await writeDurableFile(filePath, `${JSON.stringify(data, null, jsonIndentation)}\n`);
@@ -288,18 +326,34 @@ function tripForWrite(data: StoredData, tripId: string): StoredTrip {
 	return trip;
 }
 
-async function writeData(data: StoredData, scope: ResolvedDataWriteScope = allDataWriteScope): Promise<StoredData> {
+async function writeData(
+	data: StoredData,
+	scope: ResolvedDataWriteScope = allDataWriteScope,
+	options: DataWriteOptions = {}
+): Promise<StoredData> {
 	const validated = storedDataSchema.parse(data);
 	const requestedGlobalDomains = new Set(scope.global);
+	const preservedGlobalBackups = new Set(options.preserveGlobalBackups);
 	const globalDomains = globalDataPaths.some((filePath) => !existsSync(filePath))
 		? allGlobalDataDomains
 		: [...requestedGlobalDomains];
+	const firstGlobalDomain =
+		options.firstGlobalDomain && globalDomains.includes(options.firstGlobalDomain)
+			? options.firstGlobalDomain
+			: undefined;
+	if (firstGlobalDomain) {
+		const file = globalDataFiles[firstGlobalDomain];
+		await writeManagedJsonFile(file.path, file.content(validated), preservedGlobalBackups.has(firstGlobalDomain));
+	}
+	const remainingGlobalDomains = firstGlobalDomain
+		? globalDomains.filter((domain) => domain !== firstGlobalDomain)
+		: globalDomains;
 	const trips =
 		scope.tripIds === 'all' ? validated.trips : scope.tripIds.map((tripId) => tripForWrite(validated, tripId));
 	const writeResults = await Promise.allSettled([
-		...globalDomains.map((domain) => {
+		...remainingGlobalDomains.map((domain) => {
 			const file = globalDataFiles[domain];
-			return writeManagedJsonFile(file.path, file.content(validated));
+			return writeManagedJsonFile(file.path, file.content(validated), preservedGlobalBackups.has(domain));
 		}),
 		...trips.map((trip) =>
 			writeManagedJsonFile(managedTripDataPath(trip.slug), {
@@ -326,26 +380,50 @@ function purgeExpiredRecords(data: StoredData): void {
 	data.editLocks = data.editLocks.filter((lock) => !isExpired(lock.expiresAt));
 }
 
-async function clearPersistedEditLocksAtStartup(): Promise<void> {
-	const { data, migrationRequired } = await readStoredData();
-	if (data.editLocks.length === 0 && !migrationRequired) {
+async function initializePersistedData(): Promise<void> {
+	const { data, migrationRequired, sudoPasswordResetConsumed } = await readStoredData();
+	const hasPersistedEditLocks = data.editLocks.length > 0;
+	if (!hasPersistedEditLocks && !migrationRequired && !sudoPasswordResetConsumed) {
 		replaceCachedData(data);
 		return;
 	}
 
 	data.editLocks = [];
+	const globalDomains = new Set<GlobalDataDomain>();
+	if (sudoPasswordResetConsumed) {
+		globalDomains.add('users');
+		globalDomains.add('sessions');
+	}
+	if (hasPersistedEditLocks) {
+		globalDomains.add('editLocks');
+	}
 	replaceCachedData(
-		await writeData(data, migrationRequired ? allDataWriteScope : { global: ['editLocks'], tripIds: [] })
+		await writeData(
+			data,
+			migrationRequired ? allDataWriteScope : { global: [...globalDomains], tripIds: [] },
+			sudoPasswordResetConsumed
+				? {
+						// Do not make a new sudo password usable while an old sudo session could survive an I/O failure.
+						firstGlobalDomain: 'sessions',
+						preserveGlobalBackups: ['users']
+					}
+				: {}
+		)
 	);
 }
 
-async function completeStartupLockCleanup(): Promise<void> {
-	startupLockCleanup ??= clearPersistedEditLocksAtStartup();
-	await startupLockCleanup;
+async function completeStartupInitialization(): Promise<void> {
+	startupInitialization ??= initializePersistedData();
+	await startupInitialization;
+}
+
+/** Completes validation and startup maintenance before the application accepts requests. */
+export async function initializeStore(): Promise<void> {
+	await completeStartupInitialization();
 }
 
 export async function readData(): Promise<StoredData> {
-	await completeStartupLockCleanup();
+	await initializeStore();
 	return readCachedData();
 }
 
@@ -400,7 +478,7 @@ export async function sessionTransaction<Result>(
 	operation: (data: SessionData) => Promise<SessionTransactionResult<Result>> | SessionTransactionResult<Result>
 ): Promise<Result> {
 	return runSerializedTransaction(async () => {
-		await completeStartupLockCleanup();
+		await completeStartupInitialization();
 		const data = await readSessionData();
 		const sessionCount = data.sessions.length;
 		data.sessions = data.sessions.filter((session) => !isExpired(session.expiresAt));
