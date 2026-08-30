@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { page } from '$app/state';
 import { defaultFormatPreferences, type FormatPreferences } from '$lib/format-preferences';
+import { isOnOrAfterUnixEpoch } from './unix-time';
 import { isValidIanaTimeZone } from './zoned-time';
 
 function detectedTimeZone(): string {
@@ -63,8 +64,8 @@ export class ViewerContext {
 	}
 
 	setSimulated(timestamp: number, timeZone: string): void {
-		if (!Number.isSafeInteger(timestamp)) {
-			throw new Error('The simulated time must be a valid Unix-millisecond timestamp.');
+		if (!Number.isSafeInteger(timestamp) || !isOnOrAfterUnixEpoch(timestamp)) {
+			throw new Error('The simulated time must be a Unix-millisecond timestamp no earlier than the Unix epoch.');
 		}
 		if (!isValidIanaTimeZone(timeZone)) {
 			throw new Error(`The simulated time zone ${timeZone} is not valid.`);

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { DateRangePicker, Portal } from 'bits-ui';
-	import { parseDate, today, type CalendarDate, type DateValue } from '@internationalized/date';
+	import { today, type DateValue } from '@internationalized/date';
 	import './date-picker.css';
+	import { minimumCalendarDateValue, parseCalendarDate } from '$lib/components/date-picker';
 	import { datePickerDateSeparator, datePickerLocale } from '$lib/itinerary/calendar';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import Icon from '$lib/visuals/Icon.svelte';
@@ -15,8 +16,6 @@
 		start: DateValue | undefined;
 		end: DateValue | undefined;
 	}>;
-
-	const calendarDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 	let {
 		id,
@@ -39,8 +38,8 @@
 	);
 	let numberOfMonths = $state(1);
 
-	const startValue = $derived(calendarDate(checkInDate));
-	const endValue = $derived(calendarDate(checkOutDate));
+	const startValue = $derived(parseCalendarDate(checkInDate));
+	const endValue = $derived(parseCalendarDate(checkOutDate));
 	const dateRange = $derived<DateRangeValue>({ start: startValue, end: endValue });
 	const calendarPlaceholder = $derived(startValue ?? endValue ?? today('UTC'));
 
@@ -55,18 +54,13 @@
 		return () => desktopQuery.removeEventListener('change', updateNumberOfMonths);
 	});
 
-	function calendarDate(value: string): CalendarDate | undefined {
-		if (!calendarDatePattern.test(value)) {
-			return undefined;
-		}
-		try {
-			return parseDate(value);
-		} catch {
-			return undefined;
-		}
-	}
-
 	function setDateRange(value: DateRangeValue): void {
+		if (
+			(value.start && value.start.compare(minimumCalendarDateValue) < 0) ||
+			(value.end && value.end.compare(minimumCalendarDateValue) < 0)
+		) {
+			return;
+		}
 		onDateRangeChange({
 			checkInDate: value.start?.toString() ?? '',
 			checkOutDate: value.end?.toString() ?? ''
@@ -79,6 +73,7 @@
 	closeOnRangeSelect={true}
 	fixedWeeks={true}
 	{locale}
+	minValue={minimumCalendarDateValue}
 	minDays={2}
 	{numberOfMonths}
 	onValueChange={setDateRange}
@@ -115,7 +110,7 @@
 				{/snippet}
 			</DateRangePicker.Input>
 			<DateRangePicker.Trigger aria-label={`Choose ${label.toLowerCase()}`} class="calendar-trigger">
-				<Icon name="disclosure" />
+				<Icon name="calendar" />
 			</DateRangePicker.Trigger>
 		</div>
 	</div>

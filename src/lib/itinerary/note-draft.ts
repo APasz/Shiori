@@ -1,6 +1,7 @@
 import { amountInputValue, amountMinorFromInput } from '$lib/money';
 import { defaultDayNoteAnchorAt, defaultNoteAnchorTime } from './note-anchor';
 import type { CurrencyCode, ItineraryNote, ItineraryNoteEditorTarget, NoteEntryState } from './schema';
+import { isOnOrAfterUnixEpoch } from './unix-time';
 import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export type NoteEstimatedCostDraft = {
@@ -172,6 +173,9 @@ export function validateItineraryNoteDraft(draft: ItineraryNoteDraft): NoteDraft
 	const anchorAt = anchorAtForDraft(draft);
 	if (anchorAt === null) {
 		return { error: 'Choose a valid anchor time for the selected time zone.', valid: false };
+	}
+	if (!isOnOrAfterUnixEpoch(anchorAt)) {
+		return { error: 'Choose an anchor time on or after the Unix epoch.', valid: false };
 	}
 	return {
 		note: { anchorAt, entries, id: draft.id, kind: 'day', text: draft.text, timeZone: draft.timeZone },

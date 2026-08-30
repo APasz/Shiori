@@ -1,3 +1,5 @@
+import { isOnOrAfterUnixEpoch, unixEpochMilliseconds } from './unix-time';
+
 type LocalDateTimeParts = {
 	day: number;
 	hour: number;
@@ -155,4 +157,12 @@ export function formatTimestampForTimeZoneInput(timestamp: number, timeZone: str
 	return parts
 		? `${parts.year}-${padded(parts.month)}-${padded(parts.day)}T${padded(parts.hour)}:${padded(parts.minute)}`
 		: null;
+}
+
+/** Keeps a complete local datetime at or after the Unix epoch in its selected zone. */
+export function clampLocalDateTimeToUnixEpoch(value: string, timeZone: string): string {
+	const timestamp = zonedDateTimeToUnixMilliseconds(value, timeZone);
+	return timestamp !== null && !isOnOrAfterUnixEpoch(timestamp)
+		? (formatTimestampForTimeZoneInput(unixEpochMilliseconds, timeZone) ?? value)
+		: value;
 }

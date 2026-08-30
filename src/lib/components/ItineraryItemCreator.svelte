@@ -1101,6 +1101,7 @@
 							portalTarget={dialogElement}
 							pickerMode="time"
 							showTimeZonePicker={false}
+							timeZone={accommodationTimeZone}
 						/>
 						<DateTimeInput
 							dateTime={accommodationDateTime(accommodationCheckOutDate, accommodationCheckOutTime)}
@@ -1110,6 +1111,7 @@
 							portalTarget={dialogElement}
 							pickerMode="time"
 							showTimeZonePicker={false}
+							timeZone={accommodationTimeZone}
 						/>
 					</div>
 					{#if hasGoogleHotelsSource() && (accommodationCheckInTime || accommodationCheckOutTime)}

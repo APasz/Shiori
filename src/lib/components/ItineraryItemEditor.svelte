@@ -1620,7 +1620,7 @@
 		border: 0;
 		color: var(--color-text-primary);
 		max-height: calc(100dvh - 2rem);
-		max-width: min(48rem, calc(100% - 2rem));
+		max-width: min(52.1rem, calc(100% - 2rem));
 		overflow: visible;
 		padding: 0;
 		width: 100%;

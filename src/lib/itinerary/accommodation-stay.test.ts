@@ -58,6 +58,24 @@ describe('accommodation stay drafts', () => {
 		).toEqual({ error: 'Check-out must be after check-in.', valid: false });
 	});
 
+	it('rejects a local stay time before the Unix epoch', () => {
+		expect(
+			accommodationStayDraft({
+				checkInDate: '1970-01-01',
+				checkInTime: '00:00',
+				checkOutDate: '1970-01-02',
+				checkOutTime: '10:00',
+				id: 'epoch-hotel',
+				links: [],
+				locationId: 'epoch-hotel-location',
+				name: 'Epoch Hotel',
+				timesKnown: true,
+				timeZone: 'Asia/Tokyo',
+				title: 'Epoch Hotel'
+			})
+		).toEqual({ error: 'Check-in must be on or after the Unix epoch.', valid: false });
+	});
+
 	it('creates a date-only stay when the accommodation times are unknown', () => {
 		const result = accommodationStayDraft({
 			checkInDate: '2026-10-29',

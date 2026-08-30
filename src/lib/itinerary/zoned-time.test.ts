@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	clampLocalDateTimeToUnixEpoch,
 	formatTimestampForTimeZoneInput,
 	isCompleteLocalDateTime,
 	isValidIanaTimeZone,
@@ -7,6 +8,12 @@ import {
 } from './zoned-time';
 
 describe('editor time-zone conversion', () => {
+	it('clamps local datetimes before the Unix epoch', () => {
+		expect(clampLocalDateTimeToUnixEpoch('1970-01-01T00:00', 'Asia/Tokyo')).toBe('1970-01-01T09:00');
+		expect(clampLocalDateTimeToUnixEpoch('1970-01-01T09:00', 'Asia/Tokyo')).toBe('1970-01-01T09:00');
+		expect(clampLocalDateTimeToUnixEpoch('not-a-datetime', 'Asia/Tokyo')).toBe('not-a-datetime');
+	});
+
 	it('converts a selected-zone datetime to a canonical timestamp', () => {
 		const timestamp = zonedDateTimeToUnixMilliseconds('2026-04-12T09:00', 'Asia/Tokyo');
 

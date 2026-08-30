@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
+	import { isOnOrAfterUnixEpoch } from '$lib/itinerary/unix-time';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from '$lib/itinerary/zoned-time';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
@@ -31,6 +32,10 @@
 		const timestamp = zonedDateTimeToUnixMilliseconds(dateTime, timeZone);
 		if (timestamp === null) {
 			errorMessage = 'Choose a complete, valid local date and time.';
+			return;
+		}
+		if (!isOnOrAfterUnixEpoch(timestamp)) {
+			errorMessage = 'Choose a time on or after the Unix epoch.';
 			return;
 		}
 		errorMessage = null;

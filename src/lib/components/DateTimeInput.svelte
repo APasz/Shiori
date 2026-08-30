@@ -1,19 +1,24 @@
 <script lang="ts">
 	import { DatePicker } from 'bits-ui';
-	import { parseDate, today, type CalendarDate, type DateValue } from '@internationalized/date';
+	import { today, type DateValue } from '@internationalized/date';
 	import './date-picker.css';
+	import {
+		adjustCalendarDate,
+		minimumCalendarDateValue,
+		parseCalendarDate,
+		type DayAdjustment
+	} from '$lib/components/date-picker';
 	import TimePicker from '$lib/components/TimePicker.svelte';
 	import TimeZonePicker from '$lib/components/TimeZonePicker.svelte';
 	import { datePickerDateSeparator, datePickerLocale, formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
+	import { clampLocalDateTimeToUnixEpoch } from '$lib/itinerary/zoned-time';
 	import Icon from '$lib/visuals/Icon.svelte';
 
 	type PickerPresentation = 'popover' | 'dialog';
 	type DialogPlacement = 'center' | 'above-development-controls';
 	type PickerMode = 'date-time' | 'date' | 'time';
-
-	const calendarDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 	let {
 		id,
@@ -53,9 +58,20 @@
 		datePickerDateSeparator(viewerContext.locale, viewerContext.formatPreferences.dateFormat)
 	);
 
-	const dateValue = $derived(calendarDate(datePart(dateTime)));
-	const minimumDateValue = $derived(calendarDate(minimumDate ?? ''));
+	const dateValue = $derived(parseCalendarDate(datePart(dateTime)));
+	const configuredMinimumDateValue = $derived(parseCalendarDate(minimumDate ?? ''));
+	const minimumDateValue = $derived(
+		configuredMinimumDateValue && configuredMinimumDateValue.compare(minimumCalendarDateValue) > 0
+			? configuredMinimumDateValue
+			: minimumCalendarDateValue
+	);
 	const calendarPlaceholder = $derived(dateValue ?? today(timeZone));
+	const canDecreaseDate = $derived(
+		dateValue !== undefined &&
+			adjustCalendarDate(dateValue, -1) !== undefined &&
+			dateValue.compare(minimumDateValue) > 0
+	);
+	const canIncreaseDate = $derived(dateValue !== undefined && adjustCalendarDate(dateValue, 1) !== undefined);
 	const calendarContentClass = $derived(
 		`calendar-content${pickerPresentation === 'dialog' ? ` calendar-dialog ${_dialogPlacement}` : ''}`
 	);
@@ -68,17 +84,6 @@
 		return value.slice(11);
 	}
 
-	function calendarDate(value: string): CalendarDate | undefined {
-		if (!calendarDatePattern.test(value)) {
-			return undefined;
-		}
-		try {
-			return parseDate(value);
-		} catch {
-			return undefined;
-		}
-	}
-
 	function replaceDatePart(value: string, date: string): string {
 		return `${date}T${timePart(value)}`;
 	}
@@ -87,9 +92,16 @@
 		return `${datePart(value)}T${time}`;
 	}
 
+	function setDateTime(value: string): void {
+		onDateTimeChange(clampLocalDateTimeToUnixEpoch(value, timeZone));
+	}
+
 	function setDate(value: DateValue | undefined): void {
 		if (value) {
-			onDateTimeChange(replaceDatePart(dateTime, value.toString()));
+			if (value.compare(minimumDateValue) < 0) {
+				return;
+			}
+			setDateTime(replaceDatePart(dateTime, value.toString()));
 			return;
 		}
 		if (pickerMode === 'date') {
@@ -97,8 +109,21 @@
 		}
 	}
 
+	function adjustDate(adjustment: DayAdjustment): void {
+		if (!dateValue) {
+			return;
+		}
+
+		const adjustedDate = adjustCalendarDate(dateValue, adjustment);
+		if (!adjustedDate || adjustedDate.compare(minimumDateValue) < 0) {
+			return;
+		}
+
+		setDateTime(replaceDatePart(dateTime, adjustedDate.toString()));
+	}
+
 	function setTime(value: string): void {
-		onDateTimeChange(replaceTimePart(dateTime, value));
+		setDateTime(replaceTimePart(dateTime, value));
 	}
 </script>
 
@@ -144,15 +169,31 @@
 		>
 			<div class="date-time-picker shiori-form-label">
 				<DatePicker.Label class="picker-label">{label}</DatePicker.Label>
-				<DatePicker.Input class="date-field shiori-form-control" {id}>
+				<DatePicker.Input class="date-field date-field-with-controls shiori-form-control" {id}>
 					{#snippet children({ segments })}
 						{#each segments as { part, value: segmentValue }, index (`${part}-${index}`)}
 							<DatePicker.Segment class={`date-segment${part === 'literal' ? ' literal' : ''}`} {part}>
 								{part === 'literal' && dateSeparator ? dateSeparator : segmentValue}
 							</DatePicker.Segment>
 						{/each}
-						<DatePicker.Trigger aria-label={`Open calendar for ${label}`} class="calendar-trigger">
-							<Icon name="disclosure" />
+						<div aria-label="Day controls" class="date-controls" role="group">
+							<button aria-label="Increase day" disabled={!canIncreaseDate} onclick={() => adjustDate(1)} type="button">
+								<Icon name="increment" />
+							</button>
+							<button
+								aria-label="Decrease day"
+								disabled={!canDecreaseDate}
+								onclick={() => adjustDate(-1)}
+								type="button"
+							>
+								<Icon name="decrement" />
+							</button>
+						</div>
+						<DatePicker.Trigger
+							aria-label={`Open calendar for ${label}`}
+							class="calendar-trigger date-calendar-trigger"
+						>
+							<Icon name="calendar" />
 						</DatePicker.Trigger>
 					{/snippet}
 				</DatePicker.Input>

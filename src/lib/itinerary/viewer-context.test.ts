@@ -31,4 +31,10 @@ describe('ViewerContext browser time-zone detection', () => {
 		expect(viewerContext.timeZone).toBe('Australia/Melbourne');
 		expect(viewerContext.revision).toBe(1);
 	});
+
+	it('rejects simulated times before the Unix epoch', () => {
+		const viewerContext = new ViewerContext(() => 'UTC');
+
+		expect(() => viewerContext.setSimulated(-1, 'UTC')).toThrow('no earlier than the Unix epoch');
+	});
 });

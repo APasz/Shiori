@@ -15,6 +15,8 @@ describe('itinerary timestamps', () => {
 
 	it('rejects invalid local datetimes and non-integer timestamps', () => {
 		expect(localDateTimeToUnixMilliseconds('2026-02-30T09:00')).toBe(null);
+		expect(unixTimestampSchema.safeParse(0).success).toBe(true);
+		expect(unixTimestampSchema.safeParse(-1).success).toBe(false);
 		expect(unixTimestampSchema.safeParse(1775952000000).success).toBe(true);
 		expect(unixTimestampSchema.safeParse(1775952000000.5).success).toBe(false);
 	});

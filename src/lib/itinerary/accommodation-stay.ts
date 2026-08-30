@@ -6,6 +6,7 @@ import {
 	type ItineraryLocation,
 	type ReservationStatus
 } from './schema';
+import { isOnOrAfterUnixEpoch } from './unix-time';
 import { amountMinorFromInput } from '$lib/money';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
@@ -68,6 +69,9 @@ export function accommodationStayDraft(input: AccommodationStayInput): Accommoda
 			valid: false
 		};
 	}
+	if (!isOnOrAfterUnixEpoch(checkIn)) {
+		return { error: 'Check-in must be on or after the Unix epoch.', valid: false };
+	}
 	const checkOut = input.timesKnown
 		? stayTimestamp(input.checkOutDate, input.checkOutTime ?? '', input.timeZone)
 		: dateOnlyStayTimestamp(input.checkOutDate, 'end', input.timeZone);
@@ -76,6 +80,9 @@ export function accommodationStayDraft(input: AccommodationStayInput): Accommoda
 			error: input.timesKnown ? 'Check-out: choose a valid local date and time.' : 'Check-out: choose a valid date.',
 			valid: false
 		};
+	}
+	if (!isOnOrAfterUnixEpoch(checkOut)) {
+		return { error: 'Check-out must be on or after the Unix epoch.', valid: false };
 	}
 	if (checkOut <= checkIn) {
 		return { error: 'Check-out must be after check-in.', valid: false };

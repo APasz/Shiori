@@ -193,6 +193,24 @@ describe('itinerary note drafts', () => {
 		});
 	});
 
+	it('rejects an anchor before the Unix epoch', () => {
+		const draft: ItineraryNoteDraft = {
+			anchorAt: Date.UTC(1969, 11, 31, 23, 59),
+			anchorDate: '1969-12-31',
+			anchorTime: '23:59',
+			entries: [],
+			id: 'day-note-epoch',
+			kind: 'day',
+			text: '',
+			timeZone: 'UTC'
+		};
+
+		expect(validateItineraryNoteDraft(draft)).toEqual({
+			error: 'Choose an anchor time on or after the Unix epoch.',
+			valid: false
+		});
+	});
+
 	it('retains an anchor in the second occurrence of a repeated local hour', () => {
 		const anchorAt = Date.UTC(2026, 10, 1, 9, 30);
 		const draft = itineraryNoteDraft(
