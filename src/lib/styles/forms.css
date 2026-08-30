@@ -36,17 +36,33 @@
 }
 
 .shiori-form-button {
+	--shiori-form-button-bump-scale: 1.02;
 	border-color: var(--color-state-selection);
 	cursor: pointer;
 	justify-self: start;
 	padding-inline: 1rem;
+	transition: transform 100ms ease-out;
 }
 
 .shiori-form-button:hover {
 	background: var(--color-surface-subtle);
 }
 
+.shiori-form-button:not(:disabled):not([aria-disabled='true']):active {
+	transform: scale(var(--shiori-form-button-bump-scale));
+}
+
 .shiori-form-button:disabled {
 	cursor: not-allowed;
 	opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.shiori-form-button {
+		transition: none;
+	}
+
+	.shiori-form-button:not(:disabled):not([aria-disabled='true']):active {
+		transform: none;
+	}
 }

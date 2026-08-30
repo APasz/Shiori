@@ -15,8 +15,17 @@
 
 	let dialogElement: HTMLDialogElement;
 	let format = $state<ItineraryExportFormat>('json');
-	type ClipboardCopyStatus = 'idle' | 'copying' | 'copied' | 'failed';
-	let clipboardCopyStatus = $state<ClipboardCopyStatus>('idle');
+	type ClipboardCopyFeedbackState = 'idle' | 'copied' | 'failed';
+	const clipboardCopyFeedbackLabels = {
+		idle: 'Copy Clipboard',
+		copied: 'Copied Clipboard',
+		failed: 'Copy failed'
+	} satisfies Record<ClipboardCopyFeedbackState, string>;
+	let copyIsInProgress = $state(false);
+	let clipboardCopyFeedback = $state<ClipboardCopyFeedbackState>('idle');
+	let copyConfirmationEvent = $state(0);
+	let exportConfigurationVersion = $state(0);
+	const clipboardCopyLabel = $derived(clipboardCopyFeedbackLabels[clipboardCopyFeedback]);
 	let includeNotes = $state(defaultItineraryExportOptions.includeNotes);
 	let includeLinksAndDocuments = $state(defaultItineraryExportOptions.includeLinksAndDocuments);
 	let includeReservationDetails = $state(defaultItineraryExportOptions.includeReservationDetails);
@@ -47,14 +56,31 @@
 		window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 	}
 
+	function invalidateClipboardCopyFeedback(): void {
+		exportConfigurationVersion += 1;
+		clipboardCopyFeedback = 'idle';
+	}
+
 	async function copyExportToClipboard(): Promise<void> {
-		clipboardCopyStatus = 'copying';
+		if (copyIsInProgress) {
+			return;
+		}
+
+		copyIsInProgress = true;
+		const copiedConfigurationVersion = exportConfigurationVersion;
 
 		try {
 			await navigator.clipboard.writeText(exportFile().contents);
-			clipboardCopyStatus = 'copied';
+			if (copiedConfigurationVersion === exportConfigurationVersion) {
+				clipboardCopyFeedback = 'copied';
+				copyConfirmationEvent += 1;
+			}
 		} catch {
-			clipboardCopyStatus = 'failed';
+			if (copiedConfigurationVersion === exportConfigurationVersion) {
+				clipboardCopyFeedback = 'failed';
+			}
+		} finally {
+			copyIsInProgress = false;
 		}
 	}
 
@@ -81,7 +107,7 @@
 			</form>
 		</header>
 
-		<fieldset>
+		<fieldset onchange={invalidateClipboardCopyFeedback}>
 			<legend>Format</legend>
 			<div class="options">
 				{#each itineraryExportFormats as exportFormat (exportFormat)}
@@ -93,7 +119,7 @@
 			</div>
 		</fieldset>
 
-		<fieldset>
+		<fieldset onchange={invalidateClipboardCopyFeedback}>
 			<legend>Include</legend>
 			<div class="options">
 				<label class="option">
@@ -119,7 +145,7 @@
 			</div>
 		</fieldset>
 
-		<fieldset>
+		<fieldset onchange={invalidateClipboardCopyFeedback}>
 			<legend>Representation</legend>
 			<div class="options">
 				<label class="option">
@@ -134,22 +160,20 @@
 		</fieldset>
 
 		<div class="actions">
-			{#if clipboardCopyStatus !== 'idle'}
-				<p aria-live="polite" class:copy-error={clipboardCopyStatus === 'failed'} class="copy-status">
-					{clipboardCopyStatus === 'copying'
-						? 'Copying export…'
-						: clipboardCopyStatus === 'copied'
-							? 'Export copied to clipboard.'
-							: 'Could not copy the export to the clipboard.'}
-				</p>
-			{/if}
 			<button
+				aria-busy={copyIsInProgress}
+				class:copy-failed={clipboardCopyFeedback === 'failed'}
 				class="copy-button shiori-form-button"
-				disabled={clipboardCopyStatus === 'copying'}
 				onclick={() => void copyExportToClipboard()}
 				type="button"
 			>
-				Copy Clipboard
+				<span aria-atomic="true" aria-live="polite">
+					{#key copyConfirmationEvent}
+						<span class:copy-confirmed={clipboardCopyFeedback === 'copied'} class="copy-button-label">
+							{clipboardCopyLabel}
+						</span>
+					{/key}
+				</span>
 			</button>
 			<button class="download-button shiori-form-button" onclick={downloadExport} type="button">Download</button>
 		</div>
@@ -215,6 +239,29 @@
 		cursor: pointer;
 	}
 
+	.copy-button {
+		min-inline-size: min(10rem, 100%);
+	}
+
+	.copy-failed {
+		border-color: var(--color-state-error);
+		color: var(--color-state-error);
+	}
+
+	.copy-button-label {
+		display: inline-block;
+	}
+
+	.copy-confirmed {
+		animation: copy-confirmation-bump 180ms ease-out;
+	}
+
+	@keyframes copy-confirmation-bump {
+		50% {
+			transform: scale(var(--shiori-form-button-bump-scale));
+		}
+	}
+
 	fieldset {
 		border: 0;
 		border-top: 1px solid var(--color-border-default);
@@ -250,18 +297,15 @@
 	.actions {
 		align-items: center;
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.75rem;
 		justify-content: end;
 		margin-top: 1.5rem;
 	}
 
-	.copy-status {
-		color: var(--color-text-secondary);
-		font-size: 0.875rem;
-		margin: 0 auto 0 0;
-	}
-
-	.copy-error {
-		color: var(--color-state-error);
+	@media (prefers-reduced-motion: reduce) {
+		.copy-confirmed {
+			animation: none;
+		}
 	}
 </style>
