@@ -7,7 +7,12 @@ import { itinerarySchema } from '../itinerary/schema';
 import { defaultFormatPreferences } from '../format-preferences';
 import { defaultColourway } from '../theme/colourway';
 import { createTripBackup } from '../trip-backup';
-import { preSudoOwnedTripsStoredDataVersion, storedDataVersion, sudoPasswordResetPrefix } from './store/model';
+import {
+	preNoteAnchorStoredDataVersion,
+	preSudoOwnedTripsStoredDataVersion,
+	storedDataVersion,
+	sudoPasswordResetPrefix
+} from './store/model';
 
 let dataDirectory = '';
 
@@ -637,6 +642,61 @@ describe('JSON store', () => {
 		});
 	});
 
+	it('migrates legacy daily note dates to noon anchors in their entry-time zone', async () => {
+		const store = await import('./store');
+		const owner = await store.createInitialSudo('owner', 'a strong test password');
+		const trip = await createTestTrip(store, owner.id);
+		const persistedTrip: { trip: { itinerary: { notes: unknown[] } }; version: number } = JSON.parse(
+			await readFile(managedTripPath(trip.slug), 'utf8')
+		);
+		persistedTrip.trip.itinerary.notes = [
+			{
+				date: '2026-04-13',
+				kind: 'day',
+				text: 'Keep the afternoon flexible.',
+				timeZone: 'Asia/Tokyo'
+			}
+		];
+		persistedTrip.version = preNoteAnchorStoredDataVersion;
+		await writeFile(managedTripPath(trip.slug), JSON.stringify(persistedTrip, null, 4), 'utf8');
+
+		for (const filePath of [
+			managedDataPath('users.json'),
+			managedDataPath('shares.json'),
+			managedDataPath('sessions.json'),
+			managedDataPath('edit-locks.json')
+		]) {
+			const persistedGlobalData: { version: number } = JSON.parse(await readFile(filePath, 'utf8'));
+			persistedGlobalData.version = preNoteAnchorStoredDataVersion;
+			await writeFile(filePath, JSON.stringify(persistedGlobalData, null, 4), 'utf8');
+		}
+
+		vi.resetModules();
+		const restartedStore = await import('./store');
+		const migratedTrip = await restartedStore.getTripView(trip.slug, owner);
+		if (!migratedTrip || migratedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read the migrated trip.');
+		}
+		expect(migratedTrip.itinerary.notes).toEqual([
+			{
+				anchorAt: Date.UTC(2026, 3, 13, 3),
+				entries: [],
+				id: 'day-note-2026-04-13',
+				kind: 'day',
+				text: 'Keep the afternoon flexible.',
+				timeZone: 'Asia/Tokyo'
+			}
+		]);
+		expect(JSON.parse(await readFile(managedTripPath(trip.slug), 'utf8'))).toMatchObject({
+			trip: {
+				itinerary: {
+					notes: [{ anchorAt: Date.UTC(2026, 3, 13, 3), id: 'day-note-2026-04-13' }]
+				}
+			},
+			version: storedDataVersion
+		});
+	});
+
 	it.each(costMigrationFixtures)(
 		'migrates version $sourceVersion cost records to explicit minor-unit fields on startup',
 		async ({ sourceCost, sourceVersion }) => {
@@ -1111,7 +1171,7 @@ describe('JSON store', () => {
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 		const trip = await createTestTrip(store, owner.id);
 		const dayNote = {
-			date: '2026-01-02',
+			anchorAt: Date.UTC(2026, 0, 2, 3),
 			entries: [
 				{
 					estimatedCosts: [{ amountMinor: 1_500, currency: 'JPY' as const, id: 'tea-cost', label: 'Tea' }],
@@ -1123,6 +1183,7 @@ describe('JSON store', () => {
 					title: 'Tea ceremony'
 				}
 			],
+			id: 'day-note-2026-01-02',
 			kind: 'day' as const,
 			text: 'Ideas for the afternoon.',
 			timeZone: 'Asia/Tokyo'
@@ -1137,7 +1198,11 @@ describe('JSON store', () => {
 		}
 		expect(savedTrip.itinerary.notes).toEqual([dayNote]);
 
-		const replacementNote = { ...dayNote, text: 'A shorter afternoon plan.' };
+		const replacementNote = {
+			...dayNote,
+			anchorAt: Date.UTC(2026, 0, 3, 3),
+			text: 'A shorter afternoon plan.'
+		};
 		await expect(
 			store.saveNote({
 				note: replacementNote,
@@ -1155,7 +1220,7 @@ describe('JSON store', () => {
 		await expect(
 			store.deleteNote({
 				revision: replacedTrip.revision,
-				target: { date: dayNote.date, kind: 'day' },
+				target: { id: dayNote.id, kind: 'day' },
 				tripId: replacedTrip.id,
 				userId: owner.id
 			})

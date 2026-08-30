@@ -8,7 +8,8 @@
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import { formatCalendarDate } from '$lib/itinerary/calendar';
-	import type { ItineraryNote, ItineraryNoteTarget } from '$lib/itinerary/schema';
+	import { dayNoteDate } from '$lib/itinerary/note-presentation';
+	import type { DayItineraryNote, ItineraryNote, ItineraryNoteEditorTarget } from '$lib/itinerary/schema';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { refreshOfflineTripPage } from '$lib/offline';
 	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
@@ -16,8 +17,12 @@
 
 	type EditingNote = {
 		note: ItineraryNote | undefined;
-		target: ItineraryNoteTarget;
+		target: ItineraryNoteEditorTarget;
 	};
+	type DayNoteForViewer = Readonly<{
+		date: string;
+		note: DayItineraryNote;
+	}>;
 
 	let { data }: { data: PageData } = $props();
 	let editingNote = $state<EditingNote | null>(null);
@@ -28,11 +33,12 @@
 	const tripNote = $derived(data.trip.itinerary.notes.find((note) => note.kind === 'trip'));
 	const dayNotes = $derived(
 		data.trip.itinerary.notes
-			.filter((note): note is Extract<ItineraryNote, { kind: 'day' }> => note.kind === 'day')
-			.toSorted((left, right) => left.date.localeCompare(right.date))
+			.filter((note): note is DayItineraryNote => note.kind === 'day')
+			.map((note): DayNoteForViewer => ({ date: dayNoteDate(note, viewerContext.timeZone), note }))
+			.toSorted((left, right) => left.note.anchorAt - right.note.anchorAt || left.note.id.localeCompare(right.note.id))
 	);
 
-	function beginEditing(target: ItineraryNoteTarget, note: ItineraryNote | undefined): void {
+	function beginEditing(target: ItineraryNoteEditorTarget, note: ItineraryNote | undefined): void {
 		if (!canModifyNotes) {
 			return;
 		}
@@ -102,17 +108,19 @@
 				<p class="empty-note">No day notes yet. Add one from the corresponding itinerary day.</p>
 			{:else}
 				<div class="day-notes">
-					{#each dayNotes as note (note.date)}
+					{#each dayNotes as { date, note } (note.id)}
 						<ItineraryNoteView
 							defaultTimeZone={data.trip.itinerary.timeZone}
 							heading={formatCalendarDate(
-								note.date,
+								date,
 								'date-with-weekday',
 								viewerContext.locale,
 								viewerContext.formatPreferences.dateFormat
-							) ?? note.date}
+							) ?? date}
 							{note}
-							onEdit={canModifyNotes ? () => beginEditing({ date: note.date, kind: 'day' }, note) : undefined}
+							onEdit={canModifyNotes
+								? () => beginEditing({ date, kind: 'day', viewerTimeZone: viewerContext.timeZone }, note)
+								: undefined}
 						/>
 					{/each}
 				</div>

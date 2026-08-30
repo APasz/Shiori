@@ -9,8 +9,10 @@
 	import ItineraryNoteEditor from '$lib/components/ItineraryNoteEditor.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import TripEditor from '$lib/components/TripEditor.svelte';
+	import { dayNotesForDate } from '$lib/itinerary/note-presentation';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { removeCurrentTripOfflinePages } from '$lib/offline';
-	import type { ItineraryItem, ItineraryNoteTarget } from '$lib/itinerary/schema';
+	import type { ItineraryItem, ItineraryNoteEditorTarget } from '$lib/itinerary/schema';
 	import { onMount } from 'svelte';
 	import { ConnectivityMonitor } from '$lib/connectivity.svelte';
 	import ItinerarySchedule from './ItinerarySchedule.svelte';
@@ -39,9 +41,14 @@
 		if (!canModifyItinerary || !detailedTrip) {
 			return;
 		}
-		const target: ItineraryNoteTarget = { date, kind: 'day' };
+		const notes = dayNotesForDate(detailedTrip.itinerary.notes, date, viewerContext.timeZone);
+		if (notes.length > 1) {
+			void goto(resolve('/trips/[slug]/notes', { slug: data.trip.slug }));
+			return;
+		}
+		const target: ItineraryNoteEditorTarget = { date, kind: 'day', viewerTimeZone: viewerContext.timeZone };
 		editingNote = {
-			note: detailedTrip.itinerary.notes.find((note) => note.kind === 'day' && note.date === date),
+			note: notes[0],
 			target
 		};
 	}

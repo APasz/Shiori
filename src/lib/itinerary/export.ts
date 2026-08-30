@@ -16,6 +16,8 @@ import { timingStartTimestamp } from './timing';
 import { resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
 
 export const itineraryExportFormats = ['json', 'yaml', 'txt'] as const;
+/** Bumped whenever the portable itinerary export shape changes. */
+export const itineraryExportVersion = 2;
 
 export type ItineraryExportFormat = (typeof itineraryExportFormats)[number];
 
@@ -185,7 +187,7 @@ type ExportedItineraryNote =
 			timeZone: string;
 	  }>
 	| Readonly<{
-			date: string;
+			anchorAt: number | string;
 			entries: ExportedNoteEntry[];
 			kind: 'day';
 			text: string;
@@ -193,7 +195,7 @@ type ExportedItineraryNote =
 	  }>;
 
 export type ItineraryExport = Readonly<{
-	version: 1;
+	version: typeof itineraryExportVersion;
 	title: string;
 	timeZone: string;
 	localCurrency?: CurrencyCode;
@@ -384,7 +386,7 @@ function exportItem(
 	return exported;
 }
 
-function exportItineraryNote(note: ItineraryNote): ExportedItineraryNote {
+function exportItineraryNote(note: ItineraryNote, options: ItineraryExportOptions): ExportedItineraryNote {
 	const entries = note.entries.map((entry) => ({
 		estimatedCosts: entry.estimatedCosts.map((estimatedCost) => ({
 			amountMinor: estimatedCost.amountMinor,
@@ -399,18 +401,22 @@ function exportItineraryNote(note: ItineraryNote): ExportedItineraryNote {
 		title: entry.title
 	}));
 	const base = { entries, text: note.text, timeZone: note.timeZone };
-	return note.kind === 'trip' ? { ...base, kind: 'trip' } : { ...base, date: note.date, kind: 'day' };
+	return note.kind === 'trip'
+		? { ...base, kind: 'trip' }
+		: { ...base, anchorAt: exportTimestampValue(note.anchorAt, options.useEpochTimestamps), kind: 'day' };
 }
 
 /** Creates the stable, portable itinerary data shared by every export format. */
 export function createItineraryExport(source: ItineraryExportSource, options: ItineraryExportOptions): ItineraryExport {
 	return {
-		version: 1,
+		version: itineraryExportVersion,
 		title: source.title,
 		timeZone: source.timeZone,
 		...(source.localCurrency === undefined ? {} : { localCurrency: source.localCurrency }),
 		items: [...source.items].sort(compareItems).map((item) => exportItem(item, source.timeZone, options)),
-		...(options.includeNotes && source.notes !== undefined ? { notes: source.notes.map(exportItineraryNote) } : {})
+		...(options.includeNotes && source.notes !== undefined
+			? { notes: source.notes.map((note) => exportItineraryNote(note, options)) }
+			: {})
 	};
 }
 
@@ -506,7 +512,7 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 }
 
 function textLinesForItineraryNote(note: ExportedItineraryNote, index: number): string[] {
-	const title = note.kind === 'trip' ? 'Trip note' : `Day note · ${note.date}`;
+	const title = note.kind === 'trip' ? 'Trip note' : `Day note · ${note.anchorAt}`;
 	const lines = [`${index + 1}. ${title} (${note.timeZone})`];
 	if (note.text !== '') {
 		lines.push(`   ${note.text.replaceAll('\n', '\n   ')}`);

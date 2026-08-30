@@ -1,6 +1,11 @@
 import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
-import { createItineraryExportFile, defaultItineraryExportOptions, renderItineraryExport } from './export';
+import {
+	createItineraryExportFile,
+	defaultItineraryExportOptions,
+	itineraryExportVersion,
+	renderItineraryExport
+} from './export';
 import { itinerarySchema } from './schema';
 
 const itinerary = itinerarySchema.parse({
@@ -71,8 +76,9 @@ const itinerary = itinerarySchema.parse({
 			timeZone: 'Asia/Tokyo'
 		},
 		{
-			date: '2026-04-13',
+			anchorAt: Date.UTC(2026, 3, 13, 3),
 			entries: [],
+			id: 'day-note-2026-04-13',
 			kind: 'day',
 			text: 'Check the weather before choosing an outdoor plan.',
 			timeZone: 'Asia/Tokyo'
@@ -87,7 +93,7 @@ describe('itinerary exports', () => {
 		const exported = JSON.parse(renderItineraryExport(itinerary, 'json', defaultItineraryExportOptions));
 
 		expect(exported).toMatchObject({
-			version: 1,
+			version: itineraryExportVersion,
 			title: 'Japan 2026',
 			timeZone: 'Asia/Tokyo',
 			localCurrency: 'AUD'
@@ -133,7 +139,7 @@ describe('itinerary exports', () => {
 				timeZone: 'Asia/Tokyo'
 			},
 			{
-				date: '2026-04-13',
+				anchorAt: '2026-04-13T03:00:00.000Z',
 				entries: [],
 				kind: 'day',
 				text: 'Check the weather before choosing an outdoor plan.',
@@ -179,6 +185,7 @@ describe('itinerary exports', () => {
 			at: 1_775_952_000_000,
 			timeZone: 'Asia/Tokyo'
 		});
+		expect(exported.notes[1].anchorAt).toBe(Date.UTC(2026, 3, 13, 3));
 		expect(exported.items[0].cost).toMatchObject({
 			amount: 125,
 			currency: 'USD',
@@ -215,7 +222,7 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Trip note (Asia/Tokyo)');
 		expect(text).toContain('Estimate: Entry: JPY 3500 minor units');
 		expect(text).toContain('Link: Museum details: https://example.com/museum');
-		expect(text).toContain('Day note · 2026-04-13 (Asia/Tokyo)');
+		expect(text).toContain('Day note · 2026-04-13T03:00:00.000Z (Asia/Tokyo)');
 		expect(file).toMatchObject({ filename: 'japan-2026-itinerary.yaml', mediaType: 'application/yaml' });
 	});
 });

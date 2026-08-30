@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { migrateLegacyDayNotes } from '$lib/itinerary/note-anchor';
 import { itinerarySchema, unixTimestampSchema, type Itinerary } from '$lib/itinerary/schema';
 
 export const tripBackupFormat = 'shiori-trip-backup';
-export const tripBackupVersion = 1;
+export const legacyTripBackupVersion = 1;
+export const tripBackupVersion = 2;
 export const tripBackupFileExtension = 'shiori-bak';
 export const tripBackupMediaType = 'application/vnd.shiori.trip-backup+json';
 export const maximumTripBackupBytes = 20 * 1024 * 1024;
@@ -18,6 +20,12 @@ export const tripBackupSchema = z.strictObject({
 const tripBackupEnvelopeSchema = z.object({
 	format: z.literal(tripBackupFormat),
 	version: z.number().int()
+});
+const legacyTripBackupSchema = z.strictObject({
+	exportedAt: unixTimestampSchema,
+	format: z.literal(tripBackupFormat),
+	itinerary: z.object({}).passthrough(),
+	version: z.literal(legacyTripBackupVersion)
 });
 
 export type TripBackup = z.infer<typeof tripBackupSchema>;
@@ -44,14 +52,29 @@ export function validateTripBackup(value: unknown): TripBackupValidation {
 	if (envelope.data.version > tripBackupVersion) {
 		return { message: 'This trip backup was created by a newer version of Shiori.', valid: false };
 	}
-	if (envelope.data.version < tripBackupVersion) {
+	if (envelope.data.version < legacyTripBackupVersion) {
 		return { message: 'This trip backup version is no longer supported.', valid: false };
 	}
 
-	const backup = tripBackupSchema.safeParse(value);
+	const backup = tripBackupSchema.safeParse(migrateLegacyTripBackup(value, envelope.data.version));
 	return backup.success
 		? { backup: backup.data, valid: true }
 		: { message: 'This Shiori trip backup is incomplete or invalid.', valid: false };
+}
+
+function migrateLegacyTripBackup(value: unknown, version: number): unknown {
+	if (version !== legacyTripBackupVersion) {
+		return value;
+	}
+	const backup = legacyTripBackupSchema.safeParse(value);
+	if (!backup.success) {
+		return value;
+	}
+	return {
+		...backup.data,
+		itinerary: migrateLegacyDayNotes(backup.data.itinerary),
+		version: tripBackupVersion
+	};
 }
 
 /** Renders a backup as deterministic, human-inspectable JSON without giving it a generic JSON extension. */

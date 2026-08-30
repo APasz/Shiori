@@ -1,4 +1,4 @@
-import { formatTimestampForTimeZoneInput, isValidIanaTimeZone } from './zoned-time';
+import { formatTimestampForTimeZoneInput } from './zoned-time';
 
 export type FormattedLocalTimestamp = Readonly<{
 	date: string;
@@ -27,9 +27,6 @@ export function localDateTimeToUnixMilliseconds(value: string): number | null {
 }
 
 export function formatTimestampInTimeZone(timestamp: number, timeZone: string): FormattedLocalTimestamp | null {
-	if (!isValidIanaTimeZone(timeZone)) {
-		return null;
-	}
 	const formatted = formatTimestampForTimeZoneInput(timestamp, timeZone);
 	if (!formatted) {
 		return null;

@@ -15,7 +15,8 @@ export const preSudoStoredDataVersion = 13;
 export const preAppearanceStoredDataVersion = 14;
 export const preFormatPreferencesStoredDataVersion = 15;
 export const preSudoOwnedTripsStoredDataVersion = 16;
-export const storedDataVersion = 17;
+export const preNoteAnchorStoredDataVersion = 17;
+export const storedDataVersion = 18;
 export const tripStructureLockTargetId = 'trip-structure';
 
 export const usernameSchema = z
@@ -74,6 +75,7 @@ const supportedStoredDataVersionSchema = z.union([
 	z.literal(preAppearanceStoredDataVersion),
 	z.literal(preFormatPreferencesStoredDataVersion),
 	z.literal(preSudoOwnedTripsStoredDataVersion),
+	z.literal(preNoteAnchorStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 

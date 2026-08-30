@@ -268,15 +268,24 @@ const itineraryNoteBaseShape = {
 	text: z.string().max(100_000, 'Use at most 100,000 characters.').default(''),
 	timeZone: ianaTimeZoneSchema
 };
+const noteAnchorTimestampSchema = unixTimestampSchema.refine(
+	(timestamp) => timestamp % 60_000 === 0,
+	'Use a Unix-millisecond timestamp aligned to a whole minute.'
+);
 
 export const itineraryNoteSchema = z.discriminatedUnion('kind', [
 	z.strictObject({ ...itineraryNoteBaseShape, kind: z.literal('trip') }),
-	z.strictObject({ ...itineraryNoteBaseShape, date: calendarDateSchema, kind: z.literal('day') })
+	z.strictObject({
+		...itineraryNoteBaseShape,
+		anchorAt: noteAnchorTimestampSchema,
+		id: itineraryIdentifierSchema,
+		kind: z.literal('day')
+	})
 ]);
 
 export const itineraryNoteTargetSchema = z.discriminatedUnion('kind', [
 	z.strictObject({ kind: z.literal('trip') }),
-	z.strictObject({ date: calendarDateSchema, kind: z.literal('day') })
+	z.strictObject({ id: itineraryIdentifierSchema, kind: z.literal('day') })
 ]);
 
 const expenseBaseShape = {
@@ -478,18 +487,29 @@ export const itinerarySchema = tripDetailsSchema
 		}
 
 		const itemIds = new Set<string>();
-		const noteKeys = new Set<string>();
+		const dayNoteIds = new Set<string>();
+		let hasTripNote = false;
 
 		for (const [noteIndex, note] of itinerary.notes.entries()) {
-			const noteKey = note.kind === 'trip' ? 'trip' : `day:${note.date}`;
-			if (noteKeys.has(noteKey)) {
+			if (note.kind === 'trip' && hasTripNote) {
 				context.addIssue({
 					code: 'custom',
 					path: ['notes', noteIndex],
-					message: note.kind === 'trip' ? 'A trip can have only one trip note.' : 'A day can have only one note.'
+					message: 'A trip can have only one trip note.'
 				});
 			}
-			noteKeys.add(noteKey);
+			if (note.kind === 'day' && dayNoteIds.has(note.id)) {
+				context.addIssue({
+					code: 'custom',
+					path: ['notes', noteIndex],
+					message: 'Each day note ID must be unique within a trip.'
+				});
+			}
+			if (note.kind === 'trip') {
+				hasTripNote = true;
+			} else {
+				dayNoteIds.add(note.id);
+			}
 
 			const entryIds = new Set<string>();
 			for (const [entryIndex, entry] of note.entries.entries()) {
@@ -583,7 +603,16 @@ export const itinerarySchema = tripDetailsSchema
 export type Itinerary = z.infer<typeof itinerarySchema>;
 export type TripDetails = z.infer<typeof tripDetailsSchema>;
 export type ItineraryNote = z.infer<typeof itineraryNoteSchema>;
+export type DayItineraryNote = Extract<ItineraryNote, { kind: 'day' }>;
 export type ItineraryNoteTarget = z.infer<typeof itineraryNoteTargetSchema>;
+/** A display-date context used to create or edit a note from the itinerary UI. */
+export type ItineraryNoteEditorTarget =
+	| Readonly<{ kind: 'trip' }>
+	| Readonly<{
+			date: string;
+			kind: 'day';
+			viewerTimeZone: string;
+	  }>;
 export type ItineraryNoteEntry = z.infer<typeof noteEntrySchema>;
 export type EstimatedNoteCost = z.infer<typeof estimatedNoteCostSchema>;
 export type NoteEntryState = z.infer<typeof noteEntryStateSchema>;

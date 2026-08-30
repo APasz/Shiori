@@ -17,8 +17,8 @@ type VersionedTripMutation = {
 	userId: string;
 };
 
-function noteMatchesTarget(note: ItineraryNote, target: { kind: 'trip' } | { date: string; kind: 'day' }): boolean {
-	return target.kind === 'trip' ? note.kind === 'trip' : note.kind === 'day' && note.date === target.date;
+function noteMatchesTarget(note: ItineraryNote, target: { kind: 'trip' } | { id: string; kind: 'day' }): boolean {
+	return target.kind === 'trip' ? note.kind === 'trip' : note.kind === 'day' && note.id === target.id;
 }
 
 function noteHasContent(note: ItineraryNote): boolean {

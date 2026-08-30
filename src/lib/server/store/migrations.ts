@@ -7,10 +7,12 @@ import {
 	unixTimestampSchema,
 	type Expense
 } from '$lib/itinerary/schema';
+import { migrateLegacyDayNotes } from '$lib/itinerary/note-anchor';
 import {
 	dailyExpenseStoredDataVersion,
 	preAppearanceStoredDataVersion,
 	preFormatPreferencesStoredDataVersion,
+	preNoteAnchorStoredDataVersion,
 	freeformExpenseStoredDataVersion,
 	legacyStoredDataVersion,
 	preAccessBlockStoredDataVersion,
@@ -80,7 +82,8 @@ const migratableStoredTripFileEnvelopeSchema = z
 			z.literal(preSudoStoredDataVersion),
 			z.literal(preAppearanceStoredDataVersion),
 			z.literal(preFormatPreferencesStoredDataVersion),
-			z.literal(preSudoOwnedTripsStoredDataVersion)
+			z.literal(preSudoOwnedTripsStoredDataVersion),
+			z.literal(preNoteAnchorStoredDataVersion)
 		]),
 		trip: z
 			.object({
@@ -108,7 +111,8 @@ const migratableStoredUsersFileSchema = z.strictObject({
 		z.literal(preSudoStoredDataVersion),
 		z.literal(preAppearanceStoredDataVersion),
 		z.literal(preFormatPreferencesStoredDataVersion),
-		z.literal(preSudoOwnedTripsStoredDataVersion)
+		z.literal(preSudoOwnedTripsStoredDataVersion),
+		z.literal(preNoteAnchorStoredDataVersion)
 	]),
 	users: z.array(migratableStoredUserSchema)
 });
@@ -142,7 +146,8 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 	const preservesSudoRole =
 		parsedFile.data.version === preAppearanceStoredDataVersion ||
 		parsedFile.data.version === preFormatPreferencesStoredDataVersion ||
-		parsedFile.data.version === preSudoOwnedTripsStoredDataVersion;
+		parsedFile.data.version === preSudoOwnedTripsStoredDataVersion ||
+		parsedFile.data.version === preNoteAnchorStoredDataVersion;
 	return {
 		file: {
 			version: storedDataVersion,
@@ -303,10 +308,11 @@ export function migrateStoredTripFile(file: unknown): { file: unknown; migration
 				? migratePreviousCost
 				: (cost: unknown) => cost;
 	const sourceItinerary = parsedFile.data.trip.itinerary as MigratableItinerary;
-	const itinerary =
+	const itineraryBeforeNoteMigration =
 		parsedFile.data.version === dailyExpenseStoredDataVersion
 			? migrateLegacyDailyExpenses(sourceItinerary)
 			: sourceItinerary;
+	const itinerary = migrateLegacyDayNotes(itineraryBeforeNoteMigration);
 	return {
 		file: {
 			...parsedFile.data,

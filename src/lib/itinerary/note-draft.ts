@@ -1,5 +1,7 @@
 import { amountInputValue, amountMinorFromInput } from '$lib/money';
-import type { CurrencyCode, ItineraryNote, ItineraryNoteTarget, NoteEntryState } from './schema';
+import { defaultDayNoteAnchorAt, defaultNoteAnchorTime } from './note-anchor';
+import type { CurrencyCode, ItineraryNote, ItineraryNoteEditorTarget, NoteEntryState } from './schema';
+import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export type NoteEstimatedCostDraft = {
 	amount: string;
@@ -25,11 +27,20 @@ export type NoteEntryDraft = {
 	title: string;
 };
 
-export type ItineraryNoteDraft = {
+type ItineraryNoteDraftBase = {
 	entries: NoteEntryDraft[];
 	text: string;
 	timeZone: string;
 };
+type DayItineraryNoteDraft = ItineraryNoteDraftBase & {
+	anchorAt: number | null;
+	anchorDate: string;
+	anchorTime: string;
+	id: string;
+	kind: 'day';
+};
+
+export type ItineraryNoteDraft = (ItineraryNoteDraftBase & { kind: 'trip' }) | DayItineraryNoteDraft;
 
 type InvalidNoteDraft = { readonly error: string; readonly valid: false };
 
@@ -38,17 +49,67 @@ export type NoteDraftValidation = { readonly note: ItineraryNote; readonly valid
 /** Creates the mutable fields used by the note editor from a persisted itinerary note. */
 export function itineraryNoteDraft(
 	initialNote: ItineraryNote | undefined,
-	defaultTimeZone: string
+	defaultTimeZone: string,
+	target: ItineraryNoteEditorTarget,
+	createDayNoteId: () => string = () => crypto.randomUUID()
 ): ItineraryNoteDraft {
-	if (initialNote === undefined) {
-		return { entries: [], text: '', timeZone: defaultTimeZone };
+	if (initialNote !== undefined && initialNote.kind !== target.kind) {
+		throw new Error('The note does not match its editor target.');
 	}
 
-	return {
-		entries: initialNote.entries.map(noteEntryDraft),
-		text: initialNote.text,
-		timeZone: initialNote.timeZone
+	const base = {
+		entries: initialNote?.entries.map(noteEntryDraft) ?? [],
+		text: initialNote?.text ?? '',
+		timeZone: initialNote?.timeZone ?? defaultTimeZone
 	};
+	if (target.kind === 'trip') {
+		return { ...base, kind: 'trip' };
+	}
+
+	if (initialNote?.kind === 'day') {
+		const anchorDateTime = anchorDateTimeFor(initialNote.anchorAt, initialNote.timeZone);
+		return {
+			...base,
+			anchorAt: initialNote.anchorAt,
+			anchorDate: anchorDateTime.slice(0, 10),
+			anchorTime: anchorDateTime.slice(11),
+			id: initialNote.id,
+			kind: 'day'
+		};
+	}
+
+	const anchorAt = defaultDayNoteAnchorAt(target.date, target.viewerTimeZone);
+	const anchorDateTime = anchorAt === null ? null : formatTimestampForTimeZoneInput(anchorAt, defaultTimeZone);
+	return {
+		...base,
+		anchorAt,
+		anchorDate: anchorDateTime?.slice(0, 10) ?? target.date,
+		anchorTime: anchorDateTime?.slice(11) ?? defaultNoteAnchorTime,
+		id: createDayNoteId(),
+		kind: 'day'
+	};
+}
+
+/** Changes the entry-time zone while preserving a valid daily note's absolute anchor. */
+export function itineraryNoteDraftForTimeZone(draft: ItineraryNoteDraft, timeZone: string): ItineraryNoteDraft {
+	if (draft.kind === 'trip') {
+		return { ...draft, timeZone };
+	}
+
+	const anchorAt = anchorAtForDraft(draft);
+	if (anchorAt === null) {
+		return { ...draft, timeZone };
+	}
+	const anchorDateTime = formatTimestampForTimeZoneInput(anchorAt, timeZone);
+	return anchorDateTime === null
+		? { ...draft, timeZone }
+		: {
+				...draft,
+				anchorAt,
+				anchorDate: anchorDateTime.slice(0, 10),
+				anchorTime: anchorDateTime.slice(11),
+				timeZone
+			};
 }
 
 /** Produces a stable snapshot for deciding whether closing the editor would discard changes. */
@@ -78,10 +139,7 @@ export function emptyNoteLinkDraft(id: string): NoteLinkDraft {
 }
 
 /** Normalizes optional draft values and checks the field combinations the schema cannot describe. */
-export function validateItineraryNoteDraft(
-	draft: ItineraryNoteDraft,
-	target: ItineraryNoteTarget
-): NoteDraftValidation {
+export function validateItineraryNoteDraft(draft: ItineraryNoteDraft): NoteDraftValidation {
 	const entries: ItineraryNote['entries'] = [];
 	for (const entry of draft.entries) {
 		const estimatedCosts = estimatedCostsForDraft(entry);
@@ -107,13 +165,34 @@ export function validateItineraryNoteDraft(
 		});
 	}
 
+	if (draft.kind === 'trip') {
+		return { note: { entries, kind: 'trip', text: draft.text, timeZone: draft.timeZone }, valid: true };
+	}
+
+	const anchorAt = anchorAtForDraft(draft);
+	if (anchorAt === null) {
+		return { error: 'Choose a valid anchor time for the selected time zone.', valid: false };
+	}
 	return {
-		note:
-			target.kind === 'trip'
-				? { entries, kind: 'trip', text: draft.text, timeZone: draft.timeZone }
-				: { date: target.date, entries, kind: 'day', text: draft.text, timeZone: draft.timeZone },
+		note: { anchorAt, entries, id: draft.id, kind: 'day', text: draft.text, timeZone: draft.timeZone },
 		valid: true
 	};
+}
+
+function anchorDateTimeFor(anchorAt: number, timeZone: string): string {
+	const anchorDateTime = formatTimestampForTimeZoneInput(anchorAt, timeZone);
+	if (anchorDateTime === null) {
+		throw new Error(`Cannot localize note anchor ${anchorAt} in ${timeZone}.`);
+	}
+	return anchorDateTime;
+}
+
+function anchorAtForDraft(draft: DayItineraryNoteDraft): number | null {
+	const localAnchor = `${draft.anchorDate}T${draft.anchorTime}`;
+	if (draft.anchorAt !== null && formatTimestampForTimeZoneInput(draft.anchorAt, draft.timeZone) === localAnchor) {
+		return draft.anchorAt;
+	}
+	return zonedDateTimeToUnixMilliseconds(localAnchor, draft.timeZone);
 }
 
 function noteEntryDraft(entry: ItineraryNote['entries'][number]): NoteEntryDraft {

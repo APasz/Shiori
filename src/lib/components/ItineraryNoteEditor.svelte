@@ -7,12 +7,14 @@
 		noteEntryStateSchema,
 		type CurrencyCode,
 		type ItineraryNote,
+		type ItineraryNoteEditorTarget,
 		type ItineraryNoteTarget
 	} from '$lib/itinerary/schema';
 	import {
 		emptyNoteEntryDraft,
 		itineraryNoteDraft,
 		itineraryNoteDraftFingerprint,
+		itineraryNoteDraftForTimeZone,
 		validateItineraryNoteDraft,
 		type ItineraryNoteDraft
 	} from '$lib/itinerary/note-draft';
@@ -25,6 +27,7 @@
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import ItineraryNoteEntryEditor from './ItineraryNoteEntryEditor.svelte';
+	import TimePicker from './TimePicker.svelte';
 	import TimeZonePicker from './TimeZonePicker.svelte';
 
 	type EditorState = 'editing' | 'saving' | 'deleting';
@@ -48,11 +51,11 @@
 		onDismiss: () => void;
 		onSaved: () => Promise<void>;
 		revision: number;
-		target: ItineraryNoteTarget;
+		target: ItineraryNoteEditorTarget;
 	} = $props();
 
 	let dialogElement: HTMLDialogElement;
-	let draft = $state<ItineraryNoteDraft>(itineraryNoteDraft(undefined, 'UTC'));
+	let draft = $state<ItineraryNoteDraft>(itineraryNoteDraft(undefined, 'UTC', { kind: 'trip' }));
 	let timeZoneOptions = $state<TimeZoneSearchOption[]>([]);
 	let editorState = $state<EditorState>('editing');
 	let errorMessage = $state('');
@@ -94,6 +97,17 @@
 		}
 	}
 
+	function deletionTarget(note: ItineraryNote): ItineraryNoteTarget {
+		return note.kind === 'trip' ? { kind: 'trip' } : { id: note.id, kind: 'day' };
+	}
+
+	function setAnchorTime(anchorTime: string): void {
+		if (draft.kind !== 'day') {
+			throw new Error('Only day notes have an anchor time.');
+		}
+		draft.anchorTime = anchorTime;
+	}
+
 	async function saveNote(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
 		if (saveIsDisabled) {
@@ -101,7 +115,7 @@
 		}
 
 		errorMessage = '';
-		const validation = validateItineraryNoteDraft(draft, target);
+		const validation = validateItineraryNoteDraft(draft);
 		if (!validation.valid) {
 			errorMessage = validation.error;
 			return;
@@ -132,7 +146,11 @@
 		editorState = 'deleting';
 		errorMessage = '';
 		try {
-			const result = await deleteItineraryNote({ endpoint: notesEndpoint, revision, target });
+			const result = await deleteItineraryNote({
+				endpoint: notesEndpoint,
+				revision,
+				target: deletionTarget(initialNote)
+			});
 			if (!result.success) {
 				editorState = 'editing';
 				errorMessage = result.error;
@@ -149,7 +167,7 @@
 
 	onMount(() => {
 		timeZoneOptions = browserTimeZoneOptions();
-		draft = itineraryNoteDraft(initialNote, defaultTimeZone);
+		draft = itineraryNoteDraft(initialNote, defaultTimeZone, target);
 		initialDraftFingerprint = itineraryNoteDraftFingerprint(draft);
 		dialogElement.showModal();
 	});
@@ -190,17 +208,33 @@
 			<textarea bind:value={draft.text} class="shiori-form-control" disabled={editorState !== 'editing'} rows="6"
 			></textarea>
 		</label>
-		<div class="shiori-form-label">
-			<label for="note-time-zone">Note time zone</label>
-			<span class="field-hint">Entry times use this time zone. It starts with the trip’s time zone.</span>
-			<TimeZonePicker
-				disabled={editorState !== 'editing'}
-				id="note-time-zone"
-				label="Note time zone"
-				onSelect={(value) => (draft.timeZone = value)}
-				options={timeZoneOptions}
-				value={draft.timeZone}
-			/>
+		<div class="note-time-settings" class:has-anchor={draft.kind === 'day'}>
+			<div class="shiori-form-label">
+				<label for="note-time-zone">Note time zone</label>
+				<span class="field-hint">For entry times.</span>
+				<TimeZonePicker
+					disabled={editorState !== 'editing'}
+					id="note-time-zone"
+					label="Note time zone"
+					onSelect={(value) => (draft = itineraryNoteDraftForTimeZone(draft, value))}
+					options={timeZoneOptions}
+					value={draft.timeZone}
+				/>
+			</div>
+			{#if draft.kind === 'day'}
+				<div class="shiori-form-label">
+					<label for="note-anchor-time">Anchor time</label>
+					<span class="field-hint">Sets the viewer day.</span>
+					<TimePicker
+						disabled={editorState !== 'editing'}
+						id="note-anchor-time"
+						label="Note anchor time"
+						onChange={setAnchorTime}
+						timeFormat={viewerContext.formatPreferences.timeFormat}
+						value={draft.anchorTime}
+					/>
+				</div>
+			{/if}
 		</div>
 		{#if !isServerReachable}
 			<p class="connection-warning" role="status">Connection lost. Your draft remains open; reconnect to save it.</p>
@@ -350,6 +384,15 @@
 		padding-top: 1rem;
 	}
 
+	.note-time-settings {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.note-time-settings.has-anchor {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.add-entry {
 		padding-block: 0.5rem;
 	}
@@ -395,6 +438,10 @@
 
 		.editor-actions {
 			justify-content: end;
+		}
+
+		.note-time-settings.has-anchor {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

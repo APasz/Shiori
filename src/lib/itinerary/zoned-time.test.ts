@@ -20,6 +20,10 @@ describe('editor time-zone conversion', () => {
 		expect(zonedDateTimeToUnixMilliseconds('2026-10-04T02:30', 'Australia/Melbourne')).toBe(null);
 	});
 
+	it('returns null for timestamps outside the Date range', () => {
+		expect(formatTimestampForTimeZoneInput(Number.MAX_SAFE_INTEGER, 'UTC')).toBe(null);
+	});
+
 	it('distinguishes a date-only placeholder from a complete local datetime', () => {
 		expect(isCompleteLocalDateTime('2026-10-28T')).toBe(false);
 		expect(isCompleteLocalDateTime('2026-10-28T11:13')).toBe(true);

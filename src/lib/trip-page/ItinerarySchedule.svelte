@@ -39,7 +39,9 @@
 		localScheduleReady ? getItineraryDateRange(itinerary.items, viewerContext.timeZone) : null
 	);
 	const dayNoteSummaries = $derived(
-		canModifyItinerary && 'notes' in itinerary ? dayNoteSummariesByDate(itinerary.notes) : emptyDayNoteSummaries
+		canModifyItinerary && 'notes' in itinerary
+			? dayNoteSummariesByDate(itinerary.notes, viewerContext.timeZone)
+			: emptyDayNoteSummaries
 	);
 
 	function storageKey(): string {

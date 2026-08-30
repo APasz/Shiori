@@ -1,4 +1,4 @@
-import type { ItineraryItem, ItineraryNote, ItineraryNoteTarget } from '$lib/itinerary/schema';
+import type { ItineraryItem, ItineraryNote, ItineraryNoteEditorTarget } from '$lib/itinerary/schema';
 import type { PublicItineraryItem } from '$lib/itinerary/access';
 import type { AuthenticatedUser } from '$lib/server/store/model';
 import type { TripView } from '$lib/server/store/views';
@@ -22,7 +22,7 @@ export type EditingItem = Readonly<{
 
 export type EditingNote = Readonly<{
 	note: ItineraryNote | undefined;
-	target: ItineraryNoteTarget;
+	target: ItineraryNoteEditorTarget;
 }>;
 
 export type DayItem = ItineraryItem | PublicItineraryItem;

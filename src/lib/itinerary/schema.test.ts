@@ -240,7 +240,7 @@ describe('expense schemas', () => {
 });
 
 describe('planning note schemas', () => {
-	it('defaults notes and validates unique day entries with independent estimates', () => {
+	it('defaults notes and validates unique anchored day notes with independent estimates', () => {
 		const itinerary = {
 			items: [],
 			timeZone: 'Asia/Tokyo',
@@ -249,7 +249,7 @@ describe('planning note schemas', () => {
 		expect(itinerarySchema.parse(itinerary).notes).toEqual([]);
 
 		const dayNote = {
-			date: '2026-04-03',
+			anchorAt: Date.UTC(2026, 3, 3, 3),
 			entries: [
 				{
 					estimatedCosts: [{ amountMinor: 3_000, currency: 'JPY', id: 'museum-ticket' }],
@@ -260,6 +260,7 @@ describe('planning note schemas', () => {
 					title: 'Museum option'
 				}
 			],
+			id: 'day-note-2026-04-03',
 			kind: 'day',
 			text: 'Possible alternatives.',
 			timeZone: 'Asia/Tokyo'
@@ -277,6 +278,18 @@ describe('planning note schemas', () => {
 			}).success
 		).toBe(false);
 		expect(itinerarySchema.safeParse({ ...itinerary, notes: [dayNote, dayNote] }).success).toBe(false);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				notes: [{ ...dayNote, date: '2026-04-03' }]
+			}).success
+		).toBe(false);
+		expect(
+			itinerarySchema.safeParse({
+				...itinerary,
+				notes: [{ ...dayNote, anchorAt: dayNote.anchorAt + 1 }]
+			}).success
+		).toBe(false);
 		expect(
 			itinerarySchema.safeParse({
 				...itinerary,
