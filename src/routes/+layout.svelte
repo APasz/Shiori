@@ -1,19 +1,21 @@
 <script lang="ts">
 	import { dev } from '$app/environment';
 	import { page } from '$app/state';
-	import { onMount, type Component, type Snippet } from 'svelte';
 	import appIcon from '$lib/assets/icon.svg';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
+	import { registerOfflineSupport } from '$lib/offline';
 	import '$lib/styles/dialogs.css';
 	import '$lib/styles/forms.css';
 	import '$lib/styles/page-titles.css';
-	import { themeStyleTag } from '$lib/theme/palette';
 	import { setDocumentColourway } from '$lib/theme/colourway';
+	import { themeStyleTag } from '$lib/theme/palette';
 	import { themeInitializationScript } from '$lib/theme/theme';
 	import BrandFeedbackMonitor from '$lib/visuals/BrandFeedbackMonitor.svelte';
-	import { registerOfflineSupport } from '$lib/offline';
+	import { onMount, type Component, type Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
+
+	const browserTimeZoneRedetectionIntervalMilliseconds = 300_000;
 
 	let { children, data }: { children: Snippet; data: LayoutData } = $props();
 	let DevelopmentViewerControls = $state<Component | null>(null);
@@ -34,6 +36,18 @@
 
 	onMount(() => {
 		viewerContext.initialize(data.formatPreferences);
+		const redetectBrowserTimeZone = () => viewerContext.redetectBrowserTimeZone();
+		const redetectOnVisibility = () => {
+			if (document.visibilityState === 'visible') {
+				redetectBrowserTimeZone();
+			}
+		};
+		window.addEventListener('focus', redetectBrowserTimeZone);
+		document.addEventListener('visibilitychange', redetectOnVisibility);
+		const browserTimeZoneIntervalId = window.setInterval(
+			redetectOnVisibility,
+			browserTimeZoneRedetectionIntervalMilliseconds
+		);
 		if (!dev) {
 			registerOfflineSupport();
 		}
@@ -42,6 +56,12 @@
 				DevelopmentViewerControls = module.default;
 			});
 		}
+
+		return () => {
+			window.removeEventListener('focus', redetectBrowserTimeZone);
+			document.removeEventListener('visibilitychange', redetectOnVisibility);
+			window.clearInterval(browserTimeZoneIntervalId);
+		};
 	});
 </script>
 

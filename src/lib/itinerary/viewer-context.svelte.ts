@@ -26,7 +26,9 @@ function persistedFormatPreferences(): FormatPreferences {
 	}
 }
 
-class ViewerContext {
+export class ViewerContext {
+	constructor(private readonly browserTimeZone: () => string = detectedTimeZone) {}
+
 	locale = $state<string | null>(null);
 	timeZone = $state('UTC');
 	revision = $state(0);
@@ -52,7 +54,7 @@ class ViewerContext {
 		}
 		this.locale = detectedLocale();
 		if (!this.isSimulated) {
-			this.timeZone = detectedTimeZone();
+			this.updateBrowserTimeZone();
 		}
 	}
 
@@ -72,11 +74,27 @@ class ViewerContext {
 		this.revision += 1;
 	}
 
+	/** Updates the viewer zone when the browser reports that it has changed. */
+	redetectBrowserTimeZone(): void {
+		if (!this.isSimulated && this.updateBrowserTimeZone()) {
+			this.revision += 1;
+		}
+	}
+
 	resetToBrowser(): void {
 		this.#overrideTimestamp = null;
 		this.locale = detectedLocale();
-		this.timeZone = detectedTimeZone();
+		this.updateBrowserTimeZone();
 		this.revision += 1;
+	}
+
+	private updateBrowserTimeZone(): boolean {
+		const timeZone = this.browserTimeZone();
+		if (this.timeZone === timeZone) {
+			return false;
+		}
+		this.timeZone = timeZone;
+		return true;
 	}
 }
 
