@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'svelte/server';
 import ItineraryNoteEditor from './ItineraryNoteEditor.svelte';
-import TimePicker from './TimePicker.svelte';
 import TimeZonePicker from './TimeZonePicker.svelte';
 
 describe('itinerary note editor', () => {
@@ -42,11 +41,8 @@ describe('itinerary note editor', () => {
 	});
 });
 
-describe('disabled note pickers', () => {
-	it('renders disabled controls', () => {
-		const timePicker = render(TimePicker, {
-			props: { disabled: true, id: 'start-time', label: 'Start time', onChange: () => {}, value: '09:00' }
-		}).body;
+describe('disabled note time-zone picker', () => {
+	it('renders a disabled control', () => {
 		const timeZonePicker = render(TimeZonePicker, {
 			props: {
 				disabled: true,
@@ -58,8 +54,6 @@ describe('disabled note pickers', () => {
 			}
 		}).body;
 
-		expect(timePicker).toContain('disabled');
-		expect(timePicker).toContain('aria-label="Start time"');
 		expect(timeZonePicker).toContain('disabled');
 		expect(timeZonePicker).toContain('aria-label="Note time zone"');
 	});

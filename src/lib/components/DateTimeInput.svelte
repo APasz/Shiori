@@ -24,6 +24,7 @@
 		dialogPlacement: _dialogPlacement = 'center',
 		pickerPresentation = 'popover',
 		portalTarget,
+		showQuickTimes = true,
 		showTimeZonePicker = true,
 		timeZoneHint = 'Used to interpret this value; not saved.',
 		timeZone = 'UTC',
@@ -39,6 +40,7 @@
 		dialogPlacement?: DialogPlacement;
 		pickerPresentation?: PickerPresentation;
 		portalTarget?: HTMLElement;
+		showQuickTimes?: boolean;
 		showTimeZonePicker?: boolean;
 		timeZoneHint?: string;
 		timeZone?: string;
@@ -120,6 +122,7 @@
 				{id}
 				{label}
 				onChange={setTime}
+				{showQuickTimes}
 				timeFormat={viewerContext.formatPreferences.timeFormat}
 				value={timePart(dateTime)}
 			/>
@@ -220,6 +223,7 @@
 				id={`${id}-time`}
 				label={`${label} time`}
 				onChange={setTime}
+				{showQuickTimes}
 				timeFormat={viewerContext.formatPreferences.timeFormat}
 				value={timePart(dateTime)}
 			/>
