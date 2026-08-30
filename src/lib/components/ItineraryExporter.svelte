@@ -8,8 +8,10 @@
 		itineraryExportFormats,
 		type ItineraryExportFile,
 		type ItineraryExportFormat,
-		type ItineraryExportSource
+		type ItineraryExportSource,
+		type ItineraryTextFormatOptions
 	} from '$lib/itinerary/export';
+	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 
 	let { itinerary, onDismiss }: { itinerary: ItineraryExportSource; onDismiss: () => void } = $props();
 
@@ -26,6 +28,11 @@
 	let copyConfirmationEvent = $state(0);
 	let exportConfigurationVersion = $state(0);
 	const clipboardCopyLabel = $derived(clipboardCopyFeedbackLabels[clipboardCopyFeedback]);
+	const textFormat = $derived<ItineraryTextFormatOptions>({
+		dateFormat: viewerContext.formatPreferences.dateFormat,
+		locale: viewerContext.locale,
+		timeFormat: viewerContext.formatPreferences.timeFormat
+	});
 	let includeNotes = $state(defaultItineraryExportOptions.includeNotes);
 	let includeLinksAndDocuments = $state(defaultItineraryExportOptions.includeLinksAndDocuments);
 	let includeReservationDetails = $state(defaultItineraryExportOptions.includeReservationDetails);
@@ -35,15 +42,20 @@
 	let normalizeCostAmounts = $state(defaultItineraryExportOptions.normalizeCostAmounts);
 
 	function exportFile(): ItineraryExportFile {
-		return createItineraryExportFile(itinerary, format, {
-			includeCoordinates,
-			includeCosts,
-			includeLinksAndDocuments,
-			includeNotes,
-			includeReservationDetails,
-			normalizeCostAmounts,
-			useEpochTimestamps
-		});
+		return createItineraryExportFile(
+			itinerary,
+			format,
+			{
+				includeCoordinates,
+				includeCosts,
+				includeLinksAndDocuments,
+				includeNotes,
+				includeReservationDetails,
+				normalizeCostAmounts,
+				useEpochTimestamps
+			},
+			textFormat
+		);
 	}
 
 	function downloadExport(): void {

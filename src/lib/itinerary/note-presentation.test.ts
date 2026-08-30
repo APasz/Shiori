@@ -38,7 +38,7 @@ describe('dayNoteSummariesByDate', () => {
 		expect(dayNotesForDate(notes, '2026-04-13', 'UTC').map((note) => note.id)).toEqual(['day-note-13']);
 	});
 
-	it('places a note on the date of its anchor in the viewer time zone', () => {
+	it('projects a note anchor into each viewer-local calendar day', () => {
 		const notes: ItineraryNote[] = [
 			{
 				anchorAt: Date.UTC(2026, 3, 13, 3),
@@ -52,6 +52,7 @@ describe('dayNoteSummariesByDate', () => {
 
 		const summaries = dayNoteSummariesByDate(notes, 'America/Los_Angeles');
 
+		expect(dayNotesForDate(notes, '2026-04-13', 'Asia/Tokyo').map((note) => note.id)).toEqual(['tokyo-noon']);
 		expect(summaries.get('2026-04-12')).toEqual({ entryCount: 0, hasFreeformText: false });
 		expect(dayNotesForDate(notes, '2026-04-12', 'America/Los_Angeles').map((note) => note.id)).toEqual(['tokyo-noon']);
 	});

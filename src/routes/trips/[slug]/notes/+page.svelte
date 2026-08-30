@@ -118,9 +118,7 @@
 								viewerContext.formatPreferences.dateFormat
 							) ?? date}
 							{note}
-							onEdit={canModifyNotes
-								? () => beginEditing({ date, kind: 'day', viewerTimeZone: viewerContext.timeZone }, note)
-								: undefined}
+							onEdit={canModifyNotes ? () => beginEditing({ date, kind: 'day' }, note) : undefined}
 						/>
 					{/each}
 				</div>

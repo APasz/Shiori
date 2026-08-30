@@ -79,38 +79,31 @@ export function itineraryNoteDraft(
 		};
 	}
 
-	const anchorAt = defaultDayNoteAnchorAt(target.date, target.viewerTimeZone);
-	const anchorDateTime = anchorAt === null ? null : formatTimestampForTimeZoneInput(anchorAt, defaultTimeZone);
+	const anchorAt = defaultDayNoteAnchorAt(target.date, defaultTimeZone);
 	return {
 		...base,
 		anchorAt,
-		anchorDate: anchorDateTime?.slice(0, 10) ?? target.date,
-		anchorTime: anchorDateTime?.slice(11) ?? defaultNoteAnchorTime,
+		anchorDate: target.date,
+		anchorTime: defaultNoteAnchorTime,
 		id: createDayNoteId(),
 		kind: 'day'
 	};
 }
 
-/** Changes the entry-time zone while preserving a valid daily note's absolute anchor. */
+/** Changes a draft's time zone, keeping daily-note anchors at the same local wall-clock time. */
 export function itineraryNoteDraftForTimeZone(draft: ItineraryNoteDraft, timeZone: string): ItineraryNoteDraft {
 	if (draft.kind === 'trip') {
 		return { ...draft, timeZone };
 	}
-
-	const anchorAt = anchorAtForDraft(draft);
-	if (anchorAt === null) {
-		return { ...draft, timeZone };
+	if (draft.timeZone === timeZone) {
+		return draft;
 	}
-	const anchorDateTime = formatTimestampForTimeZoneInput(anchorAt, timeZone);
-	return anchorDateTime === null
-		? { ...draft, timeZone }
-		: {
-				...draft,
-				anchorAt,
-				anchorDate: anchorDateTime.slice(0, 10),
-				anchorTime: anchorDateTime.slice(11),
-				timeZone
-			};
+
+	return {
+		...draft,
+		anchorAt: anchorAtForLocalDateTime(draft.anchorDate, draft.anchorTime, timeZone),
+		timeZone
+	};
 }
 
 /** Produces a stable snapshot for deciding whether closing the editor would discard changes. */
@@ -196,7 +189,11 @@ function anchorAtForDraft(draft: DayItineraryNoteDraft): number | null {
 	if (draft.anchorAt !== null && formatTimestampForTimeZoneInput(draft.anchorAt, draft.timeZone) === localAnchor) {
 		return draft.anchorAt;
 	}
-	return zonedDateTimeToUnixMilliseconds(localAnchor, draft.timeZone);
+	return anchorAtForLocalDateTime(draft.anchorDate, draft.anchorTime, draft.timeZone);
+}
+
+function anchorAtForLocalDateTime(anchorDate: string, anchorTime: string, timeZone: string): number | null {
+	return zonedDateTimeToUnixMilliseconds(`${anchorDate}T${anchorTime}`, timeZone);
 }
 
 function noteEntryDraft(entry: ItineraryNote['entries'][number]): NoteEntryDraft {

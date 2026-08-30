@@ -211,7 +211,7 @@
 		<div class="note-time-settings" class:has-anchor={draft.kind === 'day'}>
 			<div class="shiori-form-label">
 				<label for="note-time-zone">Note time zone</label>
-				<span class="field-hint">For entry times.</span>
+				<span class="field-hint">For entry times and daily note anchors.</span>
 				<TimeZonePicker
 					disabled={editorState !== 'editing'}
 					id="note-time-zone"
@@ -224,7 +224,7 @@
 			{#if draft.kind === 'day'}
 				<div class="shiori-form-label">
 					<label for="note-anchor-time">Anchor time</label>
-					<span class="field-hint">Sets the viewer day.</span>
+					<span class="field-hint">Local time in the note time zone.</span>
 					<TimePicker
 						disabled={editorState !== 'editing'}
 						id="note-anchor-time"

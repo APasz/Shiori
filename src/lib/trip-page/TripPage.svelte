@@ -46,7 +46,7 @@
 			void goto(resolve('/trips/[slug]/notes', { slug: data.trip.slug }));
 			return;
 		}
-		const target: ItineraryNoteEditorTarget = { date, kind: 'day', viewerTimeZone: viewerContext.timeZone };
+		const target: ItineraryNoteEditorTarget = { date, kind: 'day' };
 		editingNote = {
 			note: notes[0],
 			target

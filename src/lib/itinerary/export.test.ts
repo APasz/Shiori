@@ -193,6 +193,7 @@ describe('itinerary exports', () => {
 		});
 		expect(exported.items[0].locations[0]).not.toHaveProperty('coordinates');
 		expect(text).toContain('When: 1775952000000 (epoch milliseconds; Asia/Tokyo)');
+		expect(text).toContain('Day note · 1776049200000 (epoch milliseconds; Asia/Tokyo)');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
 		expect(text).toContain('Scheduled payment: 2026-04-04');
 	});
@@ -211,18 +212,25 @@ describe('itinerary exports', () => {
 	});
 
 	it('renders a readable text itinerary and names its download from the trip title', () => {
-		const text = renderItineraryExport(itinerary, 'txt', defaultItineraryExportOptions);
+		const text = renderItineraryExport(itinerary, 'txt', defaultItineraryExportOptions, {
+			dateFormat: 'month-day-year',
+			locale: 'en-US',
+			timeFormat: 'twelve-hour'
+		});
 		const file = createItineraryExportFile(itinerary, 'yaml', defaultItineraryExportOptions);
 
 		expect(text).toContain('Japan 2026');
-		expect(text).toContain('When: 2026-04-12T00:00:00.000Z (Asia/Tokyo)');
+		expect(text).toContain('When: 04-12-2026, 9:00 am (Asia/Tokyo)');
+		expect(text).toContain('Tokyo Station · TYO — 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
+		expect(text).toContain('Scheduled payment: 04-04-2026');
 		expect(text).toContain('Notes:');
 		expect(text).toContain('Trip note (Asia/Tokyo)');
+		expect(text).toContain('Time: 10:00 am');
 		expect(text).toContain('Estimate: Entry: JPY 3500 minor units');
 		expect(text).toContain('Link: Museum details: https://example.com/museum');
-		expect(text).toContain('Day note · 2026-04-13T03:00:00.000Z (Asia/Tokyo)');
+		expect(text).toContain('Day note · 04-13-2026, 12:00 pm (Asia/Tokyo)');
 		expect(file).toMatchObject({ filename: 'japan-2026-itinerary.yaml', mediaType: 'application/yaml' });
 	});
 });

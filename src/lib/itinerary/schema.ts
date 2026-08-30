@@ -612,7 +612,6 @@ export type ItineraryNoteEditorTarget =
 	| Readonly<{
 			date: string;
 			kind: 'day';
-			viewerTimeZone: string;
 	  }>;
 export type ItineraryNoteEntry = z.infer<typeof noteEntrySchema>;
 export type EstimatedNoteCost = z.infer<typeof estimatedNoteCostSchema>;

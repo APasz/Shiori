@@ -1,4 +1,5 @@
 import { stringify } from 'yaml';
+import { defaultFormatPreferences, formatTime, type DateFormat, type TimeFormat } from '$lib/format-preferences';
 import { currencyFractionDigits } from '$lib/money';
 import type {
 	Cost,
@@ -12,7 +13,9 @@ import type {
 	Reservation,
 	TransportDetails
 } from './schema';
+import { formatCalendarDate, formatCalendarDateTime, type CalendarLocale } from './calendar';
 import { timingStartTimestamp } from './timing';
+import { formatTimestampInTimeZone } from './time';
 import { resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
 
 export const itineraryExportFormats = ['json', 'yaml', 'txt'] as const;
@@ -20,6 +23,17 @@ export const itineraryExportFormats = ['json', 'yaml', 'txt'] as const;
 export const itineraryExportVersion = 2;
 
 export type ItineraryExportFormat = (typeof itineraryExportFormats)[number];
+
+export type ItineraryTextFormatOptions = Readonly<{
+	dateFormat: DateFormat;
+	locale: CalendarLocale;
+	timeFormat: TimeFormat;
+}>;
+
+export const defaultItineraryTextFormatOptions: ItineraryTextFormatOptions = {
+	...defaultFormatPreferences,
+	locale: null
+};
 
 export const itineraryExportFormatMetadata = {
 	json: { extension: 'json', label: 'JSON', mediaType: 'application/json' },
@@ -420,22 +434,34 @@ export function createItineraryExport(source: ItineraryExportSource, options: It
 	};
 }
 
-function timestampText(timestamp: ExportedTimestamp): string {
-	return typeof timestamp.at === 'number'
-		? `${timestamp.at} (epoch milliseconds; ${timestamp.timeZone})`
-		: `${timestamp.at} (${timestamp.timeZone})`;
+function timestampText(timestamp: ExportedTimestamp, textFormat: ItineraryTextFormatOptions): string {
+	if (typeof timestamp.at === 'number') {
+		return `${timestamp.at} (epoch milliseconds; ${timestamp.timeZone})`;
+	}
+
+	const local = formatTimestampInTimeZone(Date.parse(timestamp.at), timestamp.timeZone);
+	return local === null
+		? `${timestamp.at} (${timestamp.timeZone})`
+		: `${formatCalendarDateTime(
+				local.date,
+				local.time,
+				'date',
+				textFormat.locale,
+				textFormat.dateFormat,
+				textFormat.timeFormat
+			)} (${timestamp.timeZone})`;
 }
 
-function timingText(timing: ExportedTiming): string {
+function timingText(timing: ExportedTiming, textFormat: ItineraryTextFormatOptions): string {
 	switch (timing.kind) {
 		case 'exact':
 			return timing.end === undefined
-				? timestampText(timing.start)
-				: `${timestampText(timing.start)} – ${timestampText(timing.end)}`;
+				? timestampText(timing.start, textFormat)
+				: `${timestampText(timing.start, textFormat)} – ${timestampText(timing.end, textFormat)}`;
 		case 'approximate':
-			return `Approximately ${timestampText(timing.nominal)} (±${timing.toleranceMinutes} minutes)`;
+			return `Approximately ${timestampText(timing.nominal, textFormat)} (±${timing.toleranceMinutes} minutes)`;
 		case 'window':
-			return `Between ${timestampText(timing.earliest)} and ${timestampText(timing.latest)}`;
+			return `Between ${timestampText(timing.earliest, textFormat)} and ${timestampText(timing.latest, textFormat)}`;
 	}
 }
 
@@ -452,8 +478,8 @@ function reservationText(reservation: Reservation): string {
 	return details.length === 0 ? reservation.status : `${reservation.status} · ${details.join(' · ')}`;
 }
 
-function textLinesForItem(item: ExportedItem, index: number): string[] {
-	const lines = [`${index + 1}. ${item.title} (${item.type})`, `   When: ${timingText(item.timing)}`];
+function textLinesForItem(item: ExportedItem, index: number, textFormat: ItineraryTextFormatOptions): string[] {
+	const lines = [`${index + 1}. ${item.title} (${item.type})`, `   When: ${timingText(item.timing, textFormat)}`];
 	if (item.locations && item.locations.length > 0) {
 		lines.push('   Locations:');
 		for (const location of item.locations) {
@@ -473,7 +499,7 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 		lines.push(`   Transport: ${item.transport.mode}${details.length === 0 ? '' : ` · ${details.join(' · ')}`}`);
 		for (const stop of item.transport.stops) {
 			const code = stop.code === undefined ? '' : ` · ${stop.code}`;
-			const schedule = stop.scheduledAt === undefined ? '' : ` — ${timestampText(stop.scheduledAt)}`;
+			const schedule = stop.scheduledAt === undefined ? '' : ` — ${timestampText(stop.scheduledAt, textFormat)}`;
 			const platform = stop.platform === undefined ? '' : ` · Platform ${stop.platform}`;
 			lines.push(`     - ${stop.location}${code}${schedule}${platform}`);
 		}
@@ -487,7 +513,10 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 			: monetaryAmountText(item.cost.amountMinor, item.cost.currency, false);
 		lines.push(`   Cost: ${costText} (${item.cost.status})`);
 		if (item.cost.scheduledPaymentDate) {
-			lines.push(`     Scheduled payment: ${item.cost.scheduledPaymentDate}`);
+			const scheduledPaymentDate =
+				formatCalendarDate(item.cost.scheduledPaymentDate, 'date', textFormat.locale, textFormat.dateFormat) ??
+				item.cost.scheduledPaymentDate;
+			lines.push(`     Scheduled payment: ${scheduledPaymentDate}`);
 		}
 	}
 	if (item.notes && item.notes.length > 0) {
@@ -511,17 +540,30 @@ function textLinesForItem(item: ExportedItem, index: number): string[] {
 	return lines;
 }
 
-function textLinesForItineraryNote(note: ExportedItineraryNote, index: number): string[] {
-	const title = note.kind === 'trip' ? 'Trip note' : `Day note · ${note.anchorAt}`;
-	const lines = [`${index + 1}. ${title} (${note.timeZone})`];
+function noteEntryTimeText(entry: ExportedNoteEntry, timeFormat: TimeFormat): string | undefined {
+	if (entry.startTime !== undefined && entry.endTime !== undefined) {
+		return `${formatTime(entry.startTime, timeFormat)}–${formatTime(entry.endTime, timeFormat)}`;
+	}
+
+	const time = entry.startTime ?? entry.endTime;
+	return time === undefined ? undefined : formatTime(time, timeFormat);
+}
+
+function textLinesForItineraryNote(
+	note: ExportedItineraryNote,
+	index: number,
+	textFormat: ItineraryTextFormatOptions
+): string[] {
+	const title =
+		note.kind === 'trip'
+			? 'Trip note'
+			: `Day note · ${timestampText({ at: note.anchorAt, timeZone: note.timeZone }, textFormat)}`;
+	const lines = [`${index + 1}. ${title}${note.kind === 'trip' ? ` (${note.timeZone})` : ''}`];
 	if (note.text !== '') {
 		lines.push(`   ${note.text.replaceAll('\n', '\n   ')}`);
 	}
 	for (const entry of note.entries) {
-		const time =
-			entry.startTime !== undefined && entry.endTime !== undefined
-				? `${entry.startTime}–${entry.endTime}`
-				: (entry.startTime ?? entry.endTime);
+		const time = noteEntryTimeText(entry, textFormat.timeFormat);
 		const state = entry.state === 'idea' ? '' : ` · ${entry.state}`;
 		lines.push(`   - ${entry.title}${state}`);
 		if (time !== undefined) {
@@ -541,7 +583,7 @@ function textLinesForItineraryNote(note: ExportedItineraryNote, index: number): 
 	return lines;
 }
 
-function plainTextExport(itinerary: ItineraryExport): string {
+function plainTextExport(itinerary: ItineraryExport, textFormat: ItineraryTextFormatOptions): string {
 	const lines = [itinerary.title, `Time zone: ${itinerary.timeZone}`];
 	if (itinerary.localCurrency !== undefined) {
 		lines.push(`Local currency: ${itinerary.localCurrency}`);
@@ -552,13 +594,13 @@ function plainTextExport(itinerary: ItineraryExport): string {
 		lines.push('No items planned.');
 	} else {
 		for (const [index, item] of itinerary.items.entries()) {
-			lines.push(...textLinesForItem(item, index), '');
+			lines.push(...textLinesForItem(item, index, textFormat), '');
 		}
 	}
 	if (itinerary.notes && itinerary.notes.length > 0) {
 		lines.push('Notes:');
 		for (const [index, note] of itinerary.notes.entries()) {
-			lines.push(...textLinesForItineraryNote(note, index), '');
+			lines.push(...textLinesForItineraryNote(note, index, textFormat), '');
 		}
 	}
 
@@ -569,7 +611,8 @@ function plainTextExport(itinerary: ItineraryExport): string {
 export function renderItineraryExport(
 	source: ItineraryExportSource,
 	format: ItineraryExportFormat,
-	options: ItineraryExportOptions
+	options: ItineraryExportOptions,
+	textFormat: ItineraryTextFormatOptions = defaultItineraryTextFormatOptions
 ): string {
 	const itinerary = createItineraryExport(source, options);
 	switch (format) {
@@ -578,7 +621,7 @@ export function renderItineraryExport(
 		case 'yaml':
 			return stringify(itinerary);
 		case 'txt':
-			return plainTextExport(itinerary);
+			return plainTextExport(itinerary, textFormat);
 	}
 }
 
@@ -594,11 +637,12 @@ function filenameStem(title: string): string {
 export function createItineraryExportFile(
 	source: ItineraryExportSource,
 	format: ItineraryExportFormat,
-	options: ItineraryExportOptions
+	options: ItineraryExportOptions,
+	textFormat: ItineraryTextFormatOptions = defaultItineraryTextFormatOptions
 ): ItineraryExportFile {
 	const metadata = itineraryExportFormatMetadata[format];
 	return {
-		contents: renderItineraryExport(source, format, options),
+		contents: renderItineraryExport(source, format, options, textFormat),
 		filename: `${filenameStem(source.title)}-itinerary.${metadata.extension}`,
 		mediaType: metadata.mediaType
 	};
