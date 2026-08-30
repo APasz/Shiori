@@ -1,4 +1,3 @@
-import { base, build, files } from '$service-worker';
 import { browserPages, browserTitle } from '$lib/browser-title';
 import {
 	offlineMessageTypes,
@@ -6,6 +5,7 @@ import {
 	type GetTripCacheStatusMessage,
 	type TripCacheStatusResponse
 } from '$lib/offline-protocol';
+import { base, build, files } from '$service-worker';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
 // Keep hashed application assets with their saved trip pages so an app update does not break offline hydration.
@@ -210,12 +210,17 @@ async function setTripCacheStatus(viewerId: string, tripUrl: URL, cached: boolea
 }
 
 async function cacheTripPages(viewerId: string, request: CachedTripPagesRequest): Promise<boolean> {
-	const pageUrls = request.urls.map((url) => {
+	const pageUrls: URL[] = [];
+	for (const url of request.urls) {
 		const tripUrl = new URL(url, worker.location.origin);
-		return tripUrl.origin === worker.location.origin && isTripPage(tripUrl) ? tripUrl : null;
-	});
-	const rootUrl = pageUrls[0] ? tripRootUrl(pageUrls[0]) : null;
-	if (!rootUrl || pageUrls.some((url) => url === null)) {
+		if (tripUrl.origin !== worker.location.origin || !isTripPage(tripUrl)) {
+			return false;
+		}
+		pageUrls.push(tripUrl);
+	}
+
+	const rootUrl = tripRootUrl(pageUrls[0]);
+	if (!rootUrl) {
 		return false;
 	}
 
@@ -237,7 +242,77 @@ async function cacheTripPages(viewerId: string, request: CachedTripPagesRequest)
 
 function offlineResponse(): Response {
 	return new Response(
-		`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${browserTitle(browserPages.offline)}</title></head><body><main><h1>You’re offline</h1><p>This page has not been saved on this device yet. Connect to the internet, open it once, then it will be available here offline.</p></main></body></html>`,
+		`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${browserTitle(browserPages.offline)}</title>
+<style>
+	:root {
+		color-scheme: dark;
+		--border: #4a4a46;
+		--page: #000;
+		--text: #f5f5f0;
+		--muted: #b8b8b2;
+	}
+
+	* { box-sizing: border-box; }
+
+	html { background: var(--page); }
+
+	body {
+		background: var(--page);
+		color: var(--text);
+		font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+		margin: 0;
+	}
+
+	header { border-bottom: 1px solid var(--border); }
+
+	.topbar,
+	main {
+		margin: 0 auto;
+		padding-inline: 1rem;
+		width: min(100%, 44rem);
+	}
+
+	.topbar {
+		align-items: center;
+		display: flex;
+		font-size: 0.875rem;
+		font-weight: 750;
+		gap: 0.375rem;
+		letter-spacing: -0.02em;
+		min-height: 3.5rem;
+	}
+
+	.logo { height: 1.75rem; width: auto; }
+
+	main { padding-block: 3rem 1rem; }
+
+	h1 {
+		font-size: 1.5rem;
+		letter-spacing: -0.02em;
+		margin: 0 0 0.5rem;
+	}
+
+	p {
+		color: var(--muted);
+		line-height: 1.5;
+		margin: 0;
+		max-width: 34rem;
+	}
+</style>
+</head>
+<body>
+<header><div class="topbar"><img alt="" class="logo" src="${base}/icons/shiori-192.png">Shiori</div></header>
+<main>
+<h1>You’re offline</h1>
+<p>This page isn’t saved for offline viewing. Reconnect, then choose Save for offline from the trip menu.</p>
+</main>
+</body>
+</html>`,
 		{
 			headers: {
 				'cache-control': 'no-store',
