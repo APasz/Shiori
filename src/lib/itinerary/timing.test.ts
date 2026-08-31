@@ -69,13 +69,13 @@ describe('daily itinerary timing', () => {
 			timeZone: 'Asia/Tokyo'
 		};
 
-		expect(formatItineraryTiming(timing, true, 'Asia/Tokyo')).toBe('2026-10-29 – 2026-11-01 · times unknown');
-		expect(formatItineraryTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in time unknown');
+		expect(formatItineraryTiming(timing, true, 'Asia/Tokyo')).toBe('2026-10-29 – 2026-11-01 · Unknown');
+		expect(formatItineraryTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in Unknown');
 		expect(formatItineraryTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBe('Stay continues');
-		expect(formatItineraryTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out time unknown');
-		expect(formatAccommodationTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in time unknown');
+		expect(formatItineraryTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out Unknown');
+		expect(formatAccommodationTimingForDay(timing, '2026-10-29', 'Asia/Tokyo')).toBe('Check-in Unknown');
 		expect(formatAccommodationTimingForDay(timing, '2026-10-30', 'Asia/Tokyo')).toBeNull();
-		expect(formatAccommodationTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out time unknown');
+		expect(formatAccommodationTimingForDay(timing, '2026-11-01', 'Asia/Tokyo')).toBe('Check-out Unknown');
 	});
 
 	it('labels accommodation check-in and check-out boundaries', () => {
@@ -127,7 +127,7 @@ describe('daily itinerary timing', () => {
 			timeZone: 'Asia/Tokyo'
 		};
 
-		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo')).toBe('2026-10-29 · time unknown');
-		expect(formatItineraryTimingBoundary(timing, 'end', true, 'Asia/Tokyo')).toBe('2026-11-01 · time unknown');
+		expect(formatItineraryTimingBoundary(timing, 'start', true, 'Asia/Tokyo')).toBe('2026-10-29 · Unknown');
+		expect(formatItineraryTimingBoundary(timing, 'end', true, 'Asia/Tokyo')).toBe('2026-11-01 · Unknown');
 	});
 });

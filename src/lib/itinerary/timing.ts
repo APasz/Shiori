@@ -3,6 +3,8 @@ import { formatCalendarDate, formatCalendarDateTime, type CalendarDateFormat, ty
 import type { ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 
+const unknownTimeLabel = 'Unknown';
+
 export function timingStartTimestamp(timing: ItineraryTiming): number {
 	switch (timing.kind) {
 		case 'exact':
@@ -109,7 +111,9 @@ function dateRangeLabel(
 	if (!startDate || !endDate) {
 		return null;
 	}
-	return start.date === end.date ? `${startDate} · time unknown` : `${startDate} – ${endDate} · times unknown`;
+	return start.date === end.date
+		? `${startDate} · ${unknownTimeLabel}`
+		: `${startDate} – ${endDate} · ${unknownTimeLabel}`;
 }
 
 function accommodationDateRangeLabel(
@@ -127,7 +131,7 @@ function accommodationDateRangeLabel(
 	}
 	const startDate = formatCalendarDate(start.date, calendarDateFormat, locale, formatPreferences.dateFormat);
 	const endDate = formatCalendarDate(end.date, calendarDateFormat, locale, formatPreferences.dateFormat);
-	return startDate && endDate ? `Check-in ${startDate} · Check-out ${endDate} · times unknown` : null;
+	return startDate && endDate ? `Check-in ${startDate} · Check-out ${endDate} · ${unknownTimeLabel}` : null;
 }
 
 export type TimingDisplayPart = Readonly<{
@@ -290,7 +294,7 @@ export function formatItineraryTimingBoundary(
 				const date = formatted
 					? formatCalendarDate(formatted.date, calendarDateFormat, locale, formatPreferences.dateFormat)
 					: null;
-				return date ? `${date} · time unknown` : null;
+				return date ? `${date} · ${unknownTimeLabel}` : null;
 			}
 			return timestampLabel(timestamp, includeDate, timeZone, calendarDateFormat, locale, formatPreferences);
 		}
@@ -382,9 +386,9 @@ export function formatItineraryTimingForDay(
 				switch (position) {
 					case 'both':
 					case 'start':
-						return 'Check-in time unknown';
+						return `Check-in ${unknownTimeLabel}`;
 					case 'end':
-						return 'Check-out time unknown';
+						return `Check-out ${unknownTimeLabel}`;
 					case 'continues':
 						return 'Stay continues';
 					case null:
@@ -441,9 +445,9 @@ export function formatAccommodationTimingForDayParts(
 		switch (position) {
 			case 'both':
 			case 'start':
-				return [{ label: 'Check-in', value: 'time unknown' }];
+				return [{ label: 'Check-in', value: unknownTimeLabel }];
 			case 'end':
-				return [{ label: 'Check-out', value: 'time unknown' }];
+				return [{ label: 'Check-out', value: unknownTimeLabel }];
 			case 'continues':
 			case null:
 				return null;
