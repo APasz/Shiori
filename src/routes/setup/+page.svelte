@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { minimumPasswordLength } from '$lib/auth/password-policy';
+	import CredentialRequirements from '$lib/auth/CredentialRequirements.svelte';
+	import { maximumPasswordLength, minimumPasswordLength, passwordConfirmationMessage } from '$lib/auth/password-policy';
 	import { browserPages, browserTitle } from '$lib/browser-title';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import type { ActionData, PageData } from './$types';
@@ -20,7 +21,7 @@
 		<label class="shiori-form-label">
 			<span>Username</span>
 			<input class="shiori-form-control" autocomplete="username" name="username" required />
-			<small>3–32 characters: letters, numbers, hyphens, or underscores.</small>
+			<CredentialRequirements kind="username" />
 		</label>
 
 		<label class="shiori-form-label">
@@ -28,12 +29,13 @@
 			<input
 				class="shiori-form-control"
 				autocomplete="new-password"
+				maxlength={maximumPasswordLength}
 				minlength={minimumPasswordLength}
 				name="password"
 				required
 				type="password"
 			/>
-			<small>Use at least {minimumPasswordLength} character{minimumPasswordLength === 1 ? '' : 's'}.</small>
+			<CredentialRequirements kind="password" />
 		</label>
 
 		<label class="shiori-form-label">
@@ -41,11 +43,13 @@
 			<input
 				class="shiori-form-control"
 				autocomplete="new-password"
+				maxlength={maximumPasswordLength}
 				minlength={minimumPasswordLength}
 				name="passwordConfirmation"
 				required
 				type="password"
 			/>
+			<small class="shiori-credential-requirements">{passwordConfirmationMessage}</small>
 		</label>
 
 		{#if data.setupTokenRequired}

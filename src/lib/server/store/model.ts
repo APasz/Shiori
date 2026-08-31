@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { minimumPasswordLength, passwordMinimumMessage } from '$lib/auth/password-policy';
+import {
+	maximumPasswordLength,
+	minimumPasswordLength,
+	passwordMaximumMessage,
+	passwordMinimumMessage
+} from '$lib/auth/password-policy';
+import { usernamePattern, usernameValidationMessage } from '$lib/auth/username-policy';
 import { dateFormatValues, timeFormatValues } from '$lib/format-preferences';
 import { itineraryIdentifierSchema, itinerarySchema, unixTimestampSchema } from '$lib/itinerary/schema';
 import { colourwaySchema } from '$lib/theme/colourway';
@@ -19,10 +25,7 @@ export const preNoteAnchorStoredDataVersion = 17;
 export const storedDataVersion = 18;
 export const tripStructureLockTargetId = 'trip-structure';
 
-export const usernameSchema = z
-	.string()
-	.trim()
-	.regex(/^[a-z0-9][a-z0-9_-]{2,31}$/i, 'Use 3–32 letters, numbers, underscores, or hyphens.');
+export const usernameSchema = z.string().trim().regex(usernamePattern, usernameValidationMessage);
 
 /** Creates a username identity key without changing the capitalization stored for display. */
 export function usernameIdentityKey(username: string): string {
@@ -32,7 +35,7 @@ export function usernameIdentityKey(username: string): string {
 export const passwordSchema = z
 	.string()
 	.min(minimumPasswordLength, passwordMinimumMessage())
-	.max(1024, 'Use at most 1,024 characters for a password.');
+	.max(maximumPasswordLength, passwordMaximumMessage());
 
 export const passwordHashSaltBytes = 16;
 export const passwordHashKeyBytes = 64;

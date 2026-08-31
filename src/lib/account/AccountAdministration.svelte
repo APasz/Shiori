@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { minimumPasswordLength } from '$lib/auth/password-policy';
+	import CredentialRequirements from '$lib/auth/CredentialRequirements.svelte';
+	import { maximumPasswordLength, minimumPasswordLength } from '$lib/auth/password-policy';
 	import type { AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
 	import type { OwnedTripOption } from '$lib/server/store/views';
 	import Icon from '$lib/visuals/Icon.svelte';
@@ -141,11 +142,13 @@
 											<input
 												class="shiori-form-control"
 												autocomplete="new-password"
+												maxlength={maximumPasswordLength}
 												minlength={minimumPasswordLength}
 												name="password"
 												required
 												type="password"
 											/>
+											<CredentialRequirements kind="password" />
 										</label>
 									</form>
 									<div class="account-action-buttons">
@@ -183,18 +186,22 @@
 		<h2 id="create-account-heading">Create account</h2>
 		<form action={actionUrl('createAccount')} class="shiori-form" method="POST">
 			<label class="shiori-form-label">
-				Username <input class="shiori-form-control" autocomplete="username" name="username" required />
+				Username
+				<input class="shiori-form-control" autocomplete="username" name="username" required />
+				<CredentialRequirements kind="username" />
 			</label>
 			<label class="shiori-form-label">
 				Password
 				<input
 					class="shiori-form-control"
 					autocomplete="new-password"
+					maxlength={maximumPasswordLength}
 					minlength={minimumPasswordLength}
 					name="password"
 					required
 					type="password"
 				/>
+				<CredentialRequirements kind="password" />
 			</label>
 			{#if form?.createAccountError}<p class="error" role="alert">{form.createAccountError}</p>{/if}
 			{#if form?.createdAccount}<p class="success" role="status">{form.createdAccount} can now sign in.</p>{/if}

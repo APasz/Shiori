@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { availableAccountTabs, type AccountTab } from '$lib/account/tabs';
-	import { minimumPasswordLength } from '$lib/auth/password-policy';
+	import CredentialRequirements from '$lib/auth/CredentialRequirements.svelte';
+	import { maximumPasswordLength, minimumPasswordLength, passwordConfirmationMessage } from '$lib/auth/password-policy';
 	import { browserPages, browserTitle } from '$lib/browser-title';
 	import {
 		dateFormatOptions,
 		defaultFormatPreferences,
 		timeFormatOptions,
 		type DateFormat,
-		type FormatPreferences,
 		type TimeFormat
 	} from '$lib/format-preferences';
 	import AccountAdministration from '$lib/account/AccountAdministration.svelte';
@@ -26,7 +26,8 @@
 	let previousSavedColourway = $state<Colourway | undefined>(undefined);
 	let selectedDateFormat = $state<DateFormat>(defaultFormatPreferences.dateFormat);
 	let selectedTimeFormat = $state<TimeFormat>(defaultFormatPreferences.timeFormat);
-	let previousSavedFormatPreferences = $state<FormatPreferences | undefined>(undefined);
+	let previousSavedDateFormat = $state<DateFormat | undefined>(undefined);
+	let previousSavedTimeFormat = $state<TimeFormat | undefined>(undefined);
 	const previewColourway = $derived(selectedColourway ?? data.currentUser.colourway);
 	const visibleTabs = $derived(availableAccountTabs(data.canManageAccounts));
 
@@ -52,10 +53,14 @@
 
 	$effect(() => {
 		const savedFormatPreferences = data.currentUser.formatPreferences;
-		if (savedFormatPreferences !== previousSavedFormatPreferences) {
+		if (
+			savedFormatPreferences.dateFormat !== previousSavedDateFormat ||
+			savedFormatPreferences.timeFormat !== previousSavedTimeFormat
+		) {
 			selectedDateFormat = savedFormatPreferences.dateFormat;
 			selectedTimeFormat = savedFormatPreferences.timeFormat;
-			previousSavedFormatPreferences = savedFormatPreferences;
+			previousSavedDateFormat = savedFormatPreferences.dateFormat;
+			previousSavedTimeFormat = savedFormatPreferences.timeFormat;
 		}
 	});
 
@@ -202,6 +207,7 @@
 							required
 							value={data.currentUser.username}
 						/>
+						<CredentialRequirements kind="username" />
 					</label>
 					{#if form?.usernameError}<p class="error" role="alert">{form.usernameError}</p>{/if}
 					{#if form?.usernameUpdated}<p class="success" role="status">Username updated.</p>{/if}
@@ -228,22 +234,26 @@
 						<input
 							class="shiori-form-control"
 							autocomplete="new-password"
+							maxlength={maximumPasswordLength}
 							minlength={minimumPasswordLength}
 							name="newPassword"
 							required
 							type={showPasswords ? 'text' : 'password'}
 						/>
+						<CredentialRequirements kind="password" />
 					</label>
 					<label class="shiori-form-label">
 						Confirm new password
 						<input
 							class="shiori-form-control"
 							autocomplete="new-password"
+							maxlength={maximumPasswordLength}
 							minlength={minimumPasswordLength}
 							name="newPasswordConfirmation"
 							required
 							type={showPasswords ? 'text' : 'password'}
 						/>
+						<small class="shiori-credential-requirements">{passwordConfirmationMessage}</small>
 					</label>
 					<label class="password-visibility">
 						<input bind:checked={showPasswords} type="checkbox" />
