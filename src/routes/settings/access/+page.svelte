@@ -1,11 +1,27 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { browserPages, browserTitle } from '$lib/browser-title';
+	import { viewportAnchoredPanelPlacement } from '$lib/components/anchored-panel';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import TripTopbar from '$lib/components/TripTopbar.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let addPersonOpen = $state(false);
+	let addPersonElement = $state<HTMLDetailsElement | null>(null);
+	let addPersonPanelOpensAbove = $state(false);
+	let addPersonPanelMaxHeight = $state<string | undefined>(undefined);
+
+	function updateAddPersonPanelPlacement(): void {
+		const summary = addPersonElement?.querySelector('summary');
+		if (!addPersonOpen || !summary) {
+			return;
+		}
+
+		const placement = viewportAnchoredPanelPlacement(summary, 0.5);
+		addPersonPanelOpensAbove = placement.opensAbove;
+		addPersonPanelMaxHeight = placement.maxHeight;
+	}
 
 	function synchronizeAddPerson(event: Event): void {
 		const details = event.currentTarget;
@@ -13,6 +29,7 @@
 			throw new Error('The add-person panel must be a details element.');
 		}
 		addPersonOpen = details.open;
+		updateAddPersonPanelPlacement();
 	}
 
 	function autoSubmit(event: Event): void {
@@ -28,11 +45,20 @@
 			event.preventDefault();
 		}
 	}
+
+	onMount(() => {
+		if (addPersonElement?.open) {
+			addPersonOpen = true;
+			updateAddPersonPanelPlacement();
+		}
+	});
 </script>
 
 <svelte:head>
 	<title>{browserTitle(browserPages.access)}</title>
 </svelte:head>
+
+<svelte:window onresize={updateAddPersonPanelPlacement} onscroll={updateAddPersonPanelPlacement} />
 
 <TripTopbar activePage="access" canManageAccounts currentUser={data.currentUser} trip={data.trip} />
 
@@ -81,12 +107,17 @@
 			<h2 id="people-heading">People <span>{data.members.length}</span></h2>
 			<div class="people-actions">
 				<details
+					bind:this={addPersonElement}
 					class="add-person"
 					open={Boolean(form?.grantUserError) || addPersonOpen}
 					ontoggle={synchronizeAddPerson}
 				>
 					<summary>+ Add person</summary>
-					<div class="add-person-panel">
+					<div
+						class:opens-above={addPersonPanelOpensAbove}
+						class="add-person-panel"
+						style:--add-person-panel-max-height={addPersonPanelMaxHeight}
+					>
 						<form
 							class="shiori-form add-person-form"
 							action={`?trip=${encodeURIComponent(data.trip.slug)}&/grantUser`}
@@ -353,8 +384,17 @@
 		padding: 1rem;
 		position: absolute;
 		right: 0;
+		max-height: var(--add-person-panel-max-height, calc(100dvh - 2rem));
+		overscroll-behavior: contain;
+		overflow-y: auto;
 		width: min(35rem, calc(100vw - 2rem));
 		z-index: 1;
+	}
+
+	.add-person-panel.opens-above {
+		bottom: calc(100% + 0.5rem);
+		margin-top: 0;
+		top: auto;
 	}
 
 	.add-person-form {

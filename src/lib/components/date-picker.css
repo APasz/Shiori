@@ -208,3 +208,11 @@
 .calendar-day[data-today] {
 	box-shadow: inset 0 -2px 0 var(--color-state-focus);
 }
+
+@media (max-width: 40rem) {
+	.calendar-content .calendar-panel {
+		max-height: var(--bits-popover-content-available-height, calc(100dvh - 2rem));
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+}

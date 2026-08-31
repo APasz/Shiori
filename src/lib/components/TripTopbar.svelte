@@ -9,6 +9,7 @@
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
 	import OfflineTripControl from './OfflineTripControl.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
+	import ViewerTimeZonePicker from './ViewerTimeZonePicker.svelte';
 
 	type TopbarPage = 'account' | 'access' | 'admin' | 'costs' | 'itinerary' | 'notes' | 'trips';
 	type TopbarTrip = Pick<TripView, 'access' | 'itinerary' | 'slug'>;
@@ -133,6 +134,7 @@
 			{#if isOffline}
 				<span class="connection-status" role="status">Offline</span>
 			{/if}
+			<ViewerTimeZonePicker />
 			{#if trip}
 				<details bind:this={tripMenuElement} bind:open={tripMenuOpen} class="trip-menu" ontoggle={synchronizeTripMenu}>
 					<summary aria-label="Trip options" title="Trip options"><Icon name="more" /></summary>
@@ -201,6 +203,7 @@
 
 <style>
 	.trip-topbar {
+		--trip-topbar-row-height: 3.5rem;
 		background: var(--color-surface-raised);
 		border-bottom: 1px solid var(--color-border-default);
 		position: sticky;
@@ -213,7 +216,7 @@
 		display: flex;
 		gap: 1rem;
 		margin: 0 auto;
-		min-height: 3.5rem;
+		min-height: var(--trip-topbar-row-height);
 		padding: 0.5rem 1rem;
 		width: min(100%, 90rem);
 	}

@@ -144,20 +144,61 @@ function normalized(value: string): string {
 	return value.trim().toLowerCase();
 }
 
-function searchScore(option: TimeZoneSearchOption, query: string): number {
-	if (option.aliases.some((alias) => normalized(alias) === query)) {
-		return 0;
+enum TimeZoneSearchRank {
+	ExactTimeZone = 0,
+	ExactAlias = 1,
+	ExactTimeZoneSegment = 2,
+	TimeZonePrefix = 3,
+	TimeZoneSegmentPrefix = 4,
+	ExactPlace = 5,
+	AliasPrefix = 6,
+	PlacePrefix = 7,
+	PartialMatch = 8
+}
+
+type RankedTimeZoneSearchOption = Readonly<{
+	option: TimeZoneSearchOption;
+	rank: TimeZoneSearchRank;
+}>;
+
+function searchRank(option: TimeZoneSearchOption, query: string): TimeZoneSearchRank | null {
+	const timeZone = normalized(option.timeZone);
+	const aliases = option.aliases.map(normalized);
+	const places = option.places.map(normalized);
+	const segments = timeZone.split('/');
+	const isMatch =
+		timeZone.includes(query) ||
+		aliases.some((alias) => alias.includes(query)) ||
+		places.some((place) => place.includes(query));
+	if (!isMatch) {
+		return null;
 	}
-	if (normalized(option.timeZone) === query) {
-		return 1;
+
+	if (timeZone === query) {
+		return TimeZoneSearchRank.ExactTimeZone;
 	}
-	if (option.aliases.some((alias) => normalized(alias).startsWith(query))) {
-		return 2;
+	if (aliases.includes(query)) {
+		return TimeZoneSearchRank.ExactAlias;
 	}
-	if (normalized(option.timeZone).startsWith(query)) {
-		return 3;
+	if (segments.includes(query)) {
+		return TimeZoneSearchRank.ExactTimeZoneSegment;
 	}
-	return 4;
+	if (timeZone.startsWith(query)) {
+		return TimeZoneSearchRank.TimeZonePrefix;
+	}
+	if (segments.some((segment) => segment.startsWith(query))) {
+		return TimeZoneSearchRank.TimeZoneSegmentPrefix;
+	}
+	if (places.includes(query)) {
+		return TimeZoneSearchRank.ExactPlace;
+	}
+	if (aliases.some((alias) => alias.startsWith(query))) {
+		return TimeZoneSearchRank.AliasPrefix;
+	}
+	if (places.some((place) => place.startsWith(query))) {
+		return TimeZoneSearchRank.PlacePrefix;
+	}
+	return TimeZoneSearchRank.PartialMatch;
 }
 
 export function searchTimeZoneOptions(
@@ -166,16 +207,17 @@ export function searchTimeZoneOptions(
 	limit = 12
 ): TimeZoneSearchOption[] {
 	const query = normalized(queryInput);
-	const matches = query
-		? options.filter((option) =>
-				[option.timeZone, ...option.aliases, ...option.places].some((value) => normalized(value).includes(query))
-			)
-		: options;
+	const matches: RankedTimeZoneSearchOption[] = [];
 
-	return [...matches]
-		.sort(
-			(left, right) =>
-				searchScore(left, query) - searchScore(right, query) || left.timeZone.localeCompare(right.timeZone)
-		)
-		.slice(0, limit);
+	for (const option of options) {
+		const rank = query ? searchRank(option, query) : TimeZoneSearchRank.PartialMatch;
+		if (rank !== null) {
+			matches.push({ option, rank });
+		}
+	}
+
+	return matches
+		.sort((left, right) => left.rank - right.rank || left.option.timeZone.localeCompare(right.option.timeZone))
+		.slice(0, limit)
+		.map(({ option }) => option);
 }

@@ -47,7 +47,7 @@ source component to `VisualRenderer` in `src/lib/visuals/types.ts`, then create 
 application components.
 
 When running `npm run dev`, use the collapsed **Development viewer** control in the lower-left
-corner to stage and apply the viewer's current local date, time, and IANA time zone. It affects
+corner to stage and apply the viewer's current local date and time in the top-bar time zone. It affects
 only client-side presentation and defaults for newly created items; stored Unix timestamps are
 never changed.
 

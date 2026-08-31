@@ -166,9 +166,11 @@
 
 	@media (max-width: 40rem) {
 		.unavailable-reason {
-			bottom: auto;
-			right: 0;
-			top: calc(100% + 0.25rem);
+			bottom: max(1rem, env(safe-area-inset-bottom));
+			left: max(1rem, env(safe-area-inset-left));
+			position: fixed;
+			right: max(1rem, env(safe-area-inset-right));
+			width: auto;
 		}
 	}
 </style>

@@ -1,30 +1,23 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 	import { isOnOrAfterUnixEpoch } from '$lib/itinerary/unix-time';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from '$lib/itinerary/zoned-time';
-	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 
 	let dateTime = $state('');
-	let timeZone = $state('UTC');
-	let timeZoneOptions = $state<TimeZoneSearchOption[]>([]);
 	let errorMessage = $state<string | null>(null);
-
-	function syncFromViewer(): void {
-		timeZone = viewerContext.timeZone;
-		dateTime = formatTimestampForTimeZoneInput(viewerContext.currentTimestamp, timeZone) ?? '';
-	}
+	const timeZone = $derived(viewerContext.timeZone);
+	const viewerStatus = $derived(
+		viewerContext.isSimulated
+			? 'Simulation active'
+			: viewerContext.isTimeZoneOverridden
+				? 'Time zone override active'
+				: 'Using browser settings'
+	);
+	const canResetViewer = $derived(viewerContext.isSimulated || viewerContext.isTimeZoneOverridden);
 
 	function changeDateTime(value: string): void {
 		dateTime = value;
-		errorMessage = null;
-	}
-
-	function changeTimeZone(value: string): void {
-		const timestamp = zonedDateTimeToUnixMilliseconds(dateTime, timeZone);
-		timeZone = value;
-		dateTime = timestamp !== null ? (formatTimestampForTimeZoneInput(timestamp, timeZone) ?? dateTime) : dateTime;
 		errorMessage = null;
 	}
 
@@ -39,18 +32,17 @@
 			return;
 		}
 		errorMessage = null;
-		viewerContext.setSimulated(timestamp, timeZone);
+		viewerContext.setSimulated(timestamp);
 	}
 
 	function reset(): void {
 		viewerContext.resetToBrowser();
-		syncFromViewer();
 		errorMessage = null;
 	}
 
-	onMount(() => {
-		timeZoneOptions = browserTimeZoneOptions();
-		queueMicrotask(syncFromViewer);
+	$effect(() => {
+		void viewerContext.revision;
+		dateTime = formatTimestampForTimeZoneInput(viewerContext.currentTimestamp, timeZone) ?? '';
 	});
 </script>
 
@@ -59,8 +51,8 @@
 		<summary>Development viewer</summary>
 		<div class="controls">
 			<p>
-				Stage a viewer-local time and zone, then apply it. This changes only client-side presentation and new-item
-				defaults; persisted timestamps remain unchanged.
+				Stage a viewer-local date and time in the top-bar time zone. This changes only client-side presentation and
+				new-item defaults; persisted timestamps remain unchanged.
 			</p>
 			<DateTimeInput
 				{dateTime}
@@ -68,16 +60,15 @@
 				id="development-viewer-time"
 				label="Viewer date and time"
 				onDateTimeChange={changeDateTime}
-				onTimeZoneChange={changeTimeZone}
 				pickerPresentation="dialog"
+				showTimeZonePicker={false}
 				{timeZone}
-				{timeZoneOptions}
 			/>
 			{#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
 			<div class="actions">
-				<span>{viewerContext.isSimulated ? 'Simulation active' : 'Using browser settings'}</span>
+				<span>{viewerStatus}</span>
 				<button onclick={apply} type="button">Apply viewer settings</button>
-				<button disabled={!viewerContext.isSimulated} onclick={reset} type="button"> Reset to browser </button>
+				<button disabled={!canResetViewer} onclick={reset} type="button"> Reset to browser </button>
 			</div>
 		</div>
 	</details>
@@ -96,15 +87,22 @@
 		background: var(--color-surface-raised);
 		border: 1px solid var(--color-state-warning);
 		box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--color-overlay-backdrop) 40%, transparent);
+		max-height: calc(100dvh - 2rem);
+		overscroll-behavior: contain;
+		overflow-y: auto;
 	}
 
 	summary {
+		background: var(--color-surface-raised);
 		cursor: pointer;
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		padding: 0.5rem 0.75rem;
+		position: sticky;
+		top: 0;
 		text-transform: uppercase;
+		z-index: 1;
 	}
 
 	.controls {

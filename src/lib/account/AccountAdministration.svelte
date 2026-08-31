@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { viewportAnchoredPanelPlacement } from '$lib/components/anchored-panel';
 	import CredentialRequirements from '$lib/auth/CredentialRequirements.svelte';
 	import { maximumPasswordLength, minimumPasswordLength } from '$lib/auth/password-policy';
 	import type { AuthenticatedUser, TripMemberRole } from '$lib/server/store/model';
@@ -17,6 +18,12 @@
 		passwordResetError?: string;
 	};
 	type AdministrationAction = 'createAccount' | 'deleteAccount' | 'resetPassword' | 'setTripAccess';
+	type OpenAccountActions = Readonly<{
+		accountId: string;
+		element: HTMLDetailsElement;
+		maxHeight: string | undefined;
+		opensAbove: boolean;
+	}>;
 
 	let {
 		accounts,
@@ -31,6 +38,42 @@
 		selectedTrip: OwnedTripOption | null;
 		trips: readonly OwnedTripOption[];
 	} = $props();
+
+	let openAccountActions = $state<OpenAccountActions | null>(null);
+
+	function updateAccountActionsPanelPlacement(): void {
+		const activeActions = openAccountActions;
+		const summary = activeActions?.element.querySelector('summary');
+		if (!activeActions || !summary) {
+			return;
+		}
+
+		openAccountActions = {
+			...activeActions,
+			...viewportAnchoredPanelPlacement(summary, 0.25)
+		};
+	}
+
+	function synchronizeAccountActions(event: Event, accountId: string): void {
+		const details = event.currentTarget;
+		if (!(details instanceof HTMLDetailsElement)) {
+			throw new Error('The account actions panel must be a details element.');
+		}
+
+		if (!details.open) {
+			if (openAccountActions?.accountId === accountId) {
+				openAccountActions = null;
+			}
+			return;
+		}
+
+		const previousActions = openAccountActions;
+		openAccountActions = { accountId, element: details, maxHeight: undefined, opensAbove: false };
+		if (previousActions && previousActions.element !== details) {
+			previousActions.element.open = false;
+		}
+		updateAccountActionsPanelPlacement();
+	}
 
 	function actionUrl(action: AdministrationAction): string {
 		const tripParameter = selectedTrip ? `&trip=${encodeURIComponent(selectedTrip.slug)}` : '';
@@ -59,6 +102,8 @@
 		}
 	}
 </script>
+
+<svelte:window onresize={updateAccountActionsPanelPlacement} onscroll={updateAccountActionsPanelPlacement} />
 
 <div class="administration">
 	{#if form?.accountDeleted}
@@ -124,11 +169,17 @@
 									<noscript><button class="shiori-form-button" type="submit">Save</button></noscript>
 								</form>
 							{/if}
-							<details class="account-actions">
+							<details class="account-actions" ontoggle={(event) => synchronizeAccountActions(event, account.id)}>
 								<summary aria-label={`Actions for ${account.username}`} title={`Actions for ${account.username}`}>
 									<Icon name="more" />
 								</summary>
-								<div class="account-actions-panel">
+								<div
+									class:opens-above={openAccountActions?.accountId === account.id && openAccountActions.opensAbove}
+									class="account-actions-panel"
+									style:--account-actions-panel-max-height={openAccountActions?.accountId === account.id
+										? openAccountActions.maxHeight
+										: undefined}
+								>
 									<form
 										id={`reset-password-${account.id}`}
 										class="shiori-form"
@@ -365,12 +416,20 @@
 		border: 1px solid var(--color-border-strong);
 		display: grid;
 		gap: 0.75rem;
+		max-height: var(--account-actions-panel-max-height, calc(100dvh - 2rem));
+		overscroll-behavior: contain;
+		overflow-y: auto;
 		padding: 0.875rem;
 		position: absolute;
 		right: 0;
 		top: calc(100% + 0.25rem);
 		width: min(20rem, calc(100vw - 2rem));
 		z-index: 1;
+	}
+
+	.account-actions-panel.opens-above {
+		bottom: calc(100% + 0.25rem);
+		top: auto;
 	}
 
 	.account-actions-panel .shiori-form {

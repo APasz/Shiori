@@ -42,6 +42,20 @@ describe('time-zone search', () => {
 		});
 	});
 
+	it('ranks a matching IANA segment ahead of zones that merely reference the place', () => {
+		const matches = searchTimeZoneOptions(
+			[
+				{ aliases: ['GMT'], places: ['London', 'Birmingham'], timeZone: 'Europe/Guernsey' },
+				{ aliases: ['GMT'], places: ['London'], timeZone: 'Europe/London' },
+				{ aliases: ['GMT'], places: ['London', 'Glasgow'], timeZone: 'Europe/Jersey' }
+			],
+			'London'
+		);
+
+		expect(matches.map((option) => option.timeZone)).toEqual(['Europe/London', 'Europe/Guernsey', 'Europe/Jersey']);
+		expect(searchTimeZoneOptions(browserTimeZoneOptions(), 'London')[0]).toMatchObject({ timeZone: 'Europe/London' });
+	});
+
 	it('uses timezone-database abbreviations for timeline time-zone labels', () => {
 		expect(timeZoneShortLabel('Asia/Hong_Kong', 1_775_952_000_000)).toBe('HKT');
 	});

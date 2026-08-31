@@ -16,6 +16,7 @@ export type DraggableDialogOptions = Readonly<{
 const interactiveSelector = 'a, button, input, select, textarea, label, [contenteditable="true"]';
 const dragThreshold = 4;
 const viewportInset = 8;
+const mobileDialogQuery = '(max-width: 40rem)';
 
 function clamp(value: number, minimum: number, maximum: number): number {
 	return Math.min(Math.max(value, minimum), maximum);
@@ -24,9 +25,36 @@ function clamp(value: number, minimum: number, maximum: number): number {
 export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> = (dialog, initialOptions) => {
 	let options = initialOptions;
 	let dragState: DragState | null = null;
+	const mobileDialogMedia = window.matchMedia(mobileDialogQuery);
+
+	function clearDraggedPosition(): void {
+		for (const property of ['height', 'inset', 'left', 'margin', 'position', 'top', 'width']) {
+			dialog.style.removeProperty(property);
+		}
+	}
+
+	function resetForMobileLayout(): void {
+		if (!mobileDialogMedia.matches) {
+			return;
+		}
+
+		const state = dragState;
+		if (state?.isDragging && dialog.hasPointerCapture(state.pointerId)) {
+			dialog.releasePointerCapture(state.pointerId);
+		}
+		dragState = null;
+		dialog.classList.remove('is-dragging');
+		clearDraggedPosition();
+	}
 
 	function handlePointerDown(event: PointerEvent): void {
-		if (dragState || event.button !== 0 || event.pointerType !== 'mouse' || !(event.target instanceof Element)) {
+		if (
+			mobileDialogMedia.matches ||
+			dragState ||
+			event.button !== 0 ||
+			event.pointerType !== 'mouse' ||
+			!(event.target instanceof Element)
+		) {
 			return;
 		}
 
@@ -100,6 +128,8 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 	dialog.addEventListener('pointermove', handlePointerMove);
 	dialog.addEventListener('pointerup', finishDrag);
 	dialog.addEventListener('pointercancel', finishDrag);
+	mobileDialogMedia.addEventListener('change', resetForMobileLayout);
+	resetForMobileLayout();
 
 	return {
 		update(nextOptions: DraggableDialogOptions): void {
@@ -110,6 +140,7 @@ export const draggableDialog: Action<HTMLDialogElement, DraggableDialogOptions> 
 			dialog.removeEventListener('pointermove', handlePointerMove);
 			dialog.removeEventListener('pointerup', finishDrag);
 			dialog.removeEventListener('pointercancel', finishDrag);
+			mobileDialogMedia.removeEventListener('change', resetForMobileLayout);
 			dialog.classList.remove('is-dragging', 'is-draggable');
 		}
 	};
