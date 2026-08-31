@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	addCalendarDays,
 	addCalendarMonths,
+	calendarDayCount,
 	calendarDays,
 	calendarMonthForDate,
 	datePickerDateSeparator,
@@ -17,6 +18,12 @@ describe('calendar helpers', () => {
 		expect(addCalendarDays('2026-04-12', 1)).toBe('2026-04-13');
 		expect(addCalendarDays('2026-12-31', 1)).toBe('2027-01-01');
 		expect(addCalendarDays('not-a-date', 1)).toBe(null);
+	});
+
+	it('counts inclusive calendar days', () => {
+		expect(calendarDayCount('2026-12-31', '2027-01-01')).toBe(2);
+		expect(calendarDayCount('2026-04-12', '2026-04-11')).toBe(null);
+		expect(calendarDayCount('not-a-date', '2026-04-12')).toBe(null);
 	});
 
 	it('validates calendar dates before deriving a month', () => {

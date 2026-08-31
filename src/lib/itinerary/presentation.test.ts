@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getItineraryDateRange, getLocalItineraryDays, groupItemsByLocalDay, partitionDayItems } from './presentation';
+import {
+	getItineraryDateRange,
+	getLocalItineraryDayCount,
+	getLocalItineraryDays,
+	groupItemsByLocalDay,
+	partitionDayItems
+} from './presentation';
 import { formatLocalTimestamp, localDateTimeToUnixMilliseconds } from './time';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
@@ -158,6 +164,7 @@ describe('browser-local itinerary presentation', () => {
 			{ id: 'departure', timing: { kind: 'exact' as const, startAt: departure } }
 		];
 
+		expect(getLocalItineraryDayCount(items)).toBe(9);
 		expect(getLocalItineraryDays(items)).toEqual([
 			{ date: '2026-04-12', items: [items[1]] },
 			{ date: '2026-04-13', items: [] },

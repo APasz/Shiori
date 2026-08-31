@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { browserPages, browserTitle } from '$lib/browser-title';
 	import ItineraryExporter from '$lib/components/ItineraryExporter.svelte';
 	import ItineraryItemCreator from '$lib/components/ItineraryItemCreator.svelte';
@@ -20,6 +21,7 @@
 	import { refreshTripPage } from './refresh';
 	import TripPageHeader from './TripPageHeader.svelte';
 	import { detailedTripFor } from './trip';
+	import { tripOpenGraphMetadata } from './open-graph';
 	import type { EditingNote, TripPageData } from './types';
 
 	let { data }: { data: TripPageData } = $props();
@@ -30,6 +32,9 @@
 	const detailedTrip = $derived(detailedTripFor(data.trip));
 	const canModifyItinerary = $derived(detailedTrip?.canEdit === true && connectivity.status === 'reachable');
 	const itinerary = $derived(data.trip.itinerary);
+	const openGraphMetadata = $derived(
+		tripOpenGraphMetadata({ description: data.openGraphDescription, tripTitle: data.trip.itinerary.title }, page.url)
+	);
 	const notesEndpoint = $derived(resolve('/api/trips/[tripId]/notes', { tripId: data.trip.id }));
 	const tripBackupTripId = $derived(canModifyItinerary ? data.trip.id : undefined);
 	const itemWorkflow = new ItineraryWorkflow({
@@ -97,6 +102,11 @@
 <svelte:head>
 	<title>{browserTitle(browserPages.itinerary, data.trip.itinerary.title)}</title>
 	<meta name="description" content="A server-authoritative travel itinerary, validated by Shiori." />
+	<meta property="og:title" content={openGraphMetadata.title} />
+	<meta property="og:description" content={openGraphMetadata.description} />
+	<meta property="og:url" content={openGraphMetadata.url} />
+	<meta property="og:type" content={openGraphMetadata.type} />
+	<meta property="og:site_name" content={openGraphMetadata.siteName} />
 </svelte:head>
 
 <TripTopbar

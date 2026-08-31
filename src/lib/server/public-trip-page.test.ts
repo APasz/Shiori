@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { publicTripCacheControl } from './public-cache';
 
 const needsInitialSetup = vi.hoisted(() => vi.fn());
-const getTripView = vi.hoisted(() => vi.fn());
+const getTripPageView = vi.hoisted(() => vi.fn());
 const isSudoUser = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/store/auth', () => ({ isSudoUser, needsInitialSetup }));
-vi.mock('$lib/server/store/trips', () => ({ getTripView }));
+vi.mock('$lib/server/store/trips', () => ({ getTripPageView }));
 
 import { load } from '../../routes/trips/[slug]/+page.server';
 
@@ -19,20 +19,33 @@ const publicTripView = {
 	revision: 1,
 	slug: 'public-trip'
 } as const;
+const publicTripPage = {
+	sourceItinerary: { items: [], timeZone: 'UTC', title: 'Public trip' },
+	trip: publicTripView
+} as const;
 
 describe('public trip page', () => {
 	beforeEach(() => {
 		needsInitialSetup.mockReset().mockResolvedValue(false);
-		getTripView.mockReset().mockResolvedValue(publicTripView);
+		getTripPageView.mockReset().mockResolvedValue(publicTripPage);
 		isSudoUser.mockReset().mockResolvedValue(false);
 	});
 
 	it('permits shared caching for an anonymous public visitor', async () => {
 		const setHeaders = vi.fn();
 
-		await expect(
-			load({ locals: { user: null }, params: { slug: publicTripView.slug }, setHeaders } as never)
-		).resolves.toMatchObject({ currentUser: null, trip: publicTripView });
+		const page = await load({
+			locals: { user: null },
+			params: { slug: publicTripView.slug },
+			setHeaders
+		} as never);
+
+		expect(page).toMatchObject({
+			currentUser: null,
+			openGraphDescription: 'Public trip: 0 days',
+			trip: publicTripView
+		});
+		expect(page).not.toHaveProperty('sourceItinerary');
 
 		expect(setHeaders).toHaveBeenCalledWith({ 'cache-control': publicTripCacheControl, vary: 'Cookie' });
 	});

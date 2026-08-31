@@ -24,6 +24,12 @@ export type DetailedTripView = {
 
 export type TripView = VisitorTripView | DetailedTripView;
 
+/** Server-only source data for deriving a page's safe metadata without serializing restricted details. */
+export type TripPageView = Readonly<{
+	sourceItinerary: Itinerary;
+	trip: TripView;
+}>;
+
 export type TripReference = {
 	id: string;
 	slug: string;

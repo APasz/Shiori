@@ -132,6 +132,11 @@ describe('JSON store', () => {
 		await expect(store.isSudoUser(person.id)).resolves.toBe(false);
 		await expect(store.getTripView(trip.slug, sudo)).resolves.toMatchObject({ access: 'sudo' });
 		await expect(store.getTripView(trip.slug, person)).resolves.toBeNull();
+		await expect(store.getTripPageView(trip.slug, sudo)).resolves.toMatchObject({
+			sourceItinerary: { title: 'Sudo trip' },
+			trip: { access: 'sudo' }
+		});
+		await expect(store.getTripPageView(trip.slug, person)).resolves.toBeNull();
 		await expect(store.listAccounts(person.id)).rejects.toMatchObject({ status: 403 });
 		await expect(
 			store.createAccount({ actorId: person.id, password: 'third strong test password', username: 'third-person' })

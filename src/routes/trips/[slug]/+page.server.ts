@@ -2,12 +2,13 @@ import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { isSudoUser, needsInitialSetup } from '$lib/server/store/auth';
 import { publicTripCacheControl } from '$lib/server/public-cache';
-import { getTripView } from '$lib/server/store/trips';
+import { tripOpenGraphDescription } from '$lib/server/trip-open-graph';
+import { getTripPageView } from '$lib/server/store/trips';
 
 export const load: PageServerLoad = async ({ locals, params, setHeaders }) => {
 	const setupRequired = await needsInitialSetup();
-	const trip = await getTripView(params.slug, locals.user);
-	if (!trip) {
+	const tripPage = await getTripPageView(params.slug, locals.user);
+	if (!tripPage) {
 		if (setupRequired) {
 			redirect(303, '/setup');
 		}
@@ -16,6 +17,7 @@ export const load: PageServerLoad = async ({ locals, params, setHeaders }) => {
 		}
 		error(404, 'The requested trip is unavailable.');
 	}
+	const { sourceItinerary, trip } = tripPage;
 	if (trip.access === 'visitor' && !locals.user) {
 		setHeaders({
 			'cache-control': publicTripCacheControl,
@@ -27,6 +29,7 @@ export const load: PageServerLoad = async ({ locals, params, setHeaders }) => {
 	return {
 		canManageAccounts,
 		currentUser: locals.user,
+		openGraphDescription: tripOpenGraphDescription({ isPublic: trip.isPublic, itinerary: sourceItinerary }),
 		setupRequired,
 		trip
 	};

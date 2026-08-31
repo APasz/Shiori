@@ -8,6 +8,7 @@ export type { ConnectivityStatus } from '$lib/connectivity.svelte';
 export type TripPageData = Readonly<{
 	canManageAccounts: boolean;
 	currentUser: AuthenticatedUser | null;
+	openGraphDescription: string;
 	setupRequired: boolean;
 	trip: TripView;
 }>;

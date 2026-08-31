@@ -4,6 +4,18 @@ import type { ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 
 const unknownTimeLabel = 'Unknown';
+const millisecondsPerMinute = 60_000;
+
+export function timingEarliestTimestamp(timing: ItineraryTiming): number {
+	switch (timing.kind) {
+		case 'exact':
+			return timing.startAt;
+		case 'approximate':
+			return timing.nominalAt - timing.toleranceMinutes * millisecondsPerMinute;
+		case 'window':
+			return timing.earliestAt;
+	}
+}
 
 export function timingStartTimestamp(timing: ItineraryTiming): number {
 	switch (timing.kind) {
@@ -21,7 +33,7 @@ export function timingEndTimestamp(timing: ItineraryTiming): number {
 		case 'exact':
 			return timing.endAt ?? timing.startAt;
 		case 'approximate':
-			return timing.nominalAt + timing.toleranceMinutes * 60_000;
+			return timing.nominalAt + timing.toleranceMinutes * millisecondsPerMinute;
 		case 'window':
 			return timing.latestAt;
 	}

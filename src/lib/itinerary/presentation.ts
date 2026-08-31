@@ -1,8 +1,14 @@
-import { addCalendarDays, formatCalendarDate, type CalendarDateFormat, type CalendarLocale } from './calendar';
+import {
+	addCalendarDays,
+	calendarDayCount,
+	formatCalendarDate,
+	type CalendarDateFormat,
+	type CalendarLocale
+} from './calendar';
 import { defaultFormatPreferences, type DateFormat } from '$lib/format-preferences';
 import type { ItineraryItem, ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
-import { timingEndTimestamp, timingStartTimestamp } from './timing';
+import { timingEarliestTimestamp, timingEndTimestamp, timingStartTimestamp } from './timing';
 import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export { timingStartTimestamp as timingAnchor } from './timing';
@@ -143,22 +149,10 @@ export function timingStartDate(timing: ItineraryTiming, timeZone?: string): str
 }
 
 function timingDateBounds(timing: ItineraryTiming, timeZone: string | undefined): [string, string] {
-	switch (timing.kind) {
-		case 'exact':
-			return [
-				localDateForTimestamp(timing.startAt, timeZone),
-				localDateForTimestamp(timing.endAt ?? timing.startAt, timeZone)
-			];
-		case 'approximate': {
-			const toleranceMilliseconds = timing.toleranceMinutes * 60_000;
-			return [
-				localDateForTimestamp(timing.nominalAt - toleranceMilliseconds, timeZone),
-				localDateForTimestamp(timing.nominalAt + toleranceMilliseconds, timeZone)
-			];
-		}
-		case 'window':
-			return [localDateForTimestamp(timing.earliestAt, timeZone), localDateForTimestamp(timing.latestAt, timeZone)];
-	}
+	return [
+		localDateForTimestamp(timingEarliestTimestamp(timing), timeZone),
+		localDateForTimestamp(timingEndTimestamp(timing), timeZone)
+	];
 }
 
 function timingTimestampOnLocalDay(timing: ItineraryTiming, date: string, timeZone: string | undefined): number {
@@ -242,6 +236,20 @@ export function getItineraryDateRange(items: TimedItem[], timeZone?: string): [s
 		latest = endDate > latest ? endDate : latest;
 	}
 	return [earliest, latest];
+}
+
+/** Returns the inclusive number of local calendar days covered by the itinerary. */
+export function getLocalItineraryDayCount<Item extends TimedItem>(items: Item[], timeZone?: string): number {
+	const dateRange = getItineraryDateRange(items, timeZone);
+	if (!dateRange) {
+		return 0;
+	}
+
+	const dayCount = calendarDayCount(...dateRange);
+	if (dayCount === null) {
+		throw new Error(`Itinerary date range is invalid: ${dateRange.join(' to ')}.`);
+	}
+	return dayCount;
 }
 
 /** Returns every local calendar day covered by the itinerary, including days without items. */

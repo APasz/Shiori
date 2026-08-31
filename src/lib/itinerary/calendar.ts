@@ -19,6 +19,7 @@ export type CalendarLocale = string | null;
 export const isoDateLocale = 'en-CA-u-ca-iso8601';
 
 const calendarDatePattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/;
+const millisecondsPerDay = 86_400_000;
 const calendarFormatters = new Map<string, Intl.DateTimeFormat>();
 const australianEnglishLocales = new Map<string, boolean>();
 
@@ -66,6 +67,19 @@ export function addCalendarMonths(month: CalendarMonth, amount: number): Calenda
 export function addCalendarDays(value: string, amount: number): string | null {
 	const parts = calendarDateParts(value);
 	return parts ? calendarDateFromTimestamp(Date.UTC(parts.year, parts.month - 1, parts.day + amount)) : null;
+}
+
+/** Counts inclusive calendar days, or returns null when either date is invalid or reversed. */
+export function calendarDayCount(first: string, last: string): number | null {
+	const firstParts = calendarDateParts(first);
+	const lastParts = calendarDateParts(last);
+	if (!firstParts || !lastParts) {
+		return null;
+	}
+
+	const firstTimestamp = Date.UTC(firstParts.year, firstParts.month - 1, firstParts.day);
+	const lastTimestamp = Date.UTC(lastParts.year, lastParts.month - 1, lastParts.day);
+	return lastTimestamp >= firstTimestamp ? (lastTimestamp - firstTimestamp) / millisecondsPerDay + 1 : null;
 }
 
 export function calendarDays(month: CalendarMonth): CalendarDay[] {

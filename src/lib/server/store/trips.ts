@@ -8,7 +8,7 @@ import { StoreError } from './error';
 import type { AuthenticatedUser, StoredData, StoredTrip, TripMemberRole } from './model';
 import { readData, transaction } from './persistence';
 import { timestamp } from './time';
-import type { OwnedTripOption, TripReference, TripSwitchOption, TripView } from './views';
+import type { OwnedTripOption, TripPageView, TripReference, TripSwitchOption, TripView } from './views';
 
 export function findTripBySlug(data: StoredData, slug: string): StoredTrip | undefined {
 	return data.trips.find((trip) => trip.slug === slug);
@@ -156,13 +156,7 @@ function compareTripSwitchOptions(left: TripSwitchOption, right: TripSwitchOptio
 	);
 }
 
-export async function getTripView(slug: string, user: AuthenticatedUser | null): Promise<TripView | null> {
-	const data = await readData();
-	const trip = findTripBySlug(data, slug);
-	if (!trip) {
-		return null;
-	}
-
+function createTripView(data: StoredData, trip: StoredTrip, user: AuthenticatedUser | null): TripView | null {
 	const access = getTripAccess(data, trip, user);
 	if (!access) {
 		return null;
@@ -189,6 +183,23 @@ export async function getTripView(slug: string, user: AuthenticatedUser | null):
 		slug: trip.slug,
 		itinerary: projectDetailedItinerary(trip.itinerary, access)
 	};
+}
+
+export async function getTripView(slug: string, user: AuthenticatedUser | null): Promise<TripView | null> {
+	const data = await readData();
+	const trip = findTripBySlug(data, slug);
+	return trip ? createTripView(data, trip, user) : null;
+}
+
+export async function getTripPageView(slug: string, user: AuthenticatedUser | null): Promise<TripPageView | null> {
+	const data = await readData();
+	const sourceTrip = findTripBySlug(data, slug);
+	if (!sourceTrip) {
+		return null;
+	}
+
+	const trip = createTripView(data, sourceTrip, user);
+	return trip ? { sourceItinerary: sourceTrip.itinerary, trip } : null;
 }
 
 export async function createTrip(input: { actorId: string; details: unknown }): Promise<TripReference> {

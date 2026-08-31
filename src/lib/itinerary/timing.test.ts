@@ -6,8 +6,25 @@ import {
 	formatAccommodationTimingParts,
 	formatItineraryTimingBoundary,
 	formatItineraryTiming,
-	formatItineraryTimingForDay
+	formatItineraryTimingForDay,
+	timingEarliestTimestamp,
+	timingEndTimestamp,
+	timingStartTimestamp
 } from './timing';
+
+describe('timing boundaries', () => {
+	it('keeps an approximate timing anchor distinct from its earliest possible timestamp', () => {
+		const timing = {
+			kind: 'approximate' as const,
+			nominalAt: Date.UTC(2026, 0, 1),
+			toleranceMinutes: 60
+		};
+
+		expect(timingEarliestTimestamp(timing)).toBe(Date.UTC(2025, 11, 31, 23));
+		expect(timingStartTimestamp(timing)).toBe(Date.UTC(2026, 0, 1));
+		expect(timingEndTimestamp(timing)).toBe(Date.UTC(2026, 0, 1, 1));
+	});
+});
 
 describe('daily itinerary timing', () => {
 	it('applies date and time display preferences to timing labels', () => {
