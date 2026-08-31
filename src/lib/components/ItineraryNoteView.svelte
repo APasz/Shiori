@@ -39,7 +39,7 @@
 		<div>
 			<h2>{heading}</h2>
 			{#if note.timeZone !== defaultTimeZone}
-				<p class="time-zone">Times use {note.timeZone}.</p>
+				<p class="time-zone">Times use {note.timeZone}</p>
 			{/if}
 		</div>
 		{#if onEdit}<button onclick={onEdit} type="button">Edit</button>{/if}

@@ -31,7 +31,7 @@
 		portalTarget,
 		showQuickTimes = true,
 		showTimeZonePicker = true,
-		timeZoneHint = 'Used to interpret this value; not saved.',
+		timeZoneHint = 'Used to interpret this value; not saved',
 		timeZone = 'UTC',
 		timeZoneOptions = [],
 		onDateTimeChange,

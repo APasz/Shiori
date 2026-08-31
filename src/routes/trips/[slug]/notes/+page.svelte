@@ -93,7 +93,7 @@
 					onEdit={canModifyNotes ? () => beginEditing({ kind: 'trip' }, tripNote) : undefined}
 				/>
 			{:else}
-				<p class="empty-note">No trip-wide note yet.</p>
+				<p class="empty-note">No trip-wide note yet</p>
 			{/if}
 		</section>
 
@@ -105,7 +105,7 @@
 				</div>
 			</div>
 			{#if dayNotes.length === 0}
-				<p class="empty-note">No day notes yet. Add one from the corresponding itinerary day.</p>
+				<p class="empty-note">No day notes yet. Add one from the corresponding itinerary day</p>
 			{:else}
 				<div class="day-notes">
 					{#each dayNotes as { date, note } (note.id)}

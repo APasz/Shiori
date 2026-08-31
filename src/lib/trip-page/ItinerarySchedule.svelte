@@ -150,7 +150,7 @@
 		{#if !localScheduleReady || !dayDisclosureReady}
 			<p class="detail-prompt">Localizing your schedule…</p>
 		{:else if itinerary.items.length === 0}
-			<p class="empty-day">No items planned yet.</p>
+			<p class="empty-day">No items planned yet</p>
 			{#if canModifyItinerary}
 				<div class="add-item-actions" aria-label="Add an itinerary item">
 					<button onclick={() => onCreateItem()} type="button">Add item</button>

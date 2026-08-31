@@ -160,7 +160,7 @@
 			{@render stayBlock(dayItems.ongoingStays, 'ongoing')}
 		{/if}
 		{#if dayItems.timelineEntries.length === 0 && dayItems.ongoingStays.length === 0 && dayItems.arrivingStays.length === 0}
-			<p class="empty-day">No items planned for this day.</p>
+			<p class="empty-day">No items planned for this day</p>
 		{:else if dayItems.timelineEntries.length > 0}
 			<ul>
 				{#each dayItems.timelineEntries as entry (`${entry.item.id}:${entry.kind}:${entry.timestamp}`)}

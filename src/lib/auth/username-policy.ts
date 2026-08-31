@@ -8,4 +8,4 @@ export const usernamePattern = new RegExp(
 
 export const usernameValidationMessage = `Use ${minimumUsernameLength}–${maximumUsernameLength} characters: A–Z, 0–9, _, or -, starting with A–Z or 0–9`;
 
-export const usernameRequirementsMessage = `${minimumUsernameLength}–${maximumUsernameLength} characters: A–Z, 0–9, _, or -. Start with A–Z or 0–9; usernames are case-insensitive`;
+export const usernameRequirementsMessage = `${minimumUsernameLength}–${maximumUsernameLength} characters: A–Z, 0–9, _, or -; start with A–Z or 0–9; usernames are case-insensitive`;

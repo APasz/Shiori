@@ -71,7 +71,7 @@
 
 	<section aria-labelledby="administration-heading" class="administration-introduction">
 		<h2 id="administration-heading">Administration</h2>
-		<p>Manage global accounts and their access to your trips.</p>
+		<p>Manage global accounts and their access to your trips</p>
 	</section>
 
 	<section aria-labelledby="users-heading">
@@ -80,8 +80,8 @@
 				<h2 id="users-heading">Users <span>{accounts.length}</span></h2>
 				<p>
 					{selectedTrip
-						? 'Access levels apply to the selected trip only.'
-						: 'You can manage global accounts and trip access from this screen.'}
+						? 'Access levels apply to the selected trip only'
+						: 'You can manage global accounts and trip access from this screen'}
 				</p>
 			</div>
 			{#if selectedTrip}
@@ -209,8 +209,8 @@
 		</form>
 		<p class="access-note">
 			{selectedTrip
-				? 'New accounts have no private-trip access until you assign it using the list above.'
-				: 'New accounts have no private-trip access until you grant it.'}
+				? 'New accounts have no private-trip access until you assign it using the list above'
+				: 'New accounts have no private-trip access until you grant it'}
 		</p>
 	</section>
 </div>

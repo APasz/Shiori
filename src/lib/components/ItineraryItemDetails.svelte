@@ -283,7 +283,7 @@
 							<p class="cost-payment-detail">Paid {paidAtLabel(item.cost.payment.paidAt)}</p>
 						{/if}
 						{#if item.cost.payment.localCurrency !== localCurrency}
-							<p class="cost-note">Trip currency is now {localCurrency}.</p>
+							<p class="cost-note">Trip currency is now {localCurrency}</p>
 						{/if}
 					{:else if item.cost.scheduledPaymentDate}
 						<p class="cost-payment-detail">

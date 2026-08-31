@@ -79,9 +79,9 @@
 	{#if !nowNextState}
 		<p class="status">Localizing your schedule…</p>
 	{:else if nowNextState.kind === 'empty'}
-		<p class="status">No items planned yet.</p>
+		<p class="status">No items planned yet</p>
 	{:else if nowNextState.kind === 'idle'}
-		<p class="status">Nothing scheduled right now.</p>
+		<p class="status">Nothing scheduled right now</p>
 	{:else if nowNextState.kind === 'complete'}
 		<p class="status">Trip complete</p>
 	{:else}

@@ -166,7 +166,7 @@
 			<form action={actionUrl('changeFormatPreferences')} class="shiori-form appearance-form" method="POST">
 				<fieldset class="format-preferences-fields">
 					<legend>Date and time</legend>
-					<p class="format-preferences-description">Choose how dates and times are displayed throughout Shiori.</p>
+					<p class="format-preferences-description">Choose how dates and times are displayed throughout Shiori</p>
 					<div class="format-preferences-controls">
 						<label class="shiori-form-label">
 							Date format
@@ -196,7 +196,7 @@
 		<div class="account-panel">
 			<section aria-labelledby="username-heading" class="account-section">
 				<h2 id="username-heading">Username</h2>
-				<p>Use this name to sign in and identify your account.</p>
+				<p>Use this name to sign in and identify your account</p>
 				<form action={actionUrl('changeUsername')} class="shiori-form" method="POST">
 					<label class="shiori-form-label">
 						Username
@@ -217,7 +217,7 @@
 
 			<section aria-labelledby="password-heading" class="account-section">
 				<h2 id="password-heading">Password</h2>
-				<p>Changing your password signs out your other active sessions.</p>
+				<p>Changing your password signs out your other active sessions</p>
 				<form action={actionUrl('changePassword')} class="shiori-form" method="POST">
 					<label class="shiori-form-label">
 						Current password

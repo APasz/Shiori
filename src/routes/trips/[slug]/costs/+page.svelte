@@ -400,7 +400,7 @@
 					<input bind:checked={editingExpense.availableForItemCosts} disabled={expenseSaving} type="checkbox" />
 					<span>
 						Available for itinerary items
-						<span class="field-hint">Can be linked from an item’s Cost section.</span>
+						<span class="field-hint">Can be linked from an item’s Cost section</span>
 					</span>
 				</label>
 				{#if editingExpense.paid}
@@ -492,16 +492,16 @@
 				{#if conversionStatus === 'loading'}
 					Updating summary with current exchange rates…
 				{:else if conversionStatus === 'unavailable'}
-					{conversionError} Showing the original currencies instead.
+					{conversionError} Showing the original currencies instead
 				{:else if conversionEffectiveDate}
 					Converted to {summaryCurrency} using ECB reference rates from {formatCalendarDate(
 						conversionEffectiveDate,
 						'date',
 						viewerContext.locale,
 						viewerContext.formatPreferences.dateFormat
-					) ?? conversionEffectiveDate}.
+					) ?? conversionEffectiveDate}
 				{:else}
-					No costs have been entered yet.
+					No costs have been entered yet
 				{/if}
 			</p>
 		</section>
@@ -520,7 +520,7 @@
 					>{/if}
 			</div>
 			<p class="section-introduction">
-				Each expense can be a single purchase or a grouped cost, such as a day of food or a rail pass.
+				Each expense can be a single purchase or a grouped cost, such as a day of food or a rail pass
 			</p>
 			{#if expenseError && expenseEditorMode === null}<p class="error" role="alert">{expenseError}</p>{/if}
 			<div class="table-scroller">
@@ -536,7 +536,7 @@
 					</thead>
 					<tbody>
 						{#if expenses.length === 0 && expenseEditorMode !== 'create'}
-							<tr><td class="empty-cell" colspan={canModifyExpenses ? 6 : 5}>No expenses recorded yet.</td></tr>
+							<tr><td class="empty-cell" colspan={canModifyExpenses ? 6 : 5}>No expenses recorded yet</td></tr>
 						{/if}
 						{#if expenseEditorMode === 'create'}
 							<tr class="expense-editor-row"><td colspan={canModifyExpenses ? 6 : 5}>{@render expenseEditor()}</td></tr>
@@ -589,7 +589,7 @@
 					</tbody>
 				</table>
 			</div>
-			{#if !data.trip.canEdit}<p class="table-note">Only the sudo user can add or edit expenses.</p>{/if}
+			{#if !data.trip.canEdit}<p class="table-note">Only the sudo user can add or edit expenses</p>{/if}
 		</section>
 	</div>
 </main>

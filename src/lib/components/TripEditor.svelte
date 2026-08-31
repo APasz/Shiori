@@ -324,7 +324,7 @@
 		</label>
 		<div class="shiori-form-label">
 			<label for="trip-time-zone">Default time zone</label>
-			<span class="field-hint">Used for itinerary items without their own time zone.</span>
+			<span class="field-hint">Used for itinerary items without their own time zone</span>
 			<TimeZonePicker
 				id="trip-time-zone"
 				label="Default time zone"
@@ -335,7 +335,7 @@
 		</div>
 		<label class="shiori-form-label">
 			Local currency
-			<span class="field-hint">Newly paid costs are converted to this currency and saved at that rate.</span>
+			<span class="field-hint">Newly paid costs are converted to this currency and saved at that rate</span>
 			<select bind:value={localCurrency} class="shiori-form-control">
 				{#each currencyOptions as currency (currency)}
 					<option value={currency}>{currency}</option>
@@ -346,13 +346,13 @@
 			<section aria-labelledby="trip-backup-heading" class="backup-import">
 				<div>
 					<h3 id="trip-backup-heading">Import Trip</h3>
-					<p>Restore a <code>.{tripBackupFileExtension}</code> file as a new private trip.</p>
+					<p>Restore a <code>.{tripBackupFileExtension}</code> file as a new private trip</p>
 				</div>
 				{#if selectedBackup}
 					<p class="backup-summary">
 						Ready to import <strong>{selectedBackup.itinerary.title}</strong> from {selectedBackupFileName} with
 						{selectedBackup.itinerary.items.length} itinerary
-						{selectedBackup.itinerary.items.length === 1 ? 'item' : 'items'}.
+						{selectedBackup.itinerary.items.length === 1 ? 'item' : 'items'}
 					</p>
 					<div class="backup-actions">
 						<button
@@ -395,7 +395,7 @@
 			<section aria-labelledby="delete-trip-heading" class="delete-trip">
 				<div>
 					<h3 id="delete-trip-heading">Delete trip</h3>
-					<p>Remove this itinerary and its shared access.</p>
+					<p>Remove this itinerary and its shared access</p>
 				</div>
 				<button
 					class="delete-trip-button shiori-form-button"

@@ -19,7 +19,7 @@ export function passwordMaximumMessage(maximumLength = maximumPasswordLength): s
 }
 
 export function passwordRequirementsMessage(minimumLength = minimumPasswordLength): string {
-	return `Use ${minimumLength}–${maximumPasswordLength.toLocaleString('en-US')} characters. Spaces and symbols are allowed`;
+	return `Use ${minimumLength}–${maximumPasswordLength.toLocaleString('en-US')} characters; spaces and symbols are allowed`;
 }
 
-export const passwordConfirmationMessage = 'Must match the password above.';
+export const passwordConfirmationMessage = 'Must match the password above';

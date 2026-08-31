@@ -112,7 +112,7 @@
 			<div>
 				<p class="eyebrow">Itinerary export</p>
 				<h2 id="itinerary-exporter-heading">Export {itinerary.title}</h2>
-				<p class="intro">Download a copy of the itinerary with only the details you choose.</p>
+				<p class="intro">Download a copy of the itinerary with only the details you choose</p>
 			</div>
 			<form method="dialog">
 				<button class="close-button shiori-form-button" type="submit">Close</button>

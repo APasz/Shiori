@@ -56,7 +56,7 @@
 			<label class="shiori-form-label">
 				<span>Setup token</span>
 				<input class="shiori-form-control" autocomplete="off" name="setupToken" required type="password" />
-				<small>Set through <code>SHIORI_SETUP_TOKEN</code> before starting Shiori.</small>
+				<small>Set through <code>SHIORI_SETUP_TOKEN</code> before starting Shiori</small>
 			</label>
 		{/if}
 

@@ -12,16 +12,16 @@
 	const saveIsUnavailable = $derived(saving || isOffline || cacheStatus === null || cacheStatus.supported === false);
 	const unavailableReason = $derived.by((): string | null => {
 		if (saving) {
-			return 'Saving this trip for offline use.';
+			return 'Saving this trip for offline use';
 		}
 		if (isOffline) {
-			return 'Connect to the internet to save this trip for offline use.';
+			return 'Connect to the internet to save this trip for offline use';
 		}
 		if (cacheStatus === null) {
-			return 'Checking whether offline saving is available.';
+			return 'Checking whether offline saving is available';
 		}
 		if (!cacheStatus.supported) {
-			return 'This browser cannot save the itinerary for offline viewing.';
+			return 'This browser cannot save the itinerary for offline viewing';
 		}
 		return null;
 	});

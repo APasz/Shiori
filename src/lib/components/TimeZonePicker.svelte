@@ -127,7 +127,7 @@
 	{#if isOpen}
 		<ul id={`${id}-options`} role="listbox">
 			{#if matches.length === 0}
-				<li class="empty">No matching time zone.</li>
+				<li class="empty">No matching time zone</li>
 			{:else}
 				{#each matches as option, index (option.timeZone)}
 					<li aria-selected={index === activeOptionIndex} role="option">

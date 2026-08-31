@@ -59,7 +59,7 @@
 			<label class="visibility-control">
 				<span>
 					<strong>Public schedule</strong>
-					<small>Anyone with the link can see the schedule.</small>
+					<small>Anyone with the link can see the schedule</small>
 				</span>
 				<span class="visibility-toggle">
 					<input
@@ -94,7 +94,7 @@
 						>
 							<h3>Add an account</h3>
 							{#if data.availableAccounts.length === 0}
-								<p class="empty-accounts">No other accounts are available for this trip.</p>
+								<p class="empty-accounts">No other accounts are available for this trip</p>
 							{:else}
 								<label class="shiori-form-label">
 									Account
@@ -180,7 +180,7 @@
 		<details class="advanced-section">
 			<summary>Advanced</summary>
 			<div>
-				<p class="active-edit-session">An edit session is active.</p>
+				<p class="active-edit-session">An edit session is active</p>
 				<form
 					class="shiori-form"
 					action={`?trip=${encodeURIComponent(data.trip.slug)}&/forceCloseEditSession`}

@@ -259,7 +259,7 @@
 				: `Accommodation in ${destination}`;
 		}
 		if (item.type === 'activity') {
-			return 'Activity details were detected.';
+			return 'Activity details were detected';
 		}
 		const route = item.locations.map((location) => location.name).join(' to ');
 		const service = item.transport.operator
@@ -392,11 +392,11 @@
 	function accommodationStatusMessage(): string | null {
 		switch (accommodationPropertyStatus) {
 			case 'confirmed':
-				return 'Property details were confirmed from the selected Google link.';
+				return 'Property details were confirmed from the selected Google link';
 			case 'area-only':
-				return 'Google Hotels confirmed the stay dates, but this link names an area rather than a property. Paste the hotel’s Maps link to replace it.';
+				return 'Google Hotels confirmed the stay dates, but this link names an area rather than a property. Paste the hotel’s Maps link to replace it';
 			case 'unconfirmed':
-				return 'Google identified a likely property, but it could not be independently confirmed. Check the name or paste its Maps link.';
+				return 'Google identified a likely property, but it could not be independently confirmed. Check the name or paste its Maps link';
 			case null:
 				return null;
 		}
@@ -816,7 +816,7 @@
 		</header>
 
 		{#if creatorState === 'review'}
-			<p class="intro">Choose an item to review and complete before saving.</p>
+			<p class="intro">Choose an item to review and complete before saving</p>
 			<ul>
 				{#each importedItems as item, index (index)}
 					<li>
@@ -825,12 +825,12 @@
 							<span>{importedItemDescription(item)}</span>
 							{#if item.type === 'accommodation' && item.suggestedStartDate && item.suggestedEndDate}
 								<small
-									>Stay dates: {item.suggestedStartDate} to {item.suggestedEndDate}; review check-in and check-out.</small
+									>Stay dates: {item.suggestedStartDate} to {item.suggestedEndDate}; review check-in and check-out</small
 								>
 							{:else if item.suggestedStartDate}
-								<small>Suggested date: {item.suggestedStartDate}; confirm the time.</small>
+								<small>Suggested date: {item.suggestedStartDate}; confirm the time</small>
 							{:else}
-								<small>Confirm the schedule before saving.</small>
+								<small>Confirm the schedule before saving</small>
 							{/if}
 						</div>
 						<button onclick={() => selectImportedItem(item)} type="button">Review</button>
@@ -847,13 +847,13 @@
 			</p>
 			<p class="intro">
 				Where does this journey {endpointKind === 'departure' ? 'start' : 'end'}? A place, airport, station, stop, or
-				address is enough.
+				address is enough
 			</p>
 			<form class="shiori-form" onsubmit={(event) => moveToTransportEndpoint(event, endpointKind)}>
 				{#if candidateResolution}
 					<fieldset class="airport-candidate-picker">
 						<legend>Choose the airport for {candidateResolution.code}</legend>
-						<p>Google found more than one airport match. Select the one used by this journey.</p>
+						<p>Google found more than one airport match. Select the one used by this journey</p>
 						<div class="airport-candidate-options">
 							{#each candidateResolution.candidates as candidate, index (index)}
 								<label class="airport-candidate-choice">
@@ -886,7 +886,7 @@
 				</label>
 				<div class="maps-lookup">
 					<label class="shiori-form-label">
-						Google Maps link <span class="field-hint">Optional; we’ll fill in what we can.</span>
+						Google Maps link <span class="field-hint">Optional; we’ll fill in what we can</span>
 						<input
 							class="shiori-form-control"
 							bind:value={endpointDraft.googleMapsUrl}
@@ -905,7 +905,7 @@
 				</div>
 				<div class="maps-lookup">
 					<label class="shiori-form-label">
-						OpenRailwayMap link <span class="field-hint">Optional; import its station name or map position.</span>
+						OpenRailwayMap link <span class="field-hint">Optional; import its station name or map position</span>
 						<input
 							class="shiori-form-control"
 							bind:value={endpointDraft.openRailwayMapUrl}
@@ -932,7 +932,7 @@
 			</form>
 		{:else if creatorState === 'transport-details'}
 			<p class="wizard-progress">Step 3 of 4 · Journey details</p>
-			<p class="intro">Add only the details that help identify this trip. You’ll set its precise schedule next.</p>
+			<p class="intro">Add only the details that help identify this trip. You’ll set its precise schedule next</p>
 			<form class="shiori-form" onsubmit={moveToTransportReview}>
 				<label class="shiori-form-label">
 					Transport mode
@@ -953,7 +953,7 @@
 					</label>
 				</div>
 				{#if transportSchedule}
-					<p class="schedule-found">The imported scheduled times will be kept for the final review.</p>
+					<p class="schedule-found">The imported scheduled times will be kept for the final review</p>
 				{:else}
 					<DateTimeInput
 						dateTime={`${suggestedStartDate}T`}
@@ -964,10 +964,10 @@
 						pickerMode="date"
 						showTimeZonePicker={false}
 					/>
-					<p class="field-hint">Optional; used to prefill the schedule.</p>
+					<p class="field-hint">Optional; used to prefill the schedule</p>
 				{/if}
 				<label class="shiori-form-label">
-					Journey title <span class="field-hint">Optional; a route title is generated otherwise.</span>
+					Journey title <span class="field-hint">Optional; a route title is generated otherwise</span>
 					<input class="shiori-form-control" bind:value={transportTitle} placeholder="Travel: Melbourne to Tokyo" />
 				</label>
 				{#if transportErrorMessage}<p class="error" role="alert">{transportErrorMessage}</p>{/if}
@@ -980,8 +980,8 @@
 			<p class="wizard-progress">Step 4 of 4 · Review</p>
 			<p class="intro">
 				{transportSchedule
-					? 'The imported source found a scheduled journey. Confirm it before saving.'
-					: 'Confirm the journey. The next screen will ask for the departure time before you save it.'}
+					? 'The imported source found a scheduled journey. Confirm it before saving'
+					: 'Confirm the journey. The next screen will ask for the departure time before you save it'}
 			</p>
 			<section class="journey-summary" aria-label="Transport journey summary">
 				<strong>{journeyPreview()}</strong>
@@ -1025,7 +1025,7 @@
 		{:else if creatorState === 'accommodation-details'}
 			{@const stayNights = accommodationNightCount()}
 			<p class="wizard-progress">Accommodation review</p>
-			<p class="intro">Check the stay details, fill only what is missing, then save.</p>
+			<p class="intro">Check the stay details, fill only what is missing, then save</p>
 			<form
 				class="shiori-form"
 				onsubmit={(event) => {
@@ -1052,7 +1052,7 @@
 				<div class="maps-lookup">
 					<label class="shiori-form-label">
 						Google Maps or Google Hotels property link <span class="field-hint"
-							>Optional; we’ll fill in the property details we can.</span
+							>Optional; we’ll fill in the property details we can</span
 						>
 						<input
 							class="shiori-form-control"
@@ -1115,11 +1115,11 @@
 						/>
 					</div>
 					{#if hasGoogleHotelsSource() && (accommodationCheckInTime || accommodationCheckOutTime)}
-						<p class="schedule-found">Google Hotels supplied usual stay times. Confirm them against your booking.</p>
+						<p class="schedule-found">Google Hotels supplied usual stay times. Confirm them against your booking</p>
 					{/if}
 				{:else}
 					<p class="field-hint">
-						Times stay unknown; the itinerary will show the stay dates without inventing an exact time.
+						Times stay unknown; the itinerary will show the stay dates without inventing an exact time
 					</p>
 				{/if}
 				<details class="optional-details">
@@ -1246,7 +1246,7 @@
 		{:else}
 			<p class="intro">
 				Paste a Google Maps place or directions link, a Google Flights link, or a Google Hotels search or property link.
-				We’ll prefill what we can, then you can review it.
+				We’ll prefill what we can, then you can review it
 			</p>
 			<form class="shiori-form" onsubmit={importUrl}>
 				<label class="shiori-form-label">

@@ -1089,14 +1089,14 @@
 									<option value={option}>{option}</option>
 								{/each}
 							</select>
-							{#if mode === 'edit'}<span class="field-hint">Item type is locked after creation.</span>{/if}
+							{#if mode === 'edit'}<span class="field-hint">Item type is locked after creation</span>{/if}
 						</label>
 						<label class="shiori-form-label">
 							Title
 							<input class="shiori-form-control" bind:value={title} required />
 						</label>
 						<label class="shiori-form-label">
-							Notes <span class="field-hint">One note per line.</span>
+							Notes <span class="field-hint">One note per line</span>
 							<textarea class="shiori-form-control" bind:value={notes} rows="5"></textarea>
 						</label>
 					</fieldset>
@@ -1106,10 +1106,10 @@
 						{#if timingNeedsConfirmation}
 							<p class="timing-confirmation">
 								{suggestedStartDate && suggestedEndDate
-									? `The imported link confirms ${suggestedStartDate} to ${suggestedEndDate}. Add the check-in and check-out times before saving.`
+									? `The imported link confirms ${suggestedStartDate} to ${suggestedEndDate}. Add the check-in and check-out times before saving`
 									: suggestedStartDate
-										? `The imported link confirms ${suggestedStartDate}. Add the time before saving.`
-										: 'The imported link did not include a reliable time. Confirm the schedule before saving.'}
+										? `The imported link confirms ${suggestedStartDate}. Add the time before saving`
+										: 'The imported link did not include a reliable time. Confirm the schedule before saving'}
 							</p>
 						{/if}
 						<label class="shiori-form-label">
@@ -1152,12 +1152,12 @@
 									: timingNeedsConfirmation && suggestedStartDate
 										? 'time'
 										: 'date-time'}
-								timeZoneHint="Saved with this timing."
+								timeZoneHint="Saved with this timing"
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
 							/>
 							{#if itemType === 'transport'}
-								<p class="field-hint">Leave this empty to use the first transport stop's scheduled time.</p>
+								<p class="field-hint">Leave this empty to use the first transport stop's scheduled time</p>
 							{/if}
 							{#if !exactTimingDateOnly}
 								<label class="toggle-label">
@@ -1182,7 +1182,7 @@
 										: timingNeedsConfirmation && suggestedEndDate
 											? 'time'
 											: 'date-time'}
-									timeZoneHint="Saved with this timing."
+									timeZoneHint="Saved with this timing"
 									timeZone={startAtTimeZone}
 									{timeZoneOptions}
 								/>
@@ -1195,12 +1195,12 @@
 								onDateTimeChange={(value) => (nominalAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
 								portalTarget={dialogElement}
-								timeZoneHint="Saved with this timing."
+								timeZoneHint="Saved with this timing"
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
 							/>
 							<label class="shiori-form-label">
-								Tolerance <span class="field-hint">Minutes either side of the nominal time.</span>
+								Tolerance <span class="field-hint">Minutes either side of the nominal time</span>
 								<input
 									class="shiori-form-control"
 									bind:value={toleranceMinutes}
@@ -1218,7 +1218,7 @@
 								onDateTimeChange={(value) => (earliestAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
 								portalTarget={dialogElement}
-								timeZoneHint="Saved with this timing."
+								timeZoneHint="Saved with this timing"
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
 							/>
@@ -1229,7 +1229,7 @@
 								onDateTimeChange={(value) => (latestAt = value)}
 								onTimeZoneChange={changeItemTimeZone}
 								portalTarget={dialogElement}
-								timeZoneHint="Saved with this timing."
+								timeZoneHint="Saved with this timing"
 								timeZone={startAtTimeZone}
 								{timeZoneOptions}
 							/>
@@ -1296,11 +1296,11 @@
 											<input class="shiori-form-control" bind:value={location.address} />
 										</label>
 										<label class="shiori-form-label">
-											Google Maps link <span class="field-hint">Shown with this location.</span>
+											Google Maps link <span class="field-hint">Shown with this location</span>
 											<input class="shiori-form-control" bind:value={location.googleMapsUrl} inputmode="url" />
 										</label>
 										<label class="shiori-form-label">
-											OpenRailwayMap link <span class="field-hint">Shown with this location.</span>
+											OpenRailwayMap link <span class="field-hint">Shown with this location</span>
 											<input class="shiori-form-control" bind:value={location.openRailwayMapUrl} inputmode="url" />
 										</label>
 										<div class="field-grid">
@@ -1351,17 +1351,17 @@
 									/>
 								</label>
 								<label class="shiori-form-label">
-									Seat <span class="field-hint">Admin and sudo only.</span>
+									Seat <span class="field-hint">Admin and sudo only</span>
 									<input class="shiori-form-control" bind:value={transportSeat} />
 								</label>
 							</div>
 							{#if locations.length === 0}
-								<p class="transport-empty">Add locations under Places before adding stop details.</p>
+								<p class="transport-empty">Add locations under Places before adding stop details</p>
 							{:else}
 								{#if timingNeedsConfirmation && suggestedStartDate}
 									<p class="field-hint">
 										The selected departure date is prefilled for each stop. Change an arrival date if the journey
-										crosses midnight.
+										crosses midnight
 									</p>
 								{/if}
 								<div class="transport-location-list">
@@ -1383,20 +1383,20 @@
 														onDateTimeChange={(value) => (stop.scheduledAt = value)}
 														onTimeZoneChange={(timeZone) => changeStopTimeZone(stop, timeZone)}
 														portalTarget={dialogElement}
-														timeZoneHint="Saved with this stop."
+														timeZoneHint="Saved with this stop"
 														timeZone={stop.timeZone}
 														{timeZoneOptions}
 													/>
 													{#if locationIndex === 0 && !optionalText(stop.scheduledAt)}
-														<p class="field-hint">Uses the Schedule time until you set a different stop time.</p>
+														<p class="field-hint">Uses the Schedule time until you set a different stop time</p>
 													{/if}
 													<label class="shiori-form-label">
-														Platform <span class="field-hint">Admin and sudo only.</span>
+														Platform <span class="field-hint">Admin and sudo only</span>
 														<input class="shiori-form-control" bind:value={stop.platform} />
 													</label>
 												</div>
 											{:else}
-												<p class="transport-empty">Stop details are missing for this location.</p>
+												<p class="transport-empty">Stop details are missing for this location</p>
 											{/if}
 										</section>
 									{/each}
@@ -1441,7 +1441,7 @@
 
 					<fieldset class="sensitive-section" id="editor-cost">
 						<legend>Cost</legend>
-						<p>Only admin and sudo accounts can view costs.</p>
+						<p>Only admin and sudo accounts can view costs</p>
 						<label class="toggle-label">
 							<input bind:checked={costEnabled} type="checkbox" />
 							Add a cost
@@ -1478,12 +1478,12 @@
 							</div>
 							{#if costPaid}
 								<p class="field-hint">
-									Shiori saves the ECB rate and {localCurrency} equivalent when you save this paid cost.
+									Shiori saves the ECB rate and {localCurrency} equivalent when you save this paid cost
 								</p>
 							{/if}
 							{#if item.cost?.status === 'paid'}
 								<p class="field-hint">
-									This paid cost keeps its saved rate. To correct its amount or currency, mark it unpaid and save first.
+									This paid cost keeps its saved rate. To correct its amount or currency, mark it unpaid and save first
 								</p>
 							{/if}
 						{/if}
@@ -1491,7 +1491,7 @@
 							<h3>Linked expenses</h3>
 							<p>
 								Link a pass or package expense to this item. Linked expenses are recorded once in the cost summary; the
-								direct cost above remains separate.
+								direct cost above remains separate
 							</p>
 							{#if linkedExpenses.length > 0}
 								<ul class="linked-expense-list">
@@ -1505,7 +1505,7 @@
 									{/each}
 								</ul>
 							{:else}
-								<p class="field-hint">No expenses are linked to this item.</p>
+								<p class="field-hint">No expenses are linked to this item</p>
 							{/if}
 							{#if selectableExpenses.length > 0}
 								<div class="linked-expense-picker">
@@ -1526,14 +1526,14 @@
 									>
 								</div>
 							{:else}
-								<p class="field-hint">No other expenses are currently available to link.</p>
+								<p class="field-hint">No other expenses are currently available to link</p>
 							{/if}
 						</div>
 					</fieldset>
 
 					<fieldset class="sensitive-section" id="editor-private">
 						<legend>Private details</legend>
-						<p>Only admin and sudo accounts can view these details.</p>
+						<p>Only admin and sudo accounts can view these details</p>
 						<label class="toggle-label">
 							<input bind:checked={reservationEnabled} type="checkbox" />
 							Add reservation details
