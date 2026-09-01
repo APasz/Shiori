@@ -4,13 +4,30 @@ import { assertProductionConfiguration } from '$lib/server/production-config';
 import { sessionCookieName, sessionCookieOptions } from '$lib/server/session';
 import { initializeStore } from '$lib/server/store/persistence';
 import { refreshSession } from '$lib/server/store/sessions';
+import { initializeSystemMetrics, shutdownSystemMetrics } from '$lib/server/system-metrics';
 import { defaultColourway } from '$lib/theme/colourway';
 
 assertProductionConfiguration(process.env);
 
+let systemMetricsShutdownRegistered = false;
+
+function registerSystemMetricsShutdown(): void {
+	if (systemMetricsShutdownRegistered) {
+		return;
+	}
+	systemMetricsShutdownRegistered = true;
+	process.once('sveltekit:shutdown', () => {
+		void shutdownSystemMetrics().catch((error: unknown) => {
+			console.error('Shiori system metrics could not finish shutting down.', error);
+		});
+	});
+}
+
 export const init: ServerInit = async () => {
 	if (!building) {
 		await initializeStore();
+		await initializeSystemMetrics();
+		registerSystemMetricsShutdown();
 	}
 };
 

@@ -6,9 +6,12 @@ import { defaultColourway } from '$lib/theme/colourway';
 
 const refreshSession = vi.hoisted(() => vi.fn());
 const initializeStore = vi.hoisted(() => vi.fn());
+const initializeSystemMetrics = vi.hoisted(() => vi.fn());
+const shutdownSystemMetrics = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/store/sessions', () => ({ refreshSession }));
 vi.mock('$lib/server/store/persistence', () => ({ initializeStore }));
+vi.mock('$lib/server/system-metrics', () => ({ initializeSystemMetrics, shutdownSystemMetrics }));
 
 import { handle, init } from './hooks.server';
 
@@ -41,12 +44,18 @@ describe('server hook', () => {
 	beforeEach(() => {
 		refreshSession.mockReset();
 		initializeStore.mockReset();
+		initializeSystemMetrics.mockReset();
+		shutdownSystemMetrics.mockReset();
 	});
 
 	it('initializes the store before accepting requests', async () => {
 		await init();
 
 		expect(initializeStore).toHaveBeenCalledOnce();
+		expect(initializeSystemMetrics).toHaveBeenCalledOnce();
+		expect(initializeStore.mock.invocationCallOrder[0]).toBeLessThan(
+			initializeSystemMetrics.mock.invocationCallOrder[0]
+		);
 	});
 
 	it('refreshes the browser cookie when the authenticated session is renewed', async () => {

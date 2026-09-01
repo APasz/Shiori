@@ -5,6 +5,7 @@ import { forceReleaseAllEditLocks, hasActiveEditSessions } from '$lib/server/sto
 import { StoreError } from '$lib/server/store/error';
 import { forceLogoutAllUsers, listActiveSessionUsers } from '$lib/server/store/sessions';
 import { isSudoUser } from '$lib/server/store/auth';
+import { serverMetricsSnapshot } from '$lib/server/system-metrics';
 
 async function requireAdmin(user: App.Locals['user']) {
 	if (!user) {
@@ -22,6 +23,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		currentUser: user,
 		hasActiveEdits,
+		metrics: serverMetricsSnapshot(),
 		users
 	};
 };

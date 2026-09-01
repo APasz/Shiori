@@ -90,6 +90,7 @@ data/
 ├── shares.json
 ├── sessions.json
 ├── edit-locks.json
+├── system-metrics.json
 └── trips/
     └── your-trip.json
 ```
@@ -107,6 +108,13 @@ edit locks are intentionally designed for this small, single-instance deployment
 Shiori keeps a validated copy of the store in process memory. Changes made through Shiori are
 available immediately; if you edit a managed JSON file directly, restart the server before relying
 on the change.
+
+The sudo-only Admin page samples host CPU and network counters once per second, shows current RAM
+usage, and retains the highest one-second network rate from each hour in `system-metrics.json` for
+a rolling 48 hours. Network figures total every non-loopback interface on the host, so they include
+traffic from Caddy and other host services rather than just Shiori. The supplied Linux deployment
+exposes the required `/proc` counters; if they are unavailable, the affected metric is shown as
+unavailable.
 
 Anonymous public itinerary pages may be cached for one minute and served stale while revalidating
 for up to five additional minutes. Signed-in views and every other response remain uncached.

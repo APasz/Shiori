@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { unixEpochMilliseconds } from './unix-time';
+import { unixTimestampSchema } from '$lib/unix-timestamp-schema';
 import { isValidIanaTimeZone } from './zoned-time';
 
 export const itineraryIdentifierSchema = z
@@ -14,11 +14,7 @@ export const calendarDateSchema = z
 		const date = new Date(Date.UTC(year, month - 1, day));
 		return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 	}, 'Use a valid calendar date.');
-export const unixTimestampSchema = z
-	.number()
-	.int('Use a whole Unix-millisecond timestamp.')
-	.min(unixEpochMilliseconds, 'Use a Unix-millisecond timestamp no earlier than the Unix epoch.')
-	.max(8_640_000_000_000_000, 'Use a valid Unix-millisecond timestamp.');
+export { unixTimestampSchema };
 export const ianaTimeZoneSchema = z
 	.string()
 	.trim()

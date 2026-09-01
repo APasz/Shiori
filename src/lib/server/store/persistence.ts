@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, open, readFile, readdir, rename, unlink } from 'node:fs/promises';
+import { readFile, readdir, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { itineraryIdentifierSchema } from '$lib/itinerary/schema';
+import { persistentDataDirectory, synchronizeDirectory, writeManagedJsonFile } from '$lib/server/persistent-files';
 import { migrateStoredTripFile, migrateStoredUsersFile, migrateTripsToSudoOwnership } from './migrations';
 import {
 	storedDataSchema,
@@ -23,8 +23,7 @@ import {
 import { preparePasswordHash } from './password';
 import { isExpired } from './time';
 
-const jsonIndentation = 4;
-const dataDirectory = process.env.SHIORI_DATA_DIRECTORY ?? join(process.cwd(), 'data');
+const dataDirectory = persistentDataDirectory;
 const tripsDataDirectory = join(dataDirectory, 'trips');
 const usersDataPath = join(dataDirectory, 'users.json');
 const sharesDataPath = join(dataDirectory, 'shares.json');
@@ -276,39 +275,6 @@ async function readSessionData(): Promise<SessionData> {
 	return { sessions: sessions.sessions, users: users.users };
 }
 
-async function synchronizeDirectory(directoryPath: string): Promise<void> {
-	const directory = await open(directoryPath, 'r');
-	try {
-		await directory.sync();
-	} finally {
-		await directory.close();
-	}
-}
-
-async function writeDurableFile(destinationPath: string, source: string): Promise<void> {
-	const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`;
-	let renamed = false;
-
-	try {
-		const temporaryFile = await open(temporaryPath, 'wx', 0o600);
-		try {
-			await temporaryFile.writeFile(source, 'utf8');
-			await temporaryFile.sync();
-		} finally {
-			await temporaryFile.close();
-		}
-
-		await rename(temporaryPath, destinationPath);
-		renamed = true;
-		await synchronizeDirectory(dirname(destinationPath));
-	} catch (error: unknown) {
-		if (!renamed) {
-			await unlink(temporaryPath).catch(() => undefined);
-		}
-		throw error;
-	}
-}
-
 function persistTrip(trip: StoredTrip): PersistedTrip {
 	return {
 		id: trip.id,
@@ -319,14 +285,6 @@ function persistTrip(trip: StoredTrip): PersistedTrip {
 		createdAt: trip.createdAt,
 		updatedAt: trip.updatedAt
 	};
-}
-
-async function writeManagedJsonFile(filePath: string, data: unknown, preserveExistingBackup = false): Promise<void> {
-	await mkdir(dirname(filePath), { recursive: true });
-	if (existsSync(filePath) && !preserveExistingBackup) {
-		await writeDurableFile(`${filePath}.backup`, await readFile(filePath, 'utf8'));
-	}
-	await writeDurableFile(filePath, `${JSON.stringify(data, null, jsonIndentation)}\n`);
 }
 
 async function deleteManagedTripFile(slug: string): Promise<void> {
