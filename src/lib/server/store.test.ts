@@ -1171,7 +1171,7 @@ describe('JSON store', () => {
 		expect(deletedTrip.itinerary.expenses).toEqual([]);
 	});
 
-	it('saves, replaces, and deletes separate planning notes', async () => {
+	it('saves, replaces, clears, and deletes separate planning notes', async () => {
 		const store = await import('./store');
 		const owner = await store.createInitialSudo('owner', 'a strong test password');
 		const trip = await createTestTrip(store, owner.id);
@@ -1236,11 +1236,33 @@ describe('JSON store', () => {
 		}
 		expect(deletedTrip.itinerary.notes).toEqual([]);
 
+		const restoredNote = await store.saveNote({
+			note: dayNote,
+			revision: deletedTrip.revision,
+			tripId: deletedTrip.id,
+			userId: owner.id
+		});
+		expect(restoredNote).toEqual({ revision: deletedTrip.revision + 1 });
+
+		await expect(
+			store.saveNote({
+				note: { ...dayNote, entries: [], text: '   ' },
+				revision: restoredNote.revision,
+				tripId: deletedTrip.id,
+				userId: owner.id
+			})
+		).resolves.toEqual({ revision: restoredNote.revision + 1 });
+		const emptiedTrip = await store.getTripView(trip.slug, owner);
+		if (!emptiedTrip || emptiedTrip.access !== 'sudo') {
+			throw new Error('The owner should be able to read a cleared note.');
+		}
+		expect(emptiedTrip.itinerary.notes).toEqual([]);
+
 		await expect(
 			store.saveNote({
 				note: { entries: [], kind: 'trip', text: '   ', timeZone: 'UTC' },
-				revision: deletedTrip.revision,
-				tripId: deletedTrip.id,
+				revision: emptiedTrip.revision,
+				tripId: emptiedTrip.id,
 				userId: owner.id
 			})
 		).rejects.toMatchObject({ status: 400 });

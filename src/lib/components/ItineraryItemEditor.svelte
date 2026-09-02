@@ -37,6 +37,7 @@
 	} from '$lib/itinerary/zoned-time';
 	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import { defaultEndDateForTimingInput } from '$lib/itinerary/timing-input';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
 	import { resolveTransportScheduleStart, type TransportStopSchedule } from '$lib/itinerary/transport-stop-schedule';
@@ -503,6 +504,14 @@
 
 		const timestamp = zonedDateTimeToUnixMilliseconds(scheduledAt, firstStop.timeZone);
 		return timestamp === null ? undefined : { scheduledAt: timestamp, timeZone: firstStop.timeZone };
+	}
+
+	function defaultEndDate(): string | undefined {
+		return defaultEndDateForTimingInput(
+			startAt,
+			itemType === 'transport' ? firstTransportStopSchedule()?.scheduledAt : undefined,
+			startAtTimeZone
+		);
 	}
 
 	function completeDateTimeValue(value: string): string | undefined {
@@ -1168,7 +1177,7 @@
 							{#if endAtEnabled}
 								<DateTimeInput
 									dateTime={endAt}
-									defaultDate={startAt.slice(0, 10)}
+									defaultDate={defaultEndDate()}
 									id="item-end"
 									label={exactTimingDateOnly
 										? 'Check-out date'

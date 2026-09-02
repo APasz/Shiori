@@ -43,17 +43,22 @@ export async function saveTripDetails(
 
 export async function saveNote(input: VersionedTripMutation & { note: unknown }): Promise<{ revision: number }> {
 	const note = itineraryNoteSchema.parse(input.note);
-	if (!noteHasContent(note)) {
-		throw new StoreError(400, 'Add text or at least one structured entry before saving a note.');
-	}
+	const hasContent = noteHasContent(note);
 
 	return transaction(
 		(data) => {
 			const trip = getTripForMutation(data, input.tripId, input.userId);
 			assertExpectedRevision(trip, input.revision);
 			assertNoActiveEditLock(data, trip);
+			const noteExists = trip.itinerary.notes.some((candidate) => noteMatchesTarget(candidate, note));
+			if (!hasContent && !noteExists) {
+				throw new StoreError(400, 'Add text or at least one structured entry before saving a note.');
+			}
 			const notes = trip.itinerary.notes.filter((existingNote) => !noteMatchesTarget(existingNote, note));
-			return commitItineraryChange(trip, { ...trip.itinerary, notes: [...notes, note] });
+			return commitItineraryChange(trip, {
+				...trip.itinerary,
+				notes: hasContent ? [...notes, note] : notes
+			});
 		},
 		{ global: [], tripIds: [input.tripId] }
 	);
