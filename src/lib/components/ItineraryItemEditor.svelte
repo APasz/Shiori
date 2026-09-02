@@ -332,7 +332,7 @@
 	async function importLocation(): Promise<void> {
 		const url = locationImportUrl.trim();
 		if (!url) {
-			locationImportError = 'Paste a Google Maps or OpenRailwayMap link first.';
+			locationImportError = 'Paste a Google Maps, Google Share, or OpenRailwayMap link first.';
 			return;
 		}
 
@@ -1255,7 +1255,7 @@
 									class="shiori-form-control"
 									bind:value={locationImportUrl}
 									inputmode="url"
-									placeholder="Paste a Google Maps or OpenRailwayMap link"
+									placeholder="Paste a Google Maps, Google Share, or OpenRailwayMap link"
 								/>
 							</label>
 							<button

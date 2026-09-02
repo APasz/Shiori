@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const privateEnvironment = vi.hoisted(() => ({ GOOGLE_PLACES_API_KEY: undefined as string | undefined }));
 
 vi.mock('$env/dynamic/private', () => ({ env: privateEnvironment }));
-import { isGoogleHotelPropertyUrl, isGoogleMapsUrl } from '../itinerary/schema';
+import {
+	googleMapsInputUrlSchema,
+	isGoogleHotelPropertyUrl,
+	isGoogleMapsInputUrl,
+	isGoogleMapsUrl,
+	isGoogleShareUrl
+} from '../itinerary/schema';
 import {
 	GoogleMapsResolveError,
 	googleMapsDirectionsCoordinates,
@@ -14,6 +20,9 @@ import {
 
 const melbourneAirportUrl =
 	'https://www.google.com/maps/place/Melbourne+Airport/@-37.7332209,144.8645358,27101m/data=!3m1!1e3!4m6!3m5!1s0x6ad659a9ebaa3917:0xf045676052ff090!8m2!3d-37.6708228!4d144.8429763!16zL20vMDFuZmx3';
+const googleShareUrl = 'https://share.google/gkEVZ648z0N43K3Ea';
+const googleShareRedirectUrl = 'https://www.google.com/share.google?q=gkEVZ648z0N43K3Ea';
+const googleShareSearchUrl = 'https://www.google.com/search?kgmid=%2Fg%2F122d8d42&q=Bungo+Mori+Roundhouse';
 
 afterEach(() => {
 	privateEnvironment.GOOGLE_PLACES_API_KEY = undefined;
@@ -60,11 +69,54 @@ describe('Google Maps location parsing', () => {
 		expect(isGoogleMapsUrl('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).toBe(true);
 		expect(isGoogleMapsUrl('https://www.google.com.au/maps/place/Melbourne+Airport')).toBe(true);
 		expect(isGoogleMapsUrl('https://www.google.com/search?q=Melbourne+Airport')).toBe(false);
+		expect(isGoogleShareUrl(googleShareUrl)).toBe(true);
+		expect(isGoogleShareUrl('https://share.google/')).toBe(false);
+		expect(isGoogleShareUrl('https://share.google/first/second')).toBe(false);
+		expect(isGoogleShareUrl('https://www.google.com/share.google?q=gkEVZ648z0N43K3Ea')).toBe(false);
+		expect(isGoogleMapsInputUrl('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).toBe(true);
+		expect(isGoogleMapsInputUrl(googleShareUrl)).toBe(true);
+		expect(isGoogleMapsInputUrl('https://www.google.com/search?q=Bungo+Mori+Roundhouse')).toBe(false);
+		expect(googleMapsInputUrlSchema.safeParse(googleShareUrl).success).toBe(true);
+		expect(googleMapsInputUrlSchema.safeParse('https://www.google.com/search?q=Bungo+Mori+Roundhouse').success).toBe(
+			false
+		);
 		expect(isGoogleHotelPropertyUrl('https://www.google.com/travel/hotels/s/jqZoDPSDyUE5pcq16')).toBe(true);
 		expect(isGoogleHotelPropertyUrl('https://www.google.com/travel/hotels/entity/CgsI54Ov_PqD7beHARAB')).toBe(true);
 		expect(isGoogleHotelPropertyUrl('https://www.google.com/travel/hotels/anything/else')).toBe(false);
 
 		expect(() => parseGoogleMapsLocationUrl(new URL('https://example.com/?q=-37,144'))).toThrow(GoogleMapsResolveError);
+	});
+
+	it('resolves Google Share place links to canonical Maps search URLs', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(new Response('redirect', { status: 302, headers: { location: googleShareRedirectUrl } }))
+			.mockResolvedValueOnce(new Response('redirect', { status: 301, headers: { location: googleShareSearchUrl } }))
+			.mockResolvedValueOnce(new Response('Google Search result'));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleMapsLocation(googleShareUrl)).resolves.toEqual({
+			googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Bungo+Mori+Roundhouse',
+			name: 'Bungo Mori Roundhouse'
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it('rejects Google Share links that do not resolve to a Knowledge Graph place', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(new Response('redirect', { status: 302, headers: { location: googleShareRedirectUrl } }))
+			.mockResolvedValueOnce(
+				new Response('redirect', {
+					status: 301,
+					headers: { location: 'https://www.google.com/search?q=Bungo+Mori+Roundhouse' }
+				})
+			)
+			.mockResolvedValueOnce(new Response('Google Search result'));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleMapsLocation(googleShareUrl)).rejects.toMatchObject({ status: 422 });
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 
 	it('follows Google-only redirects before parsing the resolved Maps URL', async () => {
@@ -133,6 +185,17 @@ describe('Google Maps location parsing', () => {
 			status: 400
 		});
 		expect(unsafeRedirectFetch).toHaveBeenCalledTimes(1);
+
+		const unsafeGoogleShareRedirectFetch = vi.fn().mockResolvedValue(
+			new Response('redirect', {
+				status: 302,
+				headers: { location: 'https://example.com/location' }
+			})
+		);
+		vi.stubGlobal('fetch', unsafeGoogleShareRedirectFetch);
+
+		await expect(resolveGoogleMapsLocation(googleShareUrl)).rejects.toMatchObject({ status: 400 });
+		expect(unsafeGoogleShareRedirectFetch).toHaveBeenCalledTimes(1);
 
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network unavailable')));
 		await expect(resolveGoogleMapsLocation('https://maps.app.goo.gl/KKWKSZ7XFAP4v8y28')).rejects.toMatchObject({

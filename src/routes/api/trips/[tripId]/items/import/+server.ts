@@ -13,7 +13,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 	const payload = itineraryItemImportRequestSchema.safeParse(await requestJson(request));
 	if (!payload.success) {
-		return json({ message: 'Provide a valid Google Maps, Google Flights, or Google Hotels link.' }, { status: 400 });
+		return json(
+			{ message: 'Provide a valid Google Maps, Google Share, Google Flights, or Google Hotels link.' },
+			{ status: 400 }
+		);
 	}
 
 	try {

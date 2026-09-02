@@ -1,4 +1,11 @@
-import { googleMapsUrlSchema, isGoogleMapsUrl, type ItineraryLocation } from '$lib/itinerary/schema';
+import {
+	googleMapsInputUrlSchema,
+	googleMapsUrlSchema,
+	isGoogleHostname,
+	isGoogleMapsUrl,
+	isGoogleShareUrl,
+	type ItineraryLocation
+} from '$lib/itinerary/schema';
 import { lookupGoogleMapsPlace } from '$lib/server/google-places';
 
 const maximumRedirects = 5;
@@ -144,7 +151,26 @@ async function fetchGoogleMapsUrl(url: URL): Promise<Response> {
 	}
 }
 
-function redirectUrl(response: Response, currentUrl: URL): URL {
+function googleSharePlaceName(url: URL): string | undefined {
+	if (url.protocol !== 'https:' || !isGoogleHostname(url)) {
+		return undefined;
+	}
+	if (url.pathname !== '/search' || !/^\/(?:g|m)\/[A-Za-z0-9_-]+$/.test(url.searchParams.get('kgmid') ?? '')) {
+		return undefined;
+	}
+	const name = url.searchParams.get('q')?.trim();
+	return name === '' ? undefined : name;
+}
+
+function isGoogleShareRedirectUrl(url: URL): boolean {
+	return (
+		url.protocol === 'https:' &&
+		isGoogleHostname(url) &&
+		(url.pathname === '/share.google' || url.pathname === '/search')
+	);
+}
+
+function redirectUrl(response: Response, currentUrl: URL, allowGoogleShareRedirect: boolean): URL {
 	const location = response.headers.get('location');
 	if (!location) {
 		throw new GoogleMapsResolveError(502, 'Google Maps returned an invalid redirect.');
@@ -152,7 +178,7 @@ function redirectUrl(response: Response, currentUrl: URL): URL {
 
 	try {
 		const nextUrl = new URL(location, currentUrl);
-		if (!isGoogleMapsUrl(nextUrl.toString())) {
+		if (!isGoogleMapsUrl(nextUrl.toString()) && !(allowGoogleShareRedirect && isGoogleShareRedirectUrl(nextUrl))) {
 			throw new GoogleMapsResolveError(400, 'Google Maps redirected to an unsupported address.');
 		}
 		return nextUrl;
@@ -188,11 +214,12 @@ export async function enrichGoogleMapsLocation(location: GoogleMapsLocationImpor
 }
 
 export async function resolveGoogleMapsUrl(inputUrl: string): Promise<URL> {
-	const input = googleMapsUrlSchema.safeParse(inputUrl);
+	const input = googleMapsInputUrlSchema.safeParse(inputUrl);
 	if (!input.success) {
-		throw new GoogleMapsResolveError(400, 'Use a Google Maps or maps.app.goo.gl URL.');
+		throw new GoogleMapsResolveError(400, 'Use a Google Maps, maps.app.goo.gl, or share.google URL.');
 	}
 
+	const isGoogleShareLink = isGoogleShareUrl(input.data);
 	let currentUrl = new URL(input.data);
 	for (let redirectCount = 0; redirectCount <= maximumRedirects; redirectCount += 1) {
 		const response = await fetchGoogleMapsUrl(currentUrl);
@@ -201,7 +228,7 @@ export async function resolveGoogleMapsUrl(inputUrl: string): Promise<URL> {
 				if (redirectCount === maximumRedirects) {
 					throw new GoogleMapsResolveError(502, 'Google Maps redirected too many times.');
 				}
-				currentUrl = redirectUrl(response, currentUrl);
+				currentUrl = redirectUrl(response, currentUrl, isGoogleShareLink);
 			} finally {
 				await cancelResponseBody(response);
 			}
@@ -213,7 +240,14 @@ export async function resolveGoogleMapsUrl(inputUrl: string): Promise<URL> {
 			throw new GoogleMapsResolveError(502, 'Google Maps could not resolve this link.');
 		}
 
-		return currentUrl;
+		if (isGoogleMapsUrl(currentUrl.toString())) {
+			return currentUrl;
+		}
+		const placeName = isGoogleShareLink ? googleSharePlaceName(currentUrl) : undefined;
+		if (placeName) {
+			return new URL(googleMapsSearchUrl(placeName));
+		}
+		throw new GoogleMapsResolveError(422, 'The Google Share link did not identify a place.');
 	}
 
 	throw new GoogleMapsResolveError(502, 'Google Maps redirected too many times.');

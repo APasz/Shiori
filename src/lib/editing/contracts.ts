@@ -5,6 +5,7 @@ import {
 	expenseSchema,
 	externalUrlSchema,
 	googleHotelPropertyUrlSchema,
+	googleMapsInputUrlSchema,
 	googleMapsUrlSchema,
 	ianaTimeZoneSchema,
 	itineraryIdentifierSchema,
@@ -124,7 +125,7 @@ export const editLockTokenRequestSchema = z.strictObject({
 	lockToken: z.string().uuid()
 });
 
-const locationMapUrlSchema = z.union([googleMapsUrlSchema, googleHotelPropertyUrlSchema, openRailwayMapUrlSchema]);
+const locationMapUrlSchema = z.union([googleMapsInputUrlSchema, googleHotelPropertyUrlSchema, openRailwayMapUrlSchema]);
 
 export const locationResolveRequestSchema = z.strictObject({
 	url: locationMapUrlSchema

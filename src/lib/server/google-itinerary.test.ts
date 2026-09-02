@@ -28,6 +28,9 @@ const selectedKagoshimaHotelUrl =
 	'https://www.google.com/travel/hotels/entity/ChoIxcGlvN3r497pARoNL2cvMTF2ajMxcW56NBAB?q=accommodation%20kagoshima&ts=CAESBgoCCAMQARo3ChkSFQoIL20vMDQ5d206CUthZ29zaGltYRoAEhoSFAoHCOoPEAoYGxIHCOoPEAoYHBgBMgIIASoJCgU6A0FVRBoA';
 const eleHotelMapsUrl =
 	'https://www.google.com/maps/place/ELE+Hotel+%E6%A8%9F%E8%91%89/@34.8627692,135.6751333,1405m/data=!3m1!1e3!4m11!3m10!1s0x60011babd174ef51:0x876fb41faf8bc1e7!5m4!1s2026-11-02!2i2!4m1!1i2!8m2!3d34.8627692!4d135.6777082!16s%2Fg%2F11rmvc847r';
+const googleShareUrl = 'https://share.google/gkEVZ648z0N43K3Ea';
+const googleShareRedirectUrl = 'https://www.google.com/share.google?q=gkEVZ648z0N43K3Ea';
+const googleShareSearchUrl = 'https://www.google.com/search?kgmid=%2Fg%2F122d8d42&q=Bungo+Mori+Roundhouse';
 
 afterEach(() => {
 	privateEnvironment.AERODATABOX_API_KEY = undefined;
@@ -215,6 +218,30 @@ describe('Google itinerary import', () => {
 				locations: [expect.objectContaining({ name: 'Flinders Street Station', role: 'primary' })]
 			})
 		]);
+	});
+
+	it('imports a Google Share place link as an activity', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(new Response('redirect', { status: 302, headers: { location: googleShareRedirectUrl } }))
+			.mockResolvedValueOnce(new Response('redirect', { status: 301, headers: { location: googleShareSearchUrl } }))
+			.mockResolvedValueOnce(new Response('Google Search result'));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(resolveGoogleItineraryUrl(googleShareUrl)).resolves.toMatchObject([
+			expect.objectContaining({
+				type: 'activity',
+				title: 'Bungo Mori Roundhouse',
+				locations: [
+					expect.objectContaining({
+						googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Bungo+Mori+Roundhouse',
+						name: 'Bungo Mori Roundhouse',
+						role: 'primary'
+					})
+				]
+			})
+		]);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 
 	it('imports an explicitly named hotel Maps link as an accommodation review candidate', async () => {

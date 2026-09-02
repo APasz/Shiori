@@ -186,7 +186,7 @@
 		event.preventDefault();
 		const value = url.trim();
 		if (!value) {
-			errorMessage = 'Paste a Google Maps, Google Flights, or Google Hotels link first.';
+			errorMessage = 'Paste a Google Maps, Google Share, Google Flights, or Google Hotels link first.';
 			return;
 		}
 
@@ -410,7 +410,8 @@
 	async function resolveAccommodationLocation(): Promise<void> {
 		const url = accommodationLocation.googleMapsUrl.trim();
 		if (url === '') {
-			accommodationErrorMessage = 'Paste a Google Maps or Google Hotels property link to look up the property.';
+			accommodationErrorMessage =
+				'Paste a Google Maps, Google Share, or Google Hotels property link to look up the property.';
 			return;
 		}
 
@@ -707,7 +708,7 @@
 	}
 
 	function mapProviderLabel(provider: TransportEndpointMapProvider): string {
-		return provider === 'google-maps' ? 'Google Maps' : 'OpenRailwayMap';
+		return provider === 'google-maps' ? 'Google Maps or Google Share' : 'OpenRailwayMap';
 	}
 
 	async function resolveTransportEndpoint(
@@ -886,12 +887,12 @@
 				</label>
 				<div class="maps-lookup">
 					<label class="shiori-form-label">
-						Google Maps link <span class="field-hint">Optional; we’ll fill in what we can</span>
+						Google Maps or Google Share link <span class="field-hint">Optional; we’ll fill in what we can</span>
 						<input
 							class="shiori-form-control"
 							bind:value={endpointDraft.googleMapsUrl}
 							inputmode="url"
-							placeholder="Paste a Google Maps link"
+							placeholder="Paste a Google Maps or Google Share link"
 						/>
 					</label>
 					<button
@@ -1051,14 +1052,14 @@
 				</label>
 				<div class="maps-lookup">
 					<label class="shiori-form-label">
-						Google Maps or Google Hotels property link <span class="field-hint"
+						Google Maps, Google Share, or Google Hotels property link <span class="field-hint"
 							>Optional; we’ll fill in the property details we can</span
 						>
 						<input
 							class="shiori-form-control"
 							bind:value={accommodationLocation.googleMapsUrl}
 							inputmode="url"
-							placeholder="Paste a Google Maps or Google Hotels property link"
+							placeholder="Paste a Google Maps, Google Share, or Google Hotels property link"
 						/>
 					</label>
 					<button
@@ -1245,8 +1246,8 @@
 			</form>
 		{:else}
 			<p class="intro">
-				Paste a Google Maps place or directions link, a Google Flights link, or a Google Hotels search or property link.
-				We’ll prefill what we can, then you can review it
+				Paste a Google Maps or Google Share place or directions link, a Google Flights link, or a Google Hotels search
+				or property link. We’ll prefill what we can, then you can review it
 			</p>
 			<form class="shiori-form" onsubmit={importUrl}>
 				<label class="shiori-form-label">
@@ -1255,7 +1256,7 @@
 						class="shiori-form-control"
 						bind:value={url}
 						inputmode="url"
-						placeholder="Paste a Google Maps, Google Flights, or Google Hotels link"
+						placeholder="Paste a Google Maps, Google Share, Google Flights, or Google Hotels link"
 					/>
 				</label>
 				{#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}

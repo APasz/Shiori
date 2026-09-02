@@ -394,7 +394,7 @@ trip's local currency affects later payments only; previous snapshots continue t
 original saved currency.
 
 The sudo user can add, edit, and delete itinerary items from the itinerary page. New items begin
-with an import-first dialog: Google Maps place and directions links, selected Google Flights links,
+with an import-first dialog: Google Maps and Google Share place and directions links, selected Google Flights links,
 and Google Hotels search or property links prefill the fields that can be parsed safely. Hotels imports create an
 accommodation item from the destination or selected property and the link's check-in/check-out dates. Property
 links can also provide the hotel's published check-in and check-out times. When a Hotels link has a selected
@@ -403,8 +403,8 @@ search area. Accommodation imports and manual accommodation creation use one foc
 dates, property-local time zone, optional times, then optional booking and cost. When times are unknown,
 Shiori saves the stay as a date-only range rather than inventing an exact time. Transport imports
 and manual transport creation use a four-step journey flow: departure,
-arrival, journey details, then review. Each endpoint can be looked up from an optional Google Maps link
-or OpenRailwayMap permalink, and the original map link is retained. OpenRailwayMap contributes a station
+arrival, journey details, then review. Each endpoint can be looked up from an optional Google Maps or Google Share link
+or OpenRailwayMap permalink, and the resolved map link is retained. OpenRailwayMap contributes a station
 name and/or its map position only; it does not provide journey schedules, so rail times still need
 confirmation. The final transport schedule and save step remains in the shared editor, so a missing or unreliable
 time must still be confirmed before saving. Advanced changes remain available in the shared editor after any

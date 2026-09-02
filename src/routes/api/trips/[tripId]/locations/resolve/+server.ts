@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { locationResolveRequestSchema } from '$lib/editing/contracts';
-import { isGoogleHotelPropertyUrl, isGoogleMapsUrl } from '$lib/itinerary/schema';
+import { isGoogleHotelPropertyUrl, isGoogleMapsInputUrl } from '$lib/itinerary/schema';
 import { requestJson, storeErrorResponse, unauthenticatedEditResponse } from '$lib/server/api';
 import { GoogleHotelPropertyResolveError, resolveGoogleHotelPropertyUrl } from '$lib/server/google-hotels';
 import { GoogleMapsResolveError, googleMapsSearchUrl, resolveGoogleMapsLocation } from '$lib/server/google-maps';
@@ -18,14 +18,14 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 	const payload = locationResolveRequestSchema.safeParse(await requestJson(request));
 	if (!payload.success) {
 		return json(
-			{ message: 'Provide a valid Google Maps, Google Hotels property, or OpenRailwayMap link.' },
+			{ message: 'Provide a valid Google Maps, Google Share, Google Hotels property, or OpenRailwayMap link.' },
 			{ status: 400 }
 		);
 	}
 
 	try {
 		await assertTripOwnerAccess({ tripId: params.tripId, userId: user.id });
-		if (isGoogleMapsUrl(payload.data.url)) {
+		if (isGoogleMapsInputUrl(payload.data.url)) {
 			const location = await resolveGoogleMapsLocation(payload.data.url);
 			return json({
 				...(location.address ? { address: location.address } : {}),

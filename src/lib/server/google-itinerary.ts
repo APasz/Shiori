@@ -2,7 +2,8 @@ import {
 	isGoogleFlightsUrl,
 	isGoogleHotelPropertyUrl,
 	isGoogleHotelsSearchUrl,
-	isGoogleMapsUrl,
+	isGoogleMapsInputUrl,
+	isGoogleShareUrl,
 	type TransportDetails
 } from '$lib/itinerary/schema';
 import { lookupAeroDataBoxFlightSchedule } from '$lib/server/aerodatabox';
@@ -605,10 +606,14 @@ async function resolveGoogleFlightsUrl(inputUrl: string): Promise<URL> {
 }
 
 export async function resolveGoogleItineraryUrl(inputUrl: string): Promise<ItineraryItemImport[]> {
-	if (isGoogleMapsUrl(inputUrl)) {
+	if (isGoogleMapsInputUrl(inputUrl)) {
 		try {
+			const isGoogleShareLink = isGoogleShareUrl(inputUrl);
 			const inputUrlObject = new URL(inputUrl);
-			const url = inputUrlObject.hostname === 'maps.app.goo.gl' ? await resolveGoogleMapsUrl(inputUrl) : inputUrlObject;
+			const url =
+				inputUrlObject.hostname === 'maps.app.goo.gl' || isGoogleShareLink
+					? await resolveGoogleMapsUrl(inputUrl)
+					: inputUrlObject;
 			return isDirectionsUrl(url) ? directionsImports(url) : [await mapsPlaceImport(url)];
 		} catch (error: unknown) {
 			if (error instanceof GoogleMapsResolveError) {
@@ -628,6 +633,6 @@ export async function resolveGoogleItineraryUrl(inputUrl: string): Promise<Itine
 	}
 	throw new GoogleItineraryImportError(
 		400,
-		'Use a Google Maps place or directions link, a Google Flights link, or a Google Hotels search or property link.'
+		'Use a Google Maps or Google Share place or directions link, a Google Flights link, or a Google Hotels search or property link.'
 	);
 }

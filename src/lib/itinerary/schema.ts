@@ -39,11 +39,18 @@ export const externalUrlSchema = z
 		`Use an ${externalUrlProtocols.map((protocol) => protocol.slice(0, -1)).join(' or ')} URL.`
 	);
 
-const googleMapsHostnamePattern = /^(?:(?:maps|www)\.)?google\.(?:com|[a-z]{2,3})(?:\.[a-z]{2})?$/;
+const googleHostnamePattern = /^(?:(?:maps|www)\.)?google\.(?:com|[a-z]{2,3})(?:\.[a-z]{2})?$/;
+const googleSharePathPattern = /^\/[A-Za-z0-9_-]{1,512}\/?$/;
 const openRailwayMapHostnamePattern = /^(?:www\.)?openrailwaymap\.org$/;
+const googleShareHostname = 'share.google';
+
+/** Returns whether a parsed URL is hosted by an accepted Google domain. */
+export function isGoogleHostname(url: URL): boolean {
+	return googleHostnamePattern.test(url.hostname);
+}
 
 function hasGoogleMapsHostname(url: URL): boolean {
-	return url.hostname === 'maps.app.goo.gl' || googleMapsHostnamePattern.test(url.hostname);
+	return url.hostname === 'maps.app.goo.gl' || isGoogleHostname(url);
 }
 
 function hasGoogleMapsPath(url: URL): boolean {
@@ -55,10 +62,36 @@ function hasGoogleMapsPath(url: URL): boolean {
 	);
 }
 
+function isGoogleMapsUrlObject(url: URL): boolean {
+	return url.protocol === 'https:' && hasGoogleMapsHostname(url) && hasGoogleMapsPath(url);
+}
+
+function isGoogleShareUrlObject(url: URL): boolean {
+	return url.protocol === 'https:' && url.hostname === googleShareHostname && googleSharePathPattern.test(url.pathname);
+}
+
 export function isGoogleMapsUrl(value: string): boolean {
 	try {
+		return isGoogleMapsUrlObject(new URL(value));
+	} catch {
+		return false;
+	}
+}
+
+/** Returns whether a URL is a Google Share short link that can resolve to a Google place. */
+export function isGoogleShareUrl(value: string): boolean {
+	try {
+		return isGoogleShareUrlObject(new URL(value));
+	} catch {
+		return false;
+	}
+}
+
+/** Returns whether a URL can be resolved to a Google Maps place or directions link. */
+export function isGoogleMapsInputUrl(value: string): boolean {
+	try {
 		const url = new URL(value);
-		return url.protocol === 'https:' && hasGoogleMapsHostname(url) && hasGoogleMapsPath(url);
+		return isGoogleMapsUrlObject(url) || isGoogleShareUrlObject(url);
 	} catch {
 		return false;
 	}
@@ -67,18 +100,14 @@ export function isGoogleMapsUrl(value: string): boolean {
 export function isGoogleFlightsUrl(value: string): boolean {
 	try {
 		const url = new URL(value);
-		return (
-			url.protocol === 'https:' &&
-			googleMapsHostnamePattern.test(url.hostname) &&
-			url.pathname.startsWith('/travel/flights/')
-		);
+		return url.protocol === 'https:' && isGoogleHostname(url) && url.pathname.startsWith('/travel/flights/');
 	} catch {
 		return false;
 	}
 }
 
 function isGoogleTravelUrl(url: URL): boolean {
-	return url.protocol === 'https:' && googleMapsHostnamePattern.test(url.hostname);
+	return url.protocol === 'https:' && isGoogleHostname(url);
 }
 
 /** Returns whether a URL is a Google Hotels accommodation search. */
@@ -123,6 +152,11 @@ export const googleMapsUrlSchema = z
 	.string()
 	.url('Use an absolute Google Maps URL.')
 	.refine(isGoogleMapsUrl, 'Use a Google Maps or maps.app.goo.gl URL.');
+
+export const googleMapsInputUrlSchema = z
+	.string()
+	.url('Use an absolute Google Maps or share.google URL.')
+	.refine(isGoogleMapsInputUrl, 'Use a Google Maps, maps.app.goo.gl, or share.google URL.');
 
 function hasOpenRailwayMapPath(url: URL): boolean {
 	return url.pathname === '/' || url.pathname === '/index.php' || url.pathname === '/mobile.php';
