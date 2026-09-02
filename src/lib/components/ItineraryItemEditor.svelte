@@ -1168,6 +1168,7 @@
 							{#if endAtEnabled}
 								<DateTimeInput
 									dateTime={endAt}
+									defaultDate={startAt.slice(0, 10)}
 									id="item-end"
 									label={exactTimingDateOnly
 										? 'Check-out date'

@@ -15,6 +15,7 @@
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { clampLocalDateTimeToUnixEpoch } from '$lib/itinerary/zoned-time';
 	import Icon from '$lib/visuals/Icon.svelte';
+	import { defaultDateForTimeOnlyValue } from './date-time-input';
 
 	type PickerPresentation = 'popover' | 'dialog';
 	type DialogPlacement = 'center' | 'above-development-controls';
@@ -23,6 +24,7 @@
 	let {
 		id,
 		dateTime,
+		defaultDate,
 		label,
 		minimumDate,
 		pickerMode = 'date-time',
@@ -39,6 +41,7 @@
 	}: {
 		id: string;
 		dateTime: string;
+		defaultDate?: string;
 		label: string;
 		minimumDate?: string;
 		pickerMode?: PickerMode;
@@ -123,7 +126,7 @@
 	}
 
 	function setTime(value: string): void {
-		setDateTime(replaceTimePart(dateTime, value));
+		setDateTime(defaultDateForTimeOnlyValue(replaceTimePart(dateTime, value), defaultDate));
 	}
 </script>
 
