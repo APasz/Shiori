@@ -34,6 +34,7 @@
 	let dayDisclosureReady = $state(false);
 	let openDayDates = $state<string[]>([]);
 	let appliedViewerRevision = $state(0);
+	let availabilityTimestamp = $state(0);
 	const localDays = $derived(localScheduleReady ? getLocalItineraryDays(itinerary.items, viewerContext.timeZone) : []);
 	const dateRange = $derived(
 		localScheduleReady ? getItineraryDateRange(itinerary.items, viewerContext.timeZone) : null
@@ -105,6 +106,9 @@
 
 	$effect(() => {
 		const revision = viewerContext.revision;
+		if (localScheduleReady) {
+			availabilityTimestamp = viewerContext.currentTimestamp;
+		}
 		if (!dayDisclosureReady || revision === 0 || revision === appliedViewerRevision) {
 			return;
 		}
@@ -115,11 +119,18 @@
 
 	onMount(() => {
 		appliedViewerRevision = viewerContext.revision;
+		availabilityTimestamp = viewerContext.currentTimestamp;
 		localScheduleReady = true;
+		const availabilityIntervalId = window.setInterval(() => {
+			if (!viewerContext.isSimulated) {
+				availabilityTimestamp = viewerContext.currentTimestamp;
+			}
+		}, 60_000);
 		queueMicrotask(() => {
 			openDayDates = restoredOpenDayDates() ?? defaultOpenDayDates();
 			dayDisclosureReady = true;
 		});
+		return () => window.clearInterval(availabilityIntervalId);
 	});
 </script>
 
@@ -164,6 +175,7 @@
 						date={day.date}
 						dayNumber={index + 1}
 						items={day.items}
+						{availabilityTimestamp}
 						noteActionLabel={dayNoteActionLabel(dayNoteSummary)}
 						tripTimeZone={itinerary.timeZone}
 						isOpen={isDayOpen(day.date)}

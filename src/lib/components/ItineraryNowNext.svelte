@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { PublicItineraryItem } from '$lib/itinerary/access';
+	import {
+		availabilityConstraintPresentation,
+		type AvailabilityPresentation
+	} from '$lib/itinerary/availability-presentation';
 	import { getNowNextState, type AccommodationBoundary } from '$lib/itinerary/now-next';
-	import type { ItineraryTiming as ItineraryTimingData } from '$lib/itinerary/schema';
-	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
+	import type { Constraint } from '$lib/itinerary/schema';
+	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import ItineraryTiming from './ItineraryTiming.svelte';
@@ -21,7 +25,6 @@
 	} = $props();
 	let browserReady = $state(false);
 	let currentTimestamp = $state(0);
-	type ScheduledPublicItem = PublicItineraryItem & Readonly<{ timing: ItineraryTimingData }>;
 	const nowNextState = $derived(browserReady ? getNowNextState(items, currentTimestamp, tripTimeZone) : null);
 
 	$effect(() => {
@@ -53,11 +56,9 @@
 		return remainingHours === 0 ? `${days}d` : `${days}d ${remainingHours}h`;
 	}
 
-	function itemLabel(label: string, boundary: AccommodationBoundary | undefined): string {
-		if (!boundary) {
-			return label;
-		}
-		return `${label} · ${accommodationBoundaryLabel(boundary)}`;
+	function itemLabel(label: string, boundary: AccommodationBoundary | undefined, availabilityLabel?: string): string {
+		const context = boundary ? accommodationBoundaryLabel(boundary) : availabilityLabel;
+		return context ? `${label} · ${context}` : label;
 	}
 
 	function accommodationBoundaryLabel(boundary: AccommodationBoundary): 'Check-in' | 'Check-out' {
@@ -74,6 +75,13 @@
 				return 'full';
 		}
 	}
+
+	function formatAvailability(constraint: Constraint): AvailabilityPresentation | null {
+		return availabilityConstraintPresentation(constraint, {
+			formatPreferences: viewerContext.formatPreferences,
+			locale: viewerContext.locale
+		});
+	}
 </script>
 
 <section aria-labelledby="now-next-heading" class="now-next">
@@ -84,6 +92,8 @@
 		<p class="status">Nothing scheduled yet</p>
 	{:else if nowNextState.kind === 'idle'}
 		<p class="status">Nothing scheduled right now</p>
+	{:else if nowNextState.kind === 'availability-complete'}
+		<p class="status">No upcoming availability</p>
 	{:else if nowNextState.kind === 'complete'}
 		<p class="status">Trip complete</p>
 	{:else}
@@ -91,63 +101,79 @@
 			<p class="status">Starts in {formatHoursUntilStart(nowNextState.hoursUntilStart)}</p>
 		{:else if nowNextState.kind === 'window-active'}
 			<p class="status">
-				{nowNextState.currentBoundary
-					? `${accommodationBoundaryLabel(nowNextState.currentBoundary)} window now`
-					: 'Open now'}
+				{nowNextState.currentAvailability
+					? 'Available now'
+					: nowNextState.currentBoundary
+						? `${accommodationBoundaryLabel(nowNextState.currentBoundary)} window now`
+						: 'Open now'}
 			</p>
 		{/if}
 
 		<div class="items">
 			{#if nowNextState.kind === 'exact-current' || nowNextState.kind === 'window-active'}
-				{@render itemSummary(nowNextState.currentItem, 'Now', false, nowNextState.currentBoundary)}
+				{@render itemSummary(
+					nowNextState.currentItem,
+					'Now',
+					nowNextState.currentBoundary,
+					nowNextState.currentAvailability
+				)}
 				{#if nowNextState.nextItem}
-					{@render itemSummary(nowNextState.nextItem, 'Next', false, nowNextState.nextBoundary)}
+					{@render itemSummary(nowNextState.nextItem, 'Next', nowNextState.nextBoundary, nowNextState.nextAvailability)}
 				{/if}
 			{:else if nowNextState.kind === 'approximate-now'}
-				{@render itemSummary(nowNextState.approximateItem, 'Around now', false, nowNextState.approximateBoundary)}
+				{@render itemSummary(nowNextState.approximateItem, 'Around now', nowNextState.approximateBoundary, undefined)}
 				{#if nowNextState.nextItem}
-					{@render itemSummary(nowNextState.nextItem, 'Next', false, nowNextState.nextBoundary)}
+					{@render itemSummary(nowNextState.nextItem, 'Next', nowNextState.nextBoundary, nowNextState.nextAvailability)}
 				{/if}
 			{:else}
-				{@render itemSummary(nowNextState.nextItem, 'Next', false, nowNextState.nextBoundary)}
+				{@render itemSummary(nowNextState.nextItem, 'Next', nowNextState.nextBoundary, nowNextState.nextAvailability)}
 			{/if}
 		</div>
 	{/if}
 </section>
 
 {#snippet itemSummary(
-	item: ScheduledPublicItem,
+	item: PublicItineraryItem,
 	label: string,
-	subdued: boolean,
-	boundary: AccommodationBoundary | undefined
+	boundary: AccommodationBoundary | undefined,
+	availability: Constraint | undefined
 )}
 	{#if canSelectItems}
 		<button
-			class:subdued
 			class="item item-button"
 			onclick={() => onSelectItem(item.id)}
 			style={itemTypeAccentStyle(item.type)}
 			type="button"
 			aria-haspopup="dialog"
 		>
-			{@render itemSummaryContent(item, label, boundary)}
+			{@render itemSummaryContent(item, label, boundary, availability)}
 		</button>
 	{:else}
-		<article class:subdued class="item" style={itemTypeAccentStyle(item.type)}>
-			{@render itemSummaryContent(item, label, boundary)}
+		<article class="item" style={itemTypeAccentStyle(item.type)}>
+			{@render itemSummaryContent(item, label, boundary, availability)}
 		</article>
 	{/if}
 {/snippet}
 
-{#snippet itemSummaryContent(item: ScheduledPublicItem, label: string, boundary: AccommodationBoundary | undefined)}
-	<p class="item-label">{itemLabel(label, boundary)}</p>
-	<ItineraryTiming
-		display={timingDisplay(boundary)}
-		includeDate={true}
-		itemType={item.type}
-		timing={item.timing}
-		timeZone={resolveTimingTimeZone(item.timing, tripTimeZone)}
-	/>
+{#snippet itemSummaryContent(
+	item: PublicItineraryItem,
+	label: string,
+	boundary: AccommodationBoundary | undefined,
+	availability: Constraint | undefined
+)}
+	{@const displayedAvailability = availability ? formatAvailability(availability) : null}
+	<p class="item-label">{itemLabel(label, boundary, displayedAvailability?.label)}</p>
+	{#if displayedAvailability}
+		<span class="availability-timing">{displayedAvailability.timing}</span>
+	{:else if item.timing}
+		<ItineraryTiming
+			display={timingDisplay(boundary)}
+			includeDate={true}
+			itemType={item.type}
+			timing={item.timing}
+			timeZone={resolveItemTimeZone(item, tripTimeZone)}
+		/>
+	{/if}
 	<span class="item-type">{item.type}</span>
 	<strong>{item.title}</strong>
 {/snippet}
@@ -213,6 +239,16 @@
 		grid-row: 1 / span 2;
 	}
 
+	.item .availability-timing {
+		align-self: start;
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+		grid-column: 2;
+		grid-row: 1 / span 2;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
 	.item-label,
 	.item-type {
 		font-size: 0.6875rem;
@@ -231,9 +267,5 @@
 
 	strong {
 		grid-column: 1 / -1;
-	}
-
-	.subdued {
-		opacity: 0.58;
 	}
 </style>

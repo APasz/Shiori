@@ -6,6 +6,7 @@
 		availabilityConstraintPresentation,
 		type AvailabilityPresentation
 	} from '$lib/itinerary/availability-presentation';
+	import { currentOrNextAvailabilityConstraint, latestAvailabilityConstraint } from '$lib/itinerary/availability';
 	import { formatLocalDay, partitionDayItems, type DayTimelineEntry } from '$lib/itinerary/presentation';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -16,6 +17,7 @@
 		date,
 		dayNumber,
 		items,
+		availabilityTimestamp,
 		noteActionLabel,
 		tripTimeZone,
 		isOpen,
@@ -30,6 +32,7 @@
 		date: string;
 		dayNumber: number;
 		items: DayItem[];
+		availabilityTimestamp: number;
 		noteActionLabel: string;
 		tripTimeZone: string;
 		isOpen: boolean;
@@ -62,7 +65,9 @@
 			return null;
 		}
 
-		const constraint = item.availability[0];
+		const constraint =
+			currentOrNextAvailabilityConstraint(item.availability, availabilityTimestamp)?.constraint ??
+			latestAvailabilityConstraint(item.availability);
 		if (!constraint) {
 			return null;
 		}

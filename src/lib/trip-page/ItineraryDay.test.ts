@@ -4,9 +4,10 @@ import { itineraryItemSchema } from '$lib/itinerary/schema';
 import ItineraryDay from './ItineraryDay.svelte';
 import type { DayItem } from './types';
 
-function renderDay(noteActionLabel: string, items: DayItem[] = []): string {
+function renderDay(noteActionLabel: string, items: DayItem[] = [], availabilityTimestamp = 0): string {
 	return render(ItineraryDay, {
 		props: {
+			availabilityTimestamp,
 			canModifyItinerary: true,
 			canSelectItems: false,
 			date: '2026-04-13',
@@ -24,7 +25,7 @@ function renderDay(noteActionLabel: string, items: DayItem[] = []): string {
 	}).body;
 }
 
-describe('itinerary day note action', () => {
+describe('itinerary day', () => {
 	it('shows the structured note count only when entries exist', () => {
 		expect(renderDay('Notes 2')).toContain('Notes 2');
 		expect(renderDay('Notes')).not.toContain('Notes 0');
@@ -35,7 +36,7 @@ describe('itinerary day note action', () => {
 		expect(renderDay('Notes 日')).toContain('Notes 日');
 	});
 
-	it('shows the first availability entry instead of an unscheduled time', () => {
+	it('shows the next availability entry instead of an unscheduled time', () => {
 		const item = itineraryItemSchema.parse({
 			availability: [
 				{
@@ -66,5 +67,44 @@ describe('itinerary day note action', () => {
 		expect(html).toContain('10:00–16:00');
 		expect(html).not.toContain('Admission');
 		expect(html).not.toContain('Time not set');
+	});
+
+	it('uses the current or next chronological availability entry on a day card', () => {
+		const item = itineraryItemSchema.parse({
+			availability: [
+				{
+					id: 'afternoon-hours',
+					timing: {
+						endAt: Date.UTC(2026, 3, 13, 16),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 13, 13),
+						timeZone: 'UTC'
+					},
+					type: 'opening-hours'
+				},
+				{
+					id: 'morning-hours',
+					timing: {
+						endAt: Date.UTC(2026, 3, 13, 11),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 13, 9),
+						timeZone: 'UTC'
+					},
+					type: 'opening-hours'
+				}
+			],
+			id: 'museum-split-hours',
+			placement: { anchorAt: Date.UTC(2026, 3, 13, 12), timeZone: 'UTC' },
+			title: 'Museum',
+			type: 'activity'
+		});
+
+		const currentHtml = renderDay('Notes', [item], Date.UTC(2026, 3, 13, 10));
+		const nextHtml = renderDay('Notes', [item], Date.UTC(2026, 3, 13, 12));
+
+		expect(currentHtml).toContain('09:00–11:00');
+		expect(currentHtml).not.toContain('13:00–16:00');
+		expect(nextHtml).toContain('13:00–16:00');
+		expect(nextHtml).not.toContain('09:00–11:00');
 	});
 });

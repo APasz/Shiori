@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getNowNextState } from './now-next';
-import type { ItineraryTiming } from './schema';
+import type { Constraint, ItineraryTiming } from './schema';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 const day = 86_400_000;
@@ -8,6 +8,7 @@ const now = Date.UTC(2026, 3, 12, 12, 0);
 const tripTimeZone = 'UTC';
 
 type TestItem = Readonly<{
+	availability?: readonly Constraint[];
 	id: string;
 	placement?: Readonly<{ anchorAt: number; timeZone: string }>;
 	timing?: ItineraryTiming;
@@ -32,6 +33,22 @@ function accommodationItem(id: string, startAt: number, endAt?: number, timeZone
 			...(timeZone === undefined ? {} : { timeZone })
 		},
 		type: 'accommodation'
+	};
+}
+
+function availabilityPeriod(id: string, startAt: number, endAt: number): Constraint {
+	return {
+		id,
+		timing: { endAt, kind: 'period', startAt, timeZone: tripTimeZone },
+		type: 'opening-hours'
+	};
+}
+
+function availabilityDeadline(id: string, at: number): Constraint {
+	return {
+		id,
+		timing: { at, kind: 'deadline', timeZone: tripTimeZone },
+		type: 'cutoff'
 	};
 }
 
@@ -201,20 +218,79 @@ describe('Now / Next presentation', () => {
 		});
 	});
 
-	it('excludes day-anchored availability-only items from Now / Next', () => {
+	it('shows the active then next chronological availability constraint for day-anchored items', () => {
+		const morningHours = availabilityPeriod('morning-hours', now - 2 * 60 * 60_000, now + 30 * 60_000);
+		const afternoonHours = availabilityPeriod('afternoon-hours', now + 60 * 60_000, now + 3 * 60 * 60_000);
 		const availabilityOnly: TestItem = {
+			availability: [afternoonHours, morningHours],
 			id: 'museum',
 			placement: { anchorAt: now, timeZone: tripTimeZone },
 			type: 'activity'
 		};
-		const scheduled = exactItem('dinner', now + 60 * 60_000);
+
+		expect(nowNext([availabilityOnly])).toEqual({
+			currentAvailability: morningHours,
+			currentItem: availabilityOnly,
+			kind: 'window-active',
+			nextAvailability: afternoonHours,
+			nextItem: availabilityOnly
+		});
+		expect(nowNext([availabilityOnly], now + 45 * 60_000)).toEqual({
+			kind: 'next-only',
+			nextAvailability: afternoonHours,
+			nextItem: availabilityOnly
+		});
+		expect(nowNext([availabilityOnly], now + 4 * 60 * 60_000)).toEqual({ kind: 'availability-complete' });
+	});
+
+	it('prioritizes a current or upcoming Schedule over availability-only items', () => {
+		const availabilityOnly: TestItem = {
+			availability: [availabilityPeriod('opening-hours', now - 60 * 60_000, now + 60 * 60_000)],
+			id: 'museum',
+			placement: { anchorAt: now, timeZone: tripTimeZone },
+			type: 'activity'
+		};
+		const scheduled = exactItem('museum-visit', now + 2 * 60 * 60_000);
 
 		expect(nowNext([availabilityOnly, scheduled])).toEqual({
+			hoursUntilStart: 2,
 			kind: 'before-trip',
-			hoursUntilStart: 1,
 			nextItem: scheduled
 		});
-		expect(nowNext([availabilityOnly])).toEqual({ kind: 'empty' });
+	});
+
+	it('falls back to availability-only items after the scheduled timeline completes', () => {
+		const openingHours = availabilityPeriod('opening-hours', now - 60 * 60_000, now + 60 * 60_000);
+		const availabilityOnly: TestItem = {
+			availability: [openingHours],
+			id: 'museum',
+			placement: { anchorAt: now, timeZone: tripTimeZone },
+			type: 'activity'
+		};
+		const completed = exactItem('museum-visit', now - day);
+
+		expect(nowNext([completed, availabilityOnly])).toEqual({
+			currentAvailability: openingHours,
+			currentItem: availabilityOnly,
+			kind: 'window-active'
+		});
+	});
+
+	it('shows an availability deadline as next until its instant arrives', () => {
+		const cutoff = availabilityDeadline('ticket-cutoff', now + 30 * 60_000);
+		const ferry: TestItem = {
+			availability: [cutoff],
+			id: 'ferry',
+			placement: { anchorAt: now, timeZone: tripTimeZone },
+			type: 'activity'
+		};
+
+		expect(nowNext([ferry])).toEqual({ kind: 'next-only', nextAvailability: cutoff, nextItem: ferry });
+		expect(nowNext([ferry], now + 30 * 60_000)).toEqual({
+			currentAvailability: cutoff,
+			currentItem: ferry,
+			kind: 'exact-current'
+		});
 	});
 
 	it('handles an empty itinerary', () => {
