@@ -3,6 +3,7 @@ import type { ItineraryItemImport } from '$lib/editing/contracts';
 
 export function createEmptyItineraryItem(type: ItineraryItemType, id: string, startAt: number): ItineraryItem {
 	const common = {
+		availability: [],
 		id,
 		timing: { kind: 'exact' as const, startAt },
 		title: '',
@@ -37,6 +38,7 @@ export function createItineraryItemFromImport(
 		id: crypto.randomUUID()
 	}));
 	const common = {
+		availability: [],
 		id,
 		timing: { kind: 'exact' as const, startAt },
 		title: itemImport.title,

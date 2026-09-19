@@ -11,6 +11,28 @@ import { itinerarySchema } from './schema';
 const itinerary = itinerarySchema.parse({
 	items: [
 		{
+			availability: [
+				{
+					id: 'ticket-office-hours',
+					label: 'Ticket office',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 9),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'desk-hours'
+				},
+				{
+					id: 'station-last-admission',
+					timing: {
+						at: Date.UTC(2026, 3, 12, 7, 30),
+						kind: 'deadline',
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'last-admission'
+				}
+			],
 			cost: {
 				amountMinor: 12_500,
 				currency: 'USD',
@@ -104,6 +126,24 @@ describe('itinerary exports', () => {
 			kind: 'exact',
 			start: { at: '2026-04-12T00:00:00.000Z', timeZone: 'Asia/Tokyo' }
 		});
+		expect(firstItem.availability).toEqual([
+			{
+				label: 'Ticket office',
+				timing: {
+					end: { at: '2026-04-12T09:00:00.000Z', timeZone: 'Asia/Tokyo' },
+					kind: 'period',
+					start: { at: '2026-04-12T00:00:00.000Z', timeZone: 'Asia/Tokyo' }
+				},
+				type: 'desk-hours'
+			},
+			{
+				timing: {
+					at: { at: '2026-04-12T07:30:00.000Z', timeZone: 'Asia/Tokyo' },
+					kind: 'deadline'
+				},
+				type: 'last-admission'
+			}
+		]);
 		expect(firstItem.locations[0]).toMatchObject({
 			code: 'TYO',
 			coordinates: { latitude: 35.6812, longitude: 139.7671 },
@@ -122,6 +162,7 @@ describe('itinerary exports', () => {
 		expect(firstItem).not.toHaveProperty('id');
 		expect(firstItem.locations[0]).not.toHaveProperty('id');
 		expect(firstItem.transport.stops[0]).not.toHaveProperty('locationId');
+		expect(firstItem.availability[0]).not.toHaveProperty('id');
 		expect(exported.notes).toMatchObject([
 			{
 				entries: [
@@ -185,6 +226,15 @@ describe('itinerary exports', () => {
 			at: 1_775_952_000_000,
 			timeZone: 'Asia/Tokyo'
 		});
+		expect(exported.items[0].availability).toMatchObject([
+			{
+				timing: {
+					end: { at: Date.UTC(2026, 3, 12, 9), timeZone: 'Asia/Tokyo' },
+					start: { at: Date.UTC(2026, 3, 12), timeZone: 'Asia/Tokyo' }
+				}
+			},
+			{ timing: { at: { at: Date.UTC(2026, 3, 12, 7, 30), timeZone: 'Asia/Tokyo' } } }
+		]);
 		expect(exported.notes[1].anchorAt).toBe(Date.UTC(2026, 3, 13, 3));
 		expect(exported.items[0].cost).toMatchObject({
 			amount: 125,
@@ -221,6 +271,8 @@ describe('itinerary exports', () => {
 
 		expect(text).toContain('Japan 2026');
 		expect(text).toContain('When: 04-12-2026, 9:00 am (Asia/Tokyo)');
+		expect(text).toContain('Availability:');
+		expect(text).toContain('Ticket office: 04-12-2026, 9:00 am (Asia/Tokyo) – 04-12-2026, 6:00 pm (Asia/Tokyo)');
 		expect(text).toContain('Tokyo Station · TYO — 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');

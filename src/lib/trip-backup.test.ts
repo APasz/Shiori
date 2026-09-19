@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	createTripBackup,
 	legacyTripBackupVersion,
+	preAvailabilityTripBackupVersion,
 	serializeTripBackup,
 	tripBackupFileExtension,
 	tripBackupFormat,
@@ -79,5 +80,60 @@ describe('trip backups', () => {
 			},
 			version: tripBackupVersion
 		});
+	});
+
+	it('preserves current availability and defaults it for pre-availability backups', () => {
+		const availability = [
+			{
+				id: 'museum-hours',
+				timing: {
+					endAt: Date.UTC(2026, 3, 12, 17),
+					kind: 'period' as const,
+					startAt: Date.UTC(2026, 3, 12, 9),
+					timeZone: 'Asia/Tokyo'
+				},
+				type: 'opening-hours' as const
+			}
+		];
+		const currentItinerary = itinerarySchema.parse({
+			items: [
+				{
+					availability,
+					id: 'museum',
+					timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 10) },
+					title: 'Museum',
+					type: 'activity'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Japan 2026'
+		});
+		expect(createTripBackup(currentItinerary, Date.UTC(2026, 3, 1)).itinerary.items[0]?.availability).toEqual(
+			availability
+		);
+
+		const validation = validateTripBackup({
+			exportedAt: Date.UTC(2026, 3, 1),
+			format: tripBackupFormat,
+			itinerary: {
+				items: [
+					{
+						id: 'museum',
+						timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 10) },
+						title: 'Museum',
+						type: 'activity'
+					}
+				],
+				timeZone: 'Asia/Tokyo',
+				title: 'Japan 2026'
+			},
+			version: preAvailabilityTripBackupVersion
+		});
+
+		if (!validation.valid) {
+			throw new Error(validation.message);
+		}
+		expect(validation.backup.itinerary.items[0]?.availability).toEqual([]);
+		expect(validation.backup.version).toBe(tripBackupVersion);
 	});
 });

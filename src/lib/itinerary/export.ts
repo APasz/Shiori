@@ -3,6 +3,7 @@ import { defaultFormatPreferences, formatTime, type DateFormat, type TimeFormat 
 import { currencyFractionDigits } from '$lib/money';
 import type {
 	Cost,
+	Constraint,
 	CurrencyCode,
 	DocumentReference,
 	ItineraryItem,
@@ -20,7 +21,7 @@ import { resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone
 
 export const itineraryExportFormats = ['json', 'yaml', 'txt'] as const;
 /** Bumped whenever the portable itinerary export shape changes. */
-export const itineraryExportVersion = 2;
+export const itineraryExportVersion = 3;
 
 export type ItineraryExportFormat = (typeof itineraryExportFormats)[number];
 
@@ -67,7 +68,7 @@ export const defaultItineraryExportOptions: ItineraryExportOptions = {
 	useEpochTimestamps: false
 };
 
-type BasicItineraryItem = Pick<ItineraryItem, 'id' | 'timing' | 'title' | 'type'>;
+type BasicItineraryItem = Pick<ItineraryItem, 'availability' | 'id' | 'timing' | 'title' | 'type'>;
 
 export type ItineraryExportSource = Readonly<{
 	title: string;
@@ -98,6 +99,23 @@ type ExportedTiming =
 			earliest: ExportedTimestamp;
 			latest: ExportedTimestamp;
 	  }>;
+
+type ExportedConstraintTiming =
+	| Readonly<{
+			kind: 'period';
+			start: ExportedTimestamp;
+			end: ExportedTimestamp;
+	  }>
+	| Readonly<{
+			at: ExportedTimestamp;
+			kind: 'deadline';
+	  }>;
+
+type ExportedConstraint = Readonly<{
+	type: Constraint['type'];
+	label?: string;
+	timing: ExportedConstraintTiming;
+}>;
 
 type ExportedLocation = Readonly<{
 	code?: string;
@@ -168,6 +186,7 @@ type ExportedItem = {
 	type: BasicItineraryItem['type'];
 	title: string;
 	timing: ExportedTiming;
+	availability: ExportedConstraint[];
 	locations?: ExportedLocation[];
 	transport?: ExportedTransport;
 	notes?: string[];
@@ -258,6 +277,30 @@ function exportTiming(timing: ItineraryTiming, tripTimeZone: string, useEpochTim
 				latest: exportTimestamp(timing.latestAt, timeZone, useEpochTimestamps)
 			};
 	}
+}
+
+function exportConstraintTiming(timing: Constraint['timing'], useEpochTimestamps: boolean): ExportedConstraintTiming {
+	switch (timing.kind) {
+		case 'period':
+			return {
+				kind: 'period',
+				start: exportTimestamp(timing.startAt, timing.timeZone, useEpochTimestamps),
+				end: exportTimestamp(timing.endAt, timing.timeZone, useEpochTimestamps)
+			};
+		case 'deadline':
+			return {
+				at: exportTimestamp(timing.at, timing.timeZone, useEpochTimestamps),
+				kind: 'deadline'
+			};
+	}
+}
+
+function exportAvailability(availability: readonly Constraint[], useEpochTimestamps: boolean): ExportedConstraint[] {
+	return availability.map((constraint) => ({
+		type: constraint.type,
+		...(constraint.label === undefined ? {} : { label: constraint.label }),
+		timing: exportConstraintTiming(constraint.timing, useEpochTimestamps)
+	}));
 }
 
 function exportLocations(item: ItineraryItem, includeCoordinates: boolean): ExportedLocation[] {
@@ -368,7 +411,8 @@ function exportItem(
 	const exported: ExportedItem = {
 		type: item.type,
 		title: item.title,
-		timing: exportTiming(item.timing, tripTimeZone, options.useEpochTimestamps)
+		timing: exportTiming(item.timing, tripTimeZone, options.useEpochTimestamps),
+		availability: exportAvailability(item.availability, options.useEpochTimestamps)
 	};
 
 	if (!isDetailedItem(item)) {
@@ -465,6 +509,12 @@ function timingText(timing: ExportedTiming, textFormat: ItineraryTextFormatOptio
 	}
 }
 
+function constraintTimingText(timing: ExportedConstraintTiming, textFormat: ItineraryTextFormatOptions): string {
+	return timing.kind === 'period'
+		? `${timestampText(timing.start, textFormat)} – ${timestampText(timing.end, textFormat)}`
+		: `By ${timestampText(timing.at, textFormat)}`;
+}
+
 function monetaryAmountText(amount: number, currency: CurrencyCode, isNormalized: boolean): string {
 	if (!isNormalized) {
 		return `${currency} ${amount} minor units`;
@@ -478,8 +528,18 @@ function reservationText(reservation: Reservation): string {
 	return details.length === 0 ? reservation.status : `${reservation.status} · ${details.join(' · ')}`;
 }
 
+function constraintLabel(constraint: ExportedConstraint): string {
+	return constraint.label ?? constraint.type.replaceAll('-', ' ');
+}
+
 function textLinesForItem(item: ExportedItem, index: number, textFormat: ItineraryTextFormatOptions): string[] {
 	const lines = [`${index + 1}. ${item.title} (${item.type})`, `   When: ${timingText(item.timing, textFormat)}`];
+	if (item.availability.length > 0) {
+		lines.push('   Availability:');
+		for (const constraint of item.availability) {
+			lines.push(`     - ${constraintLabel(constraint)}: ${constraintTimingText(constraint.timing, textFormat)}`);
+		}
+	}
 	if (item.locations && item.locations.length > 0) {
 		lines.push('   Locations:');
 		for (const location of item.locations) {

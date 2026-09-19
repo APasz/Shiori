@@ -442,7 +442,51 @@ export const itineraryTimingSchema = z
 		}
 	});
 
+export const constraintTypeSchema = z.enum([
+	'opening-hours',
+	'reception-hours',
+	'desk-hours',
+	'storage-hours',
+	'last-admission',
+	'cutoff',
+	'other'
+]);
+
+const constraintPeriodTimingSchema = z.strictObject({
+	kind: z.literal('period'),
+	startAt: unixTimestampSchema,
+	endAt: unixTimestampSchema,
+	timeZone: ianaTimeZoneSchema
+});
+const constraintDeadlineTimingSchema = z.strictObject({
+	at: unixTimestampSchema,
+	kind: z.literal('deadline'),
+	timeZone: ianaTimeZoneSchema
+});
+
+/** A constraint's timing is independent from the timing that places its item on the itinerary. */
+export const constraintTimingSchema = z
+	.discriminatedUnion('kind', [constraintPeriodTimingSchema, constraintDeadlineTimingSchema])
+	.superRefine((timing, context) => {
+		if (timing.kind === 'period' && timing.endAt <= timing.startAt) {
+			context.addIssue({
+				code: 'custom',
+				path: ['endAt'],
+				message: 'The end time must be after the start time.'
+			});
+		}
+	});
+
+/** A named availability bound associated with an item, without changing its itinerary schedule. */
+export const constraintSchema = z.strictObject({
+	id: itineraryIdentifierSchema,
+	type: constraintTypeSchema,
+	label: nonEmptyTextSchema.optional(),
+	timing: constraintTimingSchema
+});
+
 const itineraryItemBaseShape = {
+	availability: z.array(constraintSchema).default([]),
 	id: itineraryIdentifierSchema,
 	timing: itineraryTimingSchema,
 	title: nonEmptyTextSchema,
@@ -460,37 +504,58 @@ const itineraryItemDraftBaseShape = {
 	cost: costDraftSchema.optional()
 };
 
-export const itineraryItemSchema = z.discriminatedUnion('type', [
-	z.strictObject({
-		...itineraryItemBaseShape,
-		type: z.literal('transport'),
-		transport: transportDetailsSchema
-	}),
-	z.strictObject({
-		...itineraryItemBaseShape,
-		type: z.literal('activity')
-	}),
-	z.strictObject({
-		...itineraryItemBaseShape,
-		type: z.literal('accommodation')
-	})
-]);
+function validateUniqueAvailabilityIds(
+	item: { availability: readonly { id: string }[] },
+	context: z.RefinementCtx
+): void {
+	const availabilityIds = new Set<string>();
+	for (const [availabilityIndex, availability] of item.availability.entries()) {
+		if (availabilityIds.has(availability.id)) {
+			context.addIssue({
+				code: 'custom',
+				path: ['availability', availabilityIndex, 'id'],
+				message: 'Each availability ID must be unique within an item.'
+			});
+		}
+		availabilityIds.add(availability.id);
+	}
+}
 
-export const itineraryItemDraftSchema = z.discriminatedUnion('type', [
-	z.strictObject({
-		...itineraryItemDraftBaseShape,
-		type: z.literal('transport'),
-		transport: transportDetailsSchema
-	}),
-	z.strictObject({
-		...itineraryItemDraftBaseShape,
-		type: z.literal('activity')
-	}),
-	z.strictObject({
-		...itineraryItemDraftBaseShape,
-		type: z.literal('accommodation')
-	})
-]);
+export const itineraryItemSchema = z
+	.discriminatedUnion('type', [
+		z.strictObject({
+			...itineraryItemBaseShape,
+			type: z.literal('transport'),
+			transport: transportDetailsSchema
+		}),
+		z.strictObject({
+			...itineraryItemBaseShape,
+			type: z.literal('activity')
+		}),
+		z.strictObject({
+			...itineraryItemBaseShape,
+			type: z.literal('accommodation')
+		})
+	])
+	.superRefine(validateUniqueAvailabilityIds);
+
+export const itineraryItemDraftSchema = z
+	.discriminatedUnion('type', [
+		z.strictObject({
+			...itineraryItemDraftBaseShape,
+			type: z.literal('transport'),
+			transport: transportDetailsSchema
+		}),
+		z.strictObject({
+			...itineraryItemDraftBaseShape,
+			type: z.literal('activity')
+		}),
+		z.strictObject({
+			...itineraryItemDraftBaseShape,
+			type: z.literal('accommodation')
+		})
+	])
+	.superRefine(validateUniqueAvailabilityIds);
 
 export const tripDetailsSchema = z.strictObject({
 	title: nonEmptyTextSchema,
@@ -650,6 +715,9 @@ export type ItineraryItem = z.infer<typeof itineraryItemSchema>;
 export type ItineraryItemDraft = z.infer<typeof itineraryItemDraftSchema>;
 export type ItineraryItemType = z.infer<typeof itineraryItemTypeSchema>;
 export type ItineraryTiming = z.infer<typeof itineraryTimingSchema>;
+export type Constraint = z.infer<typeof constraintSchema>;
+export type ConstraintType = z.infer<typeof constraintTypeSchema>;
+export type ConstraintTiming = z.infer<typeof constraintTimingSchema>;
 export type IanaTimeZone = z.infer<typeof ianaTimeZoneSchema>;
 export type ItineraryLocation = z.infer<typeof locationSchema>;
 export type ItineraryLink = z.infer<typeof itineraryLinkSchema>;

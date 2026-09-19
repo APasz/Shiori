@@ -18,6 +18,7 @@
 		timingKindSchema,
 		transportModeSchema,
 		type DocumentReference,
+		type Constraint,
 		type CurrencyCode,
 		type Expense,
 		type ItineraryItem,
@@ -128,6 +129,7 @@
 	let lockToken = $state<string | null>(null);
 	let itemType = $state<ItineraryItemType>('activity');
 	let title = $state('');
+	let availability = $state<Constraint[]>([]);
 	let timingKind = $state<ItineraryTiming['kind']>('exact');
 	let startAt = $state('');
 	let endAt = $state('');
@@ -213,11 +215,16 @@
 		};
 	}
 
+	function copyAvailability(constraints: readonly Constraint[]): Constraint[] {
+		return constraints.map((constraint) => ({ ...constraint, timing: { ...constraint.timing } }));
+	}
+
 	function populateDraft(source: ItineraryItem, defaultTimeZone: string): void {
 		const timeZone = resolveTimingTimeZone(source.timing, defaultTimeZone);
 		startAtTimeZone = timeZone;
 		itemType = source.type;
 		title = source.title;
+		availability = copyAvailability(source.availability);
 		timingKind = source.timing.kind;
 		startAt = '';
 		endAt = '';
@@ -698,6 +705,7 @@
 				}
 			: undefined;
 		const common = {
+			availability: copyAvailability(availability),
 			id: item.id,
 			timing: timingCandidate(),
 			title: title.trim(),

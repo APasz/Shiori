@@ -1,10 +1,12 @@
 import { z } from 'zod';
+import { migrateLegacyItemAvailability } from '$lib/itinerary/availability';
 import { migrateLegacyDayNotes } from '$lib/itinerary/note-anchor';
 import { itinerarySchema, unixTimestampSchema, type Itinerary } from '$lib/itinerary/schema';
 
 export const tripBackupFormat = 'shiori-trip-backup';
 export const legacyTripBackupVersion = 1;
-export const tripBackupVersion = 2;
+export const preAvailabilityTripBackupVersion = 2;
+export const tripBackupVersion = 3;
 export const tripBackupFileExtension = 'shiori-bak';
 export const tripBackupMediaType = 'application/vnd.shiori.trip-backup+json';
 export const maximumTripBackupBytes = 20 * 1024 * 1024;
@@ -21,11 +23,11 @@ const tripBackupEnvelopeSchema = z.object({
 	format: z.literal(tripBackupFormat),
 	version: z.number().int()
 });
-const legacyTripBackupSchema = z.strictObject({
+const migratableTripBackupSchema = z.strictObject({
 	exportedAt: unixTimestampSchema,
 	format: z.literal(tripBackupFormat),
 	itinerary: z.object({}).passthrough(),
-	version: z.literal(legacyTripBackupVersion)
+	version: z.union([z.literal(legacyTripBackupVersion), z.literal(preAvailabilityTripBackupVersion)])
 });
 
 export type TripBackup = z.infer<typeof tripBackupSchema>;
@@ -56,23 +58,25 @@ export function validateTripBackup(value: unknown): TripBackupValidation {
 		return { message: 'This trip backup version is no longer supported.', valid: false };
 	}
 
-	const backup = tripBackupSchema.safeParse(migrateLegacyTripBackup(value, envelope.data.version));
+	const backup = tripBackupSchema.safeParse(migrateSupportedTripBackup(value, envelope.data.version));
 	return backup.success
 		? { backup: backup.data, valid: true }
 		: { message: 'This Shiori trip backup is incomplete or invalid.', valid: false };
 }
 
-function migrateLegacyTripBackup(value: unknown, version: number): unknown {
-	if (version !== legacyTripBackupVersion) {
+function migrateSupportedTripBackup(value: unknown, version: number): unknown {
+	if (version === tripBackupVersion) {
 		return value;
 	}
-	const backup = legacyTripBackupSchema.safeParse(value);
+	const backup = migratableTripBackupSchema.safeParse(value);
 	if (!backup.success) {
 		return value;
 	}
+	const itinerary =
+		version === legacyTripBackupVersion ? migrateLegacyDayNotes(backup.data.itinerary) : backup.data.itinerary;
 	return {
 		...backup.data,
-		itinerary: migrateLegacyDayNotes(backup.data.itinerary),
+		itinerary: migrateLegacyItemAvailability(itinerary),
 		version: tripBackupVersion
 	};
 }

@@ -53,6 +53,133 @@ describe('itinerary timing schema', () => {
 	});
 });
 
+describe('item availability schema', () => {
+	const availability = [
+		{
+			id: 'museum-hours',
+			timing: {
+				endAt: Date.UTC(2026, 3, 12, 17),
+				kind: 'period' as const,
+				startAt: Date.UTC(2026, 3, 12, 9),
+				timeZone: 'Asia/Tokyo'
+			},
+			type: 'opening-hours' as const
+		},
+		{
+			id: 'museum-last-entry',
+			label: 'Final entry',
+			timing: {
+				at: Date.UTC(2026, 3, 12, 16, 30),
+				kind: 'deadline' as const,
+				timeZone: 'Asia/Tokyo'
+			},
+			type: 'last-admission' as const
+		}
+	] as const;
+
+	it('defaults to no constraints and accepts period and deadline constraints', () => {
+		const item = itineraryItemSchema.parse({
+			...itemBase,
+			availability,
+			timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 10) }
+		});
+
+		expect(item.availability).toEqual(availability);
+		expect(
+			itineraryItemSchema.parse({
+				...itemBase,
+				timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 10) }
+			}).availability
+		).toEqual([]);
+	});
+
+	it('requires complete valid availability timings with strictly increasing periods', () => {
+		const item = {
+			...itemBase,
+			availability,
+			timing: { kind: 'exact' as const, startAt: Date.UTC(2026, 3, 12, 10) }
+		};
+
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				availability: [
+					{
+						...availability[0],
+						timing: { ...availability[0].timing, endAt: availability[0].timing.startAt }
+					}
+				]
+			}).success
+		).toBe(false);
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				availability: [
+					{
+						...availability[0],
+						timing: { kind: 'period', startAt: Date.UTC(2026, 3, 12, 9), timeZone: 'Asia/Tokyo' }
+					}
+				]
+			}).success
+		).toBe(false);
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				availability: [
+					{
+						...availability[1],
+						timing: { ...availability[1].timing, at: -1 }
+					}
+				]
+			}).success
+		).toBe(false);
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				availability: [
+					{
+						...availability[1],
+						timing: { ...availability[1].timing, at: Date.UTC(2026, 3, 12, 16, 30) + 0.5 }
+					}
+				]
+			}).success
+		).toBe(false);
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				availability: [
+					{
+						...availability[1],
+						timing: { ...availability[1].timing, timeZone: 'Not/A-Time-Zone' }
+					}
+				]
+			}).success
+		).toBe(false);
+	});
+
+	it('requires availability IDs to be unique in stored items and drafts', () => {
+		const item = {
+			...itemBase,
+			availability: [availability[0], { ...availability[1], id: availability[0].id }],
+			timing: { kind: 'exact' as const, startAt: Date.UTC(2026, 3, 12, 10) }
+		};
+
+		for (const schema of [itineraryItemSchema, itineraryItemDraftSchema]) {
+			const result = schema.safeParse(item);
+			expect(result.success).toBe(false);
+			if (result.success) {
+				throw new Error('Duplicate availability IDs must be rejected.');
+			}
+			expect(result.error.issues).toContainEqual(
+				expect.objectContaining({
+					message: 'Each availability ID must be unique within an item.',
+					path: ['availability', 1, 'id']
+				})
+			);
+		}
+	});
+});
+
 describe('transport stop schema', () => {
 	it('requires one stop for each location and rejects duplicate stops', () => {
 		expect(

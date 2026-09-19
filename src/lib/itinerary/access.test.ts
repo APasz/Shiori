@@ -22,6 +22,18 @@ const testItinerary = {
 	],
 	items: [
 		{
+			availability: [
+				{
+					id: 'station-desk',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 17),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12, 9),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'desk-hours'
+				}
+			],
 			id: 'test-transport',
 			timing: { kind: 'exact', startAt: 1_775_952_000_000 },
 			title: 'Restricted transport',
@@ -88,6 +100,18 @@ describe('itinerary visibility projection', () => {
 		const item = publicItinerary.items[0];
 
 		expect(item).toEqual({
+			availability: [
+				{
+					id: 'station-desk',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 17),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12, 9),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'desk-hours'
+				}
+			],
 			id: 'test-transport',
 			timing: { kind: 'exact', startAt: 1_775_952_000_000 },
 			title: 'Restricted transport',
@@ -104,6 +128,7 @@ describe('itinerary visibility projection', () => {
 		expect(transport.reservation).toBeUndefined();
 		expect(transport.cost).toBeUndefined();
 		expect(transport.linkedExpenseIds).toEqual([]);
+		expect(transport.availability).toEqual(testItinerary.items[0].availability);
 		expect(projectDetailedItinerary(testItinerary, 'user').expenses).toEqual([]);
 		expect(projectDetailedItinerary(testItinerary, 'user').notes).toEqual(testItinerary.notes);
 		expect(transport.transport.seat).toBeUndefined();

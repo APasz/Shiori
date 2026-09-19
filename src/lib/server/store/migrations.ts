@@ -7,9 +7,11 @@ import {
 	unixTimestampSchema,
 	type Expense
 } from '$lib/itinerary/schema';
+import { migrateLegacyItemAvailability } from '$lib/itinerary/availability';
 import { migrateLegacyDayNotes } from '$lib/itinerary/note-anchor';
 import {
 	dailyExpenseStoredDataVersion,
+	preAvailabilityStoredDataVersion,
 	preAppearanceStoredDataVersion,
 	preFormatPreferencesStoredDataVersion,
 	preNoteAnchorStoredDataVersion,
@@ -69,22 +71,24 @@ const legacyDailyExpenseSchema = z.strictObject({
 	foodAmountMinor: minorUnitAmountSchema,
 	miscAmountMinor: minorUnitAmountSchema
 });
+const migratableStoredDataVersionSchema = z.union([
+	z.literal(legacyStoredDataVersion),
+	z.literal(previousStoredDataVersion),
+	z.literal(priorStoredDataVersion),
+	z.literal(dailyExpenseStoredDataVersion),
+	z.literal(freeformExpenseStoredDataVersion),
+	z.literal(preNotesStoredDataVersion),
+	z.literal(preAccessBlockStoredDataVersion),
+	z.literal(preSudoStoredDataVersion),
+	z.literal(preAppearanceStoredDataVersion),
+	z.literal(preFormatPreferencesStoredDataVersion),
+	z.literal(preSudoOwnedTripsStoredDataVersion),
+	z.literal(preNoteAnchorStoredDataVersion),
+	z.literal(preAvailabilityStoredDataVersion)
+]);
 const migratableStoredTripFileEnvelopeSchema = z
 	.object({
-		version: z.union([
-			z.literal(legacyStoredDataVersion),
-			z.literal(previousStoredDataVersion),
-			z.literal(priorStoredDataVersion),
-			z.literal(dailyExpenseStoredDataVersion),
-			z.literal(freeformExpenseStoredDataVersion),
-			z.literal(preNotesStoredDataVersion),
-			z.literal(preAccessBlockStoredDataVersion),
-			z.literal(preSudoStoredDataVersion),
-			z.literal(preAppearanceStoredDataVersion),
-			z.literal(preFormatPreferencesStoredDataVersion),
-			z.literal(preSudoOwnedTripsStoredDataVersion),
-			z.literal(preNoteAnchorStoredDataVersion)
-		]),
+		version: migratableStoredDataVersionSchema,
 		trip: z
 			.object({
 				itinerary: z
@@ -100,20 +104,7 @@ const migratableStoredTripFileEnvelopeSchema = z
 type MigratableItinerary = Record<string, unknown> & { items: unknown[] };
 
 const migratableStoredUsersFileSchema = z.strictObject({
-	version: z.union([
-		z.literal(legacyStoredDataVersion),
-		z.literal(previousStoredDataVersion),
-		z.literal(priorStoredDataVersion),
-		z.literal(dailyExpenseStoredDataVersion),
-		z.literal(freeformExpenseStoredDataVersion),
-		z.literal(preNotesStoredDataVersion),
-		z.literal(preAccessBlockStoredDataVersion),
-		z.literal(preSudoStoredDataVersion),
-		z.literal(preAppearanceStoredDataVersion),
-		z.literal(preFormatPreferencesStoredDataVersion),
-		z.literal(preSudoOwnedTripsStoredDataVersion),
-		z.literal(preNoteAnchorStoredDataVersion)
-	]),
+	version: migratableStoredDataVersionSchema,
 	users: z.array(migratableStoredUserSchema)
 });
 
@@ -147,7 +138,8 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 		parsedFile.data.version === preAppearanceStoredDataVersion ||
 		parsedFile.data.version === preFormatPreferencesStoredDataVersion ||
 		parsedFile.data.version === preSudoOwnedTripsStoredDataVersion ||
-		parsedFile.data.version === preNoteAnchorStoredDataVersion;
+		parsedFile.data.version === preNoteAnchorStoredDataVersion ||
+		parsedFile.data.version === preAvailabilityStoredDataVersion;
 	return {
 		file: {
 			version: storedDataVersion,
@@ -312,7 +304,7 @@ export function migrateStoredTripFile(file: unknown): { file: unknown; migration
 		parsedFile.data.version === dailyExpenseStoredDataVersion
 			? migrateLegacyDailyExpenses(sourceItinerary)
 			: sourceItinerary;
-	const itinerary = migrateLegacyDayNotes(itineraryBeforeNoteMigration);
+	const itinerary = migrateLegacyItemAvailability(migrateLegacyDayNotes(itineraryBeforeNoteMigration));
 	return {
 		file: {
 			...parsedFile.data,
