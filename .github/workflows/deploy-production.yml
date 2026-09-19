@@ -1,10 +1,6 @@
 name: Deploy production
 
 on:
-  workflow_run:
-    workflows: [Verify]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 permissions: {}
@@ -16,10 +12,7 @@ concurrency:
 jobs:
   deploy:
     environment: production
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main')
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -42,7 +35,7 @@ jobs:
           printf '%s\n' "$SHIORI_DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
 
-      - name: Deploy the pushed commit
+      - name: Deploy the selected commit
         shell: bash
         run: |
           set -Eeuo pipefail
