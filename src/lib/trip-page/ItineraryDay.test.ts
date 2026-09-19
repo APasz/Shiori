@@ -96,6 +96,25 @@ describe('itinerary day', () => {
 		expect(html).not.toContain('Reception');
 	});
 
+	it('uses an explicit first transport-stop time for a day-placed journey', () => {
+		const item = itineraryItemSchema.parse({
+			id: 'airport-train',
+			locations: [{ id: 'departure', name: 'Central Station', role: 'departure' }],
+			placement: { anchorAt: Date.UTC(2026, 3, 13, 12), timeZone: 'UTC' },
+			title: 'Airport train',
+			transport: {
+				mode: 'rail',
+				stops: [{ locationId: 'departure', scheduledAt: Date.UTC(2026, 3, 13, 10) }]
+			},
+			type: 'transport'
+		});
+
+		const html = renderDay('Notes', [item]);
+
+		expect(html).toContain('datetime="2026-04-13T10:00:00.000Z"');
+		expect(html).not.toContain('Time not set');
+	});
+
 	it('uses the current or next chronological availability entry on a day card', () => {
 		const item = itineraryItemSchema.parse({
 			availability: [

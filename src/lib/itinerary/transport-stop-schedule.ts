@@ -15,6 +15,15 @@ export function resolveTransportScheduleStart(
 	return schedule ?? firstStopSchedule;
 }
 
+/** Resolves an explicitly scheduled first stop without creating a journey schedule. */
+export function resolveFirstTransportStopSchedule(
+	transport: Pick<TransportDetails, 'stops'>,
+	defaultTimeZone: string
+): TransportStopSchedule | undefined {
+	const firstStop = transport.stops[0];
+	return firstStop ? resolveTransportStopSchedule(undefined, firstStop, 0, defaultTimeZone) : undefined;
+}
+
 /**
  * Resolves the time shown for a transport stop. The journey schedule fills in
  * only the first stop when that stop has no separately recorded time.

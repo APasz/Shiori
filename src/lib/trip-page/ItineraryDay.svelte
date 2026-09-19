@@ -12,6 +12,11 @@
 		latestAvailabilityConstraint
 	} from '$lib/itinerary/availability';
 	import { formatLocalDay, partitionDayItems, type DayTimelineEntry } from '$lib/itinerary/presentation';
+	import {
+		resolveFirstTransportStopSchedule,
+		type TransportStopSchedule
+	} from '$lib/itinerary/transport-stop-schedule';
+	import type { ItineraryItem } from '$lib/itinerary/schema';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
@@ -57,6 +62,7 @@
 		accommodation: 'Accommodation'
 	};
 	const dayItems = $derived(partitionDayItems(items, date, viewerContext.timeZone));
+	type DetailedTransportItem = Extract<ItineraryItem, { type: 'transport' }>;
 
 	function selectItem(itemId: string): void {
 		if (canSelectItems) {
@@ -84,6 +90,17 @@
 			locale: viewerContext.locale
 		});
 	}
+
+	function isDetailedTransportItem(item: DayItem): item is DetailedTransportItem {
+		return item.type === 'transport' && 'transport' in item;
+	}
+
+	function firstTransportStopSchedule(item: DayItem): TransportStopSchedule | undefined {
+		if (!isDetailedTransportItem(item)) {
+			return undefined;
+		}
+		return resolveFirstTransportStopSchedule(item.transport, resolveItemTimeZone(item, tripTimeZone));
+	}
 </script>
 
 {#snippet itemTime(item: DayItem)}
@@ -96,11 +113,14 @@
 		/>
 	{:else}
 		{@const availability = openingHoursPresentation(item)}
+		{@const firstStopSchedule = firstTransportStopSchedule(item)}
 		{#if availability}
 			<span class="availability-timing">
 				<span class="availability-label">{availability.label}</span>
 				<span>{availability.timing}</span>
 			</span>
+		{:else if firstStopSchedule}
+			<ItineraryTime startAt={firstStopSchedule.scheduledAt} timeZone={firstStopSchedule.timeZone} />
 		{:else}
 			<span class="unscheduled-timing">Time not set</span>
 		{/if}
