@@ -418,8 +418,8 @@ describe('Google itinerary import', () => {
 				title: 'ELE Hotel 樟葉',
 				suggestedStartDate: '2026-11-02',
 				suggestedEndDate: '2026-11-04',
-				suggestedCheckInTime: '15:00',
-				suggestedCheckOutTime: '10:00',
+				publishedCheckInTime: '15:00',
+				publishedCheckOutTime: '10:00',
 				locations: [
 					expect.objectContaining({
 						address: '1 Chome-5-5 Machikuzuha, Hirakata, Osaka 573-1106, Japan',

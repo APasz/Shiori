@@ -23,6 +23,7 @@ describe('availability constraint drafts', () => {
 			'other'
 		]);
 		expect(availabilityTypesForItem('activity')).toContain('reception-hours');
+		expect(availabilityTypesForItem('accommodation').slice(0, 3)).toEqual(['reception-hours', 'check-in', 'check-out']);
 	});
 
 	it('uses Period for a new Opening hours entry without inventing times', () => {
@@ -74,6 +75,26 @@ describe('availability constraint drafts', () => {
 			at: '2026-04-12T',
 			timingKind: 'deadline',
 			type: 'cutoff'
+		});
+	});
+
+	it('uses Deadline when a new entry is changed to Check-in or Check-out', () => {
+		const draft = createAvailabilityConstraintDraft({
+			defaultDate: '2026-04-12',
+			id: 'hotel-check-in',
+			itemType: 'accommodation',
+			timeZone: 'Asia/Tokyo'
+		});
+
+		expect(availabilityConstraintDraftForType(draft, 'check-in')).toMatchObject({
+			at: '2026-04-12T',
+			timingKind: 'deadline',
+			type: 'check-in'
+		});
+		expect(availabilityConstraintDraftForType(draft, 'check-out')).toMatchObject({
+			at: '2026-04-12T',
+			timingKind: 'deadline',
+			type: 'check-out'
 		});
 	});
 

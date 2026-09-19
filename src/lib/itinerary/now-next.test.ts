@@ -363,8 +363,20 @@ describe('Now / Next presentation', () => {
 			timing: { at: now + 45 * 60_000, kind: 'deadline', timeZone: tripTimeZone },
 			type: 'last-admission'
 		};
+		const publishedStayTimes: Constraint[] = [
+			{
+				id: 'property-check-in',
+				timing: { at: now + 60 * 60_000, kind: 'deadline', timeZone: tripTimeZone },
+				type: 'check-in'
+			},
+			{
+				id: 'property-check-out',
+				timing: { at: now + 90 * 60_000, kind: 'deadline', timeZone: tripTimeZone },
+				type: 'check-out'
+			}
+		];
 		const ferry: TestItem = {
-			availability: [cutoff, lastAdmission],
+			availability: [cutoff, lastAdmission, ...publishedStayTimes],
 			id: 'ferry',
 			placement: { anchorAt: now, timeZone: tripTimeZone },
 			type: 'activity'

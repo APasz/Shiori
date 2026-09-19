@@ -102,4 +102,100 @@ describe('accommodation stay drafts', () => {
 			}
 		});
 	});
+
+	it('adds published property times without making a date-only stay exact', () => {
+		const result = accommodationStayDraft({
+			checkInDate: '2026-10-29',
+			checkOutDate: '2026-11-01',
+			id: 'hotel-yokohama-camelot-japan',
+			links: [],
+			locationId: 'hotel-yokohama-camelot-japan-location',
+			name: 'Hotel Yokohama Camelot Japan',
+			publishedTimes: { checkInTime: '15:00', checkOutTime: '10:00' },
+			timesKnown: false,
+			timeZone: 'Asia/Tokyo',
+			title: 'Hotel Yokohama Camelot Japan'
+		});
+
+		expect(result).toMatchObject({
+			valid: true,
+			item: {
+				availability: [
+					{
+						id: 'property-check-in',
+						timing: { at: Date.UTC(2026, 9, 29, 6), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						type: 'check-in'
+					},
+					{
+						id: 'property-check-out',
+						timing: { at: Date.UTC(2026, 10, 1, 1), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						type: 'check-out'
+					}
+				],
+				timing: {
+					endAt: Date.UTC(2026, 10, 1, 14, 59),
+					kind: 'exact',
+					startAt: Date.UTC(2026, 9, 28, 15),
+					timePrecision: 'date'
+				}
+			}
+		});
+	});
+
+	it('rejects an invalid published property time', () => {
+		expect(
+			accommodationStayDraft({
+				checkInDate: '2026-10-29',
+				checkOutDate: '2026-11-01',
+				id: 'hotel-yokohama-camelot-japan',
+				links: [],
+				locationId: 'hotel-yokohama-camelot-japan-location',
+				name: 'Hotel Yokohama Camelot Japan',
+				publishedTimes: { checkInTime: 'not-a-time' },
+				timesKnown: false,
+				timeZone: 'Asia/Tokyo',
+				title: 'Hotel Yokohama Camelot Japan'
+			})
+		).toEqual({ error: 'Published check-in time: choose a valid local time.', valid: false });
+	});
+
+	it('keeps published property times as availability separate from booking-specific stay times', () => {
+		const result = accommodationStayDraft({
+			checkInDate: '2026-11-02',
+			checkInTime: '16:00',
+			checkOutDate: '2026-11-04',
+			checkOutTime: '11:00',
+			id: 'ele-hotel-kuzuha',
+			links: [],
+			locationId: 'ele-hotel-kuzuha-location',
+			name: 'ELE Hotel 樟葉',
+			publishedTimes: { checkInTime: '15:00', checkOutTime: '10:00' },
+			timesKnown: true,
+			timeZone: 'Asia/Tokyo',
+			title: 'ELE Hotel 樟葉'
+		});
+
+		expect(result).toMatchObject({
+			valid: true,
+			item: {
+				availability: [
+					{
+						id: 'property-check-in',
+						timing: { at: Date.UTC(2026, 10, 2, 6), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						type: 'check-in'
+					},
+					{
+						id: 'property-check-out',
+						timing: { at: Date.UTC(2026, 10, 4, 1), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						type: 'check-out'
+					}
+				],
+				timing: {
+					endAt: Date.UTC(2026, 10, 4, 2),
+					kind: 'exact',
+					startAt: Date.UTC(2026, 10, 2, 7)
+				}
+			}
+		});
+	});
 });

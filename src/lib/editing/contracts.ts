@@ -134,8 +134,8 @@ export const locationResolveRequestSchema = z.strictObject({
 export const locationResolveResponseSchema = z
 	.strictObject({
 		address: z.string().trim().min(1).optional(),
-		checkInTime: localTimeSchema.optional(),
-		checkOutTime: localTimeSchema.optional(),
+		publishedCheckInTime: localTimeSchema.optional(),
+		publishedCheckOutTime: localTimeSchema.optional(),
 		coordinates: locationCoordinatesSchema.optional(),
 		googleHotelsUrl: googleHotelPropertyUrlSchema.optional(),
 		googleMapsUrl: googleMapsUrlSchema.optional(),
@@ -185,8 +185,8 @@ export const itineraryItemImportSchema = z.discriminatedUnion('type', [
 	z.strictObject({
 		...importedItemBaseShape,
 		propertyStatus: accommodationPropertyStatusSchema,
-		suggestedCheckInTime: localTimeSchema.optional(),
-		suggestedCheckOutTime: localTimeSchema.optional(),
+		publishedCheckInTime: localTimeSchema.optional(),
+		publishedCheckOutTime: localTimeSchema.optional(),
 		suggestedTimeZone: ianaTimeZoneSchema.optional(),
 		type: z.literal('accommodation')
 	}),

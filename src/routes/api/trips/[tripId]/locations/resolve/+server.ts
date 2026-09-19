@@ -43,8 +43,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 				: null;
 			return json({
 				address: place?.address ?? property.address,
-				...(property.checkInTime ? { checkInTime: property.checkInTime } : {}),
-				...(property.checkOutTime ? { checkOutTime: property.checkOutTime } : {}),
+				...(property.publishedCheckInTime ? { publishedCheckInTime: property.publishedCheckInTime } : {}),
+				...(property.publishedCheckOutTime ? { publishedCheckOutTime: property.publishedCheckOutTime } : {}),
 				...((place?.coordinates ?? property.coordinates)
 					? { coordinates: place?.coordinates ?? property.coordinates }
 					: {}),

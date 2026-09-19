@@ -452,6 +452,8 @@ export const itineraryTimingSchema = z
 export const constraintTypeSchema = z.enum([
 	'opening-hours',
 	'reception-hours',
+	'check-in',
+	'check-out',
 	'desk-hours',
 	'storage-hours',
 	'last-admission',

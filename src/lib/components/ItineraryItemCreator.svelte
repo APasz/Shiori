@@ -125,6 +125,8 @@
 	let accommodationCheckInTime = $state('');
 	let accommodationCheckOutDate = $state('');
 	let accommodationCheckOutTime = $state('');
+	let accommodationPublishedCheckInTime = $state('');
+	let accommodationPublishedCheckOutTime = $state('');
 	let accommodationPropertyStatus = $state<AccommodationPropertyStatus | null>(null);
 	let accommodationSourceLinks = $state<ItineraryLink[]>([]);
 	let accommodationTimeZone = $state('UTC');
@@ -297,15 +299,17 @@
 				}
 			: { ...emptyAccommodationLocation(), name: item?.title ?? '' };
 		accommodationCheckInDate = item?.suggestedStartDate ?? initialDate ?? '';
-		accommodationCheckInTime = item?.suggestedCheckInTime ?? '';
+		accommodationCheckInTime = '';
 		accommodationCheckOutDate =
 			item?.suggestedEndDate ??
 			(accommodationDateIsValid(accommodationCheckInDate) ? (addCalendarDays(accommodationCheckInDate, 1) ?? '') : '');
-		accommodationCheckOutTime = item?.suggestedCheckOutTime ?? '';
+		accommodationCheckOutTime = '';
+		accommodationPublishedCheckInTime = item?.publishedCheckInTime ?? '';
+		accommodationPublishedCheckOutTime = item?.publishedCheckOutTime ?? '';
 		accommodationPropertyStatus = item?.propertyStatus ?? null;
 		accommodationSourceLinks = item ? [...item.links] : [];
 		accommodationTimeZone = item?.suggestedTimeZone ?? tripTimeZone;
-		accommodationTimesKnown = item?.suggestedCheckInTime !== undefined && item.suggestedCheckOutTime !== undefined;
+		accommodationTimesKnown = false;
 		accommodationReservationEnabled = false;
 		accommodationReservationProvider = '';
 		accommodationReservationReference = '';
@@ -349,6 +353,25 @@
 		return accommodationSourceLinks.some((link) => link.label === 'Google Hotels');
 	}
 
+	function hasPublishedAccommodationTimes(): boolean {
+		return accommodationPublishedCheckInTime !== '' || accommodationPublishedCheckOutTime !== '';
+	}
+
+	function publishedAccommodationTimesLabel(): string {
+		const times: string[] = [];
+		if (accommodationPublishedCheckInTime !== '') {
+			times.push(
+				`Check-in ${formatTime(accommodationPublishedCheckInTime, viewerContext.formatPreferences.timeFormat)}`
+			);
+		}
+		if (accommodationPublishedCheckOutTime !== '') {
+			times.push(
+				`Check-out ${formatTime(accommodationPublishedCheckOutTime, viewerContext.formatPreferences.timeFormat)}`
+			);
+		}
+		return times.join(' · ');
+	}
+
 	function accommodationStayCandidate(): AccommodationStayValidation {
 		return accommodationStayDraft({
 			id: accommodationItemId,
@@ -362,6 +385,14 @@
 			...(accommodationTimesKnown ? { checkInTime: accommodationCheckInTime } : {}),
 			checkOutDate: accommodationCheckOutDate,
 			...(accommodationTimesKnown ? { checkOutTime: accommodationCheckOutTime } : {}),
+			...(hasPublishedAccommodationTimes()
+				? {
+						publishedTimes: {
+							...(accommodationPublishedCheckInTime ? { checkInTime: accommodationPublishedCheckInTime } : {}),
+							...(accommodationPublishedCheckOutTime ? { checkOutTime: accommodationPublishedCheckOutTime } : {})
+						}
+					}
+				: {}),
 			links: accommodationSourceLinks,
 			timesKnown: accommodationTimesKnown,
 			timeZone: accommodationTimeZone,
@@ -433,8 +464,10 @@
 			accommodationLocation.name = importedLocation.data.name ?? accommodationLocation.name;
 			accommodationLocation.address = importedLocation.data.address ?? accommodationLocation.address;
 			accommodationLocation.coordinates = importedLocation.data.coordinates;
-			accommodationCheckInTime = importedLocation.data.checkInTime ?? accommodationCheckInTime;
-			accommodationCheckOutTime = importedLocation.data.checkOutTime ?? accommodationCheckOutTime;
+			accommodationPublishedCheckInTime =
+				importedLocation.data.publishedCheckInTime ?? accommodationPublishedCheckInTime;
+			accommodationPublishedCheckOutTime =
+				importedLocation.data.publishedCheckOutTime ?? accommodationPublishedCheckOutTime;
 			accommodationTimeZone = importedLocation.data.timeZone ?? accommodationTimeZone;
 			accommodationPropertyStatus = 'confirmed';
 			if (
@@ -1088,6 +1121,12 @@
 						value={accommodationTimeZone}
 					/>
 				</div>
+				{#if hasPublishedAccommodationTimes()}
+					<p class="schedule-found">
+						{hasGoogleHotelsSource() ? 'Google Hotels supplied' : 'The property lookup supplied'} usual property times:
+						{publishedAccommodationTimesLabel()}. They will be saved as availability, not as booking times
+					</p>
+				{/if}
 				<label class="toggle-label">
 					<input bind:checked={accommodationTimesKnown} type="checkbox" />
 					I know the check-in and check-out times
@@ -1115,9 +1154,6 @@
 							timeZone={accommodationTimeZone}
 						/>
 					</div>
-					{#if hasGoogleHotelsSource() && (accommodationCheckInTime || accommodationCheckOutTime)}
-						<p class="schedule-found">Google Hotels supplied usual stay times. Confirm them against your booking</p>
-					{/if}
 				{:else}
 					<p class="field-hint">
 						Times stay unknown; the itinerary will show the stay dates without inventing an exact time
@@ -1234,6 +1270,10 @@
 									: 'Unknown'}
 							</dd>
 						</div>
+						{#if hasPublishedAccommodationTimes()}<div>
+								<dt>Property times</dt>
+								<dd>{publishedAccommodationTimesLabel()}</dd>
+							</div>{/if}
 					</dl>
 				</section>
 				{#if accommodationErrorMessage}<p class="error" role="alert">{accommodationErrorMessage}</p>{/if}

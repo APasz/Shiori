@@ -10,6 +10,8 @@ type OpeningHoursPeriodConstraint = Constraint &
 const availabilityTypeDetails = {
 	'opening-hours': { editorLabel: 'Opening hours', preferredTimingKind: 'period', presentationLabel: 'Opening' },
 	'reception-hours': { editorLabel: 'Reception hours', preferredTimingKind: 'period', presentationLabel: 'Reception' },
+	'check-in': { editorLabel: 'Check-in time', preferredTimingKind: 'deadline', presentationLabel: 'Check-in' },
+	'check-out': { editorLabel: 'Check-out time', preferredTimingKind: 'deadline', presentationLabel: 'Check-out' },
 	'desk-hours': { editorLabel: 'Desk hours', preferredTimingKind: 'period', presentationLabel: 'Desk' },
 	'storage-hours': { editorLabel: 'Storage hours', preferredTimingKind: 'period', presentationLabel: 'Storage' },
 	'last-admission': {
@@ -30,7 +32,7 @@ const availabilityTypeDetails = {
 
 export const availabilityTypeSuggestions = {
 	activity: ['opening-hours', 'last-admission', 'desk-hours', 'other'],
-	accommodation: ['reception-hours', 'storage-hours', 'desk-hours', 'other'],
+	accommodation: ['reception-hours', 'check-in', 'check-out', 'storage-hours', 'desk-hours', 'other'],
 	transport: ['desk-hours', 'cutoff', 'storage-hours', 'other']
 } as const satisfies Record<ItineraryItemType, readonly ConstraintType[]>;
 

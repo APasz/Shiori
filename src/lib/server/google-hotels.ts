@@ -24,8 +24,8 @@ export type GoogleHotelsSearch = Readonly<{
 
 export type GoogleHotelProperty = Readonly<{
 	address: string;
-	checkInTime?: string;
-	checkOutTime?: string;
+	publishedCheckInTime?: string;
+	publishedCheckOutTime?: string;
 	coordinates?: Readonly<{ latitude: number; longitude: number }>;
 	name: string;
 }>;
@@ -359,12 +359,12 @@ export function parseGoogleHotelPropertyHtml(html: string): GoogleHotelProperty 
 		return null;
 	}
 	const coordinates = coordinatesFromHtml(html);
-	const checkInTime = localTimeFromHotelHtml(html, 'check-in');
-	const checkOutTime = localTimeFromHotelHtml(html, 'check-out');
+	const publishedCheckInTime = localTimeFromHotelHtml(html, 'check-in');
+	const publishedCheckOutTime = localTimeFromHotelHtml(html, 'check-out');
 	return {
 		address: normalizedAddress,
-		...(checkInTime ? { checkInTime } : {}),
-		...(checkOutTime ? { checkOutTime } : {}),
+		...(publishedCheckInTime ? { publishedCheckInTime } : {}),
+		...(publishedCheckOutTime ? { publishedCheckOutTime } : {}),
 		name: normalizedName,
 		...(coordinates ? { coordinates } : {})
 	};

@@ -473,8 +473,8 @@ async function hotelsImport(url: URL): Promise<ItineraryItemImport> {
 			}
 		],
 		links: [{ label: 'Google Hotels', url: url.toString() }],
-		...(property?.checkInTime ? { suggestedCheckInTime: property.checkInTime } : {}),
-		...(property?.checkOutTime ? { suggestedCheckOutTime: property.checkOutTime } : {})
+		...(property?.publishedCheckInTime ? { publishedCheckInTime: property.publishedCheckInTime } : {}),
+		...(property?.publishedCheckOutTime ? { publishedCheckOutTime: property.publishedCheckOutTime } : {})
 	};
 }
 
@@ -523,8 +523,8 @@ async function hotelPropertyImport(url: URL): Promise<ItineraryItemImport> {
 			propertyStatus: 'confirmed',
 			...(resolved.checkInDate ? { suggestedStartDate: resolved.checkInDate } : {}),
 			...(resolved.checkOutDate ? { suggestedEndDate: resolved.checkOutDate } : {}),
-			...(property.checkInTime ? { suggestedCheckInTime: property.checkInTime } : {}),
-			...(property.checkOutTime ? { suggestedCheckOutTime: property.checkOutTime } : {}),
+			...(property.publishedCheckInTime ? { publishedCheckInTime: property.publishedCheckInTime } : {}),
+			...(property.publishedCheckOutTime ? { publishedCheckOutTime: property.publishedCheckOutTime } : {}),
 			...(place?.timeZone ? { suggestedTimeZone: place.timeZone } : {}),
 			locations: [
 				{

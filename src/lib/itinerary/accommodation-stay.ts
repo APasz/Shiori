@@ -1,8 +1,9 @@
-import type { ItineraryLink } from './schema';
 import {
 	itineraryItemDraftSchema,
+	type Constraint,
 	type CurrencyCode,
 	type ItineraryItemDraft,
+	type ItineraryLink,
 	type ItineraryLocation,
 	type ReservationStatus
 } from './schema';
@@ -23,6 +24,23 @@ type AccommodationReservationInput = Readonly<{
 	status: ReservationStatus;
 }>;
 
+type AccommodationBoundary = 'check-in' | 'check-out';
+
+/** Published property rules are distinct from booking-specific stay boundaries. */
+export type AccommodationPublishedTimesInput = Readonly<{
+	checkInTime?: string;
+	checkOutTime?: string;
+}>;
+
+type PublishedTimeConstraintInput = Readonly<{
+	boundary: AccommodationBoundary;
+	date: string;
+	time?: string;
+}>;
+
+type PublishedTimeConstraintValidation =
+	Readonly<{ availability: Constraint[]; valid: true }> | Readonly<{ error: string; valid: false }>;
+
 export type AccommodationStayInput = Readonly<{
 	address?: string;
 	checkInDate: string;
@@ -36,6 +54,7 @@ export type AccommodationStayInput = Readonly<{
 	links: readonly ItineraryLink[];
 	locationId: string;
 	name: string;
+	publishedTimes?: AccommodationPublishedTimesInput;
 	reservation?: AccommodationReservationInput;
 	timesKnown: boolean;
 	timeZone: string;
@@ -56,6 +75,33 @@ function stayTimestamp(date: string, time: string, timeZone: string): number | n
 
 function dateOnlyStayTimestamp(date: string, boundary: 'start' | 'end', timeZone: string): number | null {
 	return stayTimestamp(date, boundary === 'start' ? '00:00' : '23:59', timeZone);
+}
+
+function publishedTimeConstraint(boundary: AccommodationBoundary, at: number, timeZone: string): Constraint {
+	return {
+		id: `property-${boundary}`,
+		timing: { at, kind: 'deadline', timeZone },
+		type: boundary
+	};
+}
+
+function publishedTimeConstraints(input: AccommodationStayInput): PublishedTimeConstraintValidation {
+	const times: readonly PublishedTimeConstraintInput[] = [
+		{ boundary: 'check-in', date: input.checkInDate, time: input.publishedTimes?.checkInTime },
+		{ boundary: 'check-out', date: input.checkOutDate, time: input.publishedTimes?.checkOutTime }
+	];
+	const availability: Constraint[] = [];
+	for (const { boundary, date, time } of times) {
+		if (time === undefined) {
+			continue;
+		}
+		const at = stayTimestamp(date, time, input.timeZone);
+		if (at === null) {
+			return { error: `Published ${boundary} time: choose a valid local time.`, valid: false };
+		}
+		availability.push(publishedTimeConstraint(boundary, at, input.timeZone));
+	}
+	return { availability, valid: true };
 }
 
 /** Builds a fully validated accommodation item from the focused stay-creation wizard inputs. */
@@ -88,6 +134,11 @@ export function accommodationStayDraft(input: AccommodationStayInput): Accommoda
 		return { error: 'Check-out must be after check-in.', valid: false };
 	}
 
+	const publishedTimes = publishedTimeConstraints(input);
+	if (!publishedTimes.valid) {
+		return publishedTimes;
+	}
+
 	const costAmountMinor = input.cost ? amountMinorFromInput(input.cost.amount, input.cost.currency) : null;
 	if (input.cost && (costAmountMinor === null || costAmountMinor < 1)) {
 		return { error: 'Cost: enter an amount greater than zero.', valid: false };
@@ -100,6 +151,7 @@ export function accommodationStayDraft(input: AccommodationStayInput): Accommoda
 	const provider = optionalText(input.reservation?.provider);
 	const reference = optionalText(input.reservation?.reference);
 	const candidate = itineraryItemDraftSchema.safeParse({
+		availability: publishedTimes.availability,
 		id: input.id,
 		timing: {
 			kind: 'exact',

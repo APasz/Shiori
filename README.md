@@ -397,10 +397,11 @@ The sudo user can add, edit, and delete itinerary items from the itinerary page.
 with an import-first dialog: Google Maps and Google Share place and directions links, selected Google Flights links,
 and Google Hotels search or property links prefill the fields that can be parsed safely. Hotels imports create an
 accommodation item from the destination or selected property and the link's check-in/check-out dates. Property
-links can also provide the hotel's published check-in and check-out times. When a Hotels link has a selected
-property, Shiori resolves that property's name, street address, and map coordinates instead of using the broader
-search area. Accommodation imports and manual accommodation creation use one focused stay review: property,
-dates, property-local time zone, optional times, then optional booking and cost. When times are unknown,
+links can also provide the hotel's published check-in and check-out times; Shiori saves those as availability
+rather than treating them as confirmed booking times. When a Hotels link has a selected property, Shiori resolves
+that property's name, street address, and map coordinates instead of using the broader search area. Accommodation
+imports and manual accommodation creation use one focused stay review: property, dates, property-local time zone,
+optional booking-specific times, then optional booking and cost. When booking times are unknown,
 Shiori saves the stay as a date-only range rather than inventing an exact time. Transport imports
 and manual transport creation use a four-step journey flow: departure,
 arrival, journey details, then review. Each endpoint can be looked up from an optional Google Maps or Google Share link

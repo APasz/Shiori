@@ -12,6 +12,8 @@ const twelveHourDayMonthYear = {
 describe('availability presentation', () => {
 	it('uses concise semantic labels unless a custom label is supplied', () => {
 		expect(availabilityConstraintLabel({ type: 'reception-hours' })).toBe('Reception');
+		expect(availabilityConstraintLabel({ type: 'check-in' })).toBe('Check-in');
+		expect(availabilityConstraintLabel({ type: 'check-out' })).toBe('Check-out');
 		expect(availabilityConstraintLabel({ label: 'Luggage desk', type: 'storage-hours' })).toBe('Luggage desk');
 	});
 
