@@ -1,5 +1,9 @@
 <script lang="ts">
-	import { searchTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
+	import {
+		searchTimeZoneOptions,
+		timeZoneSelectionLabel,
+		type TimeZoneSearchOption
+	} from '$lib/itinerary/time-zone-search';
 	import { isValidIanaTimeZone } from '$lib/itinerary/zoned-time';
 
 	let {
@@ -9,6 +13,7 @@
 		id,
 		label = 'Time zone',
 		options,
+		referenceTimestamp,
 		value,
 		onSelect
 	}: {
@@ -18,6 +23,7 @@
 		id: string;
 		label?: string;
 		options: TimeZoneSearchOption[];
+		referenceTimestamp?: number;
 		value: string;
 		onSelect: (timeZone: string) => void;
 	} = $props();
@@ -29,7 +35,9 @@
 	let listMaxHeight = $state<string | undefined>(undefined);
 	let activeOptionIndex = $state(0);
 
-	const inputValue = $derived(isOpen ? query : value);
+	const displayTimestamp = $derived(referenceTimestamp ?? Date.now());
+	const selectedLabel = $derived(timeZoneSelectionLabel(value, options, displayTimestamp));
+	const inputValue = $derived(isOpen ? query : selectedLabel);
 	const matches = $derived(searchTimeZoneOptions(options, query));
 
 	$effect(() => {
@@ -150,8 +158,9 @@
 		class="shiori-form-control"
 		{disabled}
 		{id}
-		placeholder="Search AEST, JST, CST, or a place"
+		placeholder="Search time zone"
 		role="combobox"
+		title={value}
 		value={inputValue}
 		onblur={closeAfterFocusChange}
 		onfocus={() => {
@@ -184,11 +193,8 @@
 							onmousedown={(event) => event.preventDefault()}
 							type="button"
 						>
-							<span class="time-zone">{option.timeZone}</span>
-							<span>{option.places.join(' · ')}</span>
-							{#if option.aliases.length > 0}
-								<span class="aliases">{option.aliases.join(' · ')}</span>
-							{/if}
+							<span class="time-zone">{timeZoneSelectionLabel(option.timeZone, [option], displayTimestamp)}</span>
+							<span class="identifier">{option.timeZone}</span>
 						</button>
 					</li>
 				{/each}
@@ -254,7 +260,7 @@
 		font-weight: 700;
 	}
 
-	.aliases,
+	.identifier,
 	.empty {
 		color: var(--color-text-muted);
 		font-size: 0.6875rem;

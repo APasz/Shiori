@@ -23,6 +23,20 @@ describe('TimePicker', () => {
 		expect(html).toContain('aria-label="Decrease hour"');
 	});
 
+	it('keeps quick times hidden by default in a date-time field', () => {
+		const html = render(DateTimeInput, {
+			props: {
+				dateTime: '2026-04-12T10:00',
+				id: 'start-time',
+				label: 'Start',
+				onDateTimeChange: () => {},
+				showTimeZonePicker: false
+			}
+		}).body;
+
+		expect(html).not.toContain('aria-label="Common times"');
+	});
+
 	it('can hide quick times without hiding the hour controls', () => {
 		const html = render(TimePicker, {
 			props: {
@@ -60,6 +74,22 @@ describe('TimePicker', () => {
 });
 
 describe('DateTimeInput', () => {
+	it('keeps date and time paired when its time zone is shared elsewhere', () => {
+		const html = render(DateTimeInput, {
+			props: {
+				dateTime: '2026-04-12T10:00',
+				id: 'end-time',
+				label: 'End',
+				onDateTimeChange: () => {},
+				showTimeZonePicker: false
+			}
+		}).body;
+
+		expect(html).toContain('date-time-fields');
+		expect(html).toContain('has-date-and-time');
+		expect(html).not.toContain('single-column');
+	});
+
 	for (const pickerMode of ['time', 'date-time'] as const) {
 		it(`forwards the quick-time option to its ${pickerMode} picker`, () => {
 			const html = render(DateTimeInput, {

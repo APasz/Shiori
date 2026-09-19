@@ -9,18 +9,16 @@
 		type DayAdjustment
 	} from '$lib/components/date-picker';
 	import TimePicker from '$lib/components/TimePicker.svelte';
-	import TimeZonePicker from '$lib/components/TimeZonePicker.svelte';
+	import TimeZoneField from '$lib/components/TimeZoneField.svelte';
 	import { datePickerDateSeparator, datePickerLocale, formatCalendarDate } from '$lib/itinerary/calendar';
 	import type { TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { clampLocalDateTimeToUnixEpoch } from '$lib/itinerary/zoned-time';
 	import Icon from '$lib/visuals/Icon.svelte';
-	import { defaultDateForTimeOnlyValue } from './date-time-input';
+	import { defaultDateForTimeOnlyValue, timeZoneReferenceTimestamp, type DateTimePickerMode } from './date-time-input';
 
 	type PickerPresentation = 'popover' | 'dialog';
 	type DialogPlacement = 'center' | 'above-development-controls';
-	type PickerMode = 'date-time' | 'date' | 'time';
-
 	let {
 		id,
 		dateTime,
@@ -31,9 +29,8 @@
 		dialogPlacement: _dialogPlacement = 'center',
 		pickerPresentation = 'popover',
 		portalTarget,
-		showQuickTimes = true,
+		showQuickTimes = false,
 		showTimeZonePicker = true,
-		timeZoneHint = 'Used to interpret this value; not saved',
 		timeZone = 'UTC',
 		timeZoneOptions = [],
 		onDateTimeChange,
@@ -44,13 +41,12 @@
 		defaultDate?: string;
 		label: string;
 		minimumDate?: string;
-		pickerMode?: PickerMode;
+		pickerMode?: DateTimePickerMode;
 		dialogPlacement?: DialogPlacement;
 		pickerPresentation?: PickerPresentation;
 		portalTarget?: HTMLElement;
 		showQuickTimes?: boolean;
 		showTimeZonePicker?: boolean;
-		timeZoneHint?: string;
 		timeZone?: string;
 		timeZoneOptions?: TimeZoneSearchOption[];
 		onDateTimeChange: (value: string) => void;
@@ -59,6 +55,9 @@
 	const locale = $derived(datePickerLocale(viewerContext.locale, viewerContext.formatPreferences.dateFormat));
 	const dateSeparator = $derived(
 		datePickerDateSeparator(viewerContext.locale, viewerContext.formatPreferences.dateFormat)
+	);
+	const fixedDateLabel = $derived(
+		formatCalendarDate(datePart(dateTime), 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)
 	);
 
 	const dateValue = $derived(parseCalendarDate(datePart(dateTime)));
@@ -78,6 +77,7 @@
 	const calendarContentClass = $derived(
 		`calendar-content${pickerPresentation === 'dialog' ? ` calendar-dialog ${_dialogPlacement}` : ''}`
 	);
+	const timeZoneTimestamp = $derived(timeZoneReferenceTimestamp(dateTime, timeZone, viewerContext.currentTimestamp));
 
 	function datePart(value: string): string {
 		return value.slice(0, 10);
@@ -130,30 +130,35 @@
 	}
 </script>
 
-<div class:single-column={!showTimeZonePicker} class="date-time-grid">
+<div class="date-time-input">
+	{#if showTimeZonePicker}
+		<TimeZoneField
+			id={`${id}-time-zone`}
+			pickerLabel={`${label} time zone`}
+			onSelect={onTimeZoneChange}
+			options={timeZoneOptions}
+			referenceTimestamp={timeZoneTimestamp}
+			value={timeZone}
+		/>
+	{/if}
 	{#if pickerMode === 'time'}
-		<div class="date-time-picker shiori-form-label">
-			<span>
-				{label}
-				{#if formatCalendarDate(datePart(dateTime), 'date', viewerContext.locale, viewerContext.formatPreferences.dateFormat)}
-					<span class="field-hint"
-						>Date fixed as {formatCalendarDate(
-							datePart(dateTime),
-							'date',
-							viewerContext.locale,
-							viewerContext.formatPreferences.dateFormat
-						)}</span
-					>
-				{/if}
-			</span>
-			<TimePicker
-				{id}
-				{label}
-				onChange={setTime}
-				{showQuickTimes}
-				timeFormat={viewerContext.formatPreferences.timeFormat}
-				value={timePart(dateTime)}
-			/>
+		<div class="date-time-fields">
+			<div class="date-time-picker shiori-form-label">
+				<span>
+					{label}
+					{#if fixedDateLabel}
+						<span class="field-hint">Date: {fixedDateLabel}</span>
+					{/if}
+				</span>
+				<TimePicker
+					{id}
+					label={`${label} time`}
+					onChange={setTime}
+					{showQuickTimes}
+					timeFormat={viewerContext.formatPreferences.timeFormat}
+					value={timePart(dateTime)}
+				/>
+			</div>
 		</div>
 	{:else}
 		<DatePicker.Root
@@ -170,36 +175,69 @@
 			value={dateValue}
 			weekdayFormat="short"
 		>
-			<div class="date-time-picker shiori-form-label">
-				<DatePicker.Label class="picker-label">{label}</DatePicker.Label>
-				<DatePicker.Input class="date-field date-field-with-controls shiori-form-control" {id}>
-					{#snippet children({ segments })}
-						{#each segments as { part, value: segmentValue }, index (`${part}-${index}`)}
-							<DatePicker.Segment class={`date-segment${part === 'literal' ? ' literal' : ''}`} {part}>
-								{part === 'literal' && dateSeparator ? dateSeparator : segmentValue}
-							</DatePicker.Segment>
-						{/each}
-						<div aria-label="Day controls" class="date-controls" role="group">
-							<button aria-label="Increase day" disabled={!canIncreaseDate} onclick={() => adjustDate(1)} type="button">
-								<Icon name="increment" />
-							</button>
-							<button
-								aria-label="Decrease day"
-								disabled={!canDecreaseDate}
-								onclick={() => adjustDate(-1)}
-								type="button"
+			<div
+				aria-labelledby={pickerMode === 'date-time' ? `${id}-heading` : undefined}
+				class:has-date-and-time={pickerMode === 'date-time'}
+				class="date-time-fields"
+				role={pickerMode === 'date-time' ? 'group' : undefined}
+			>
+				{#if pickerMode === 'date-time'}
+					<span class="date-time-heading" id={`${id}-heading`}>{label}</span>
+				{/if}
+				<div class="date-time-picker shiori-form-label">
+					<DatePicker.Label class="picker-label">{pickerMode === 'date-time' ? 'Date' : label}</DatePicker.Label>
+					<DatePicker.Input class="date-field date-field-with-controls shiori-form-control" {id}>
+						{#snippet children({ segments })}
+							{#each segments as { part, value: segmentValue }, index (`${part}-${index}`)}
+								<DatePicker.Segment class={`date-segment${part === 'literal' ? ' literal' : ''}`} {part}>
+									{part === 'literal' && dateSeparator ? dateSeparator : segmentValue}
+								</DatePicker.Segment>
+							{/each}
+							<div aria-label="Day controls" class="date-controls" role="group">
+								<button
+									aria-label="Increase day"
+									disabled={!canIncreaseDate}
+									onclick={() => adjustDate(1)}
+									type="button"
+								>
+									<Icon name="increment" />
+								</button>
+								<button
+									aria-label="Decrease day"
+									disabled={!canDecreaseDate}
+									onclick={() => adjustDate(-1)}
+									type="button"
+								>
+									<Icon name="decrement" />
+								</button>
+							</div>
+							<DatePicker.Trigger
+								aria-label={`Open calendar for ${label}`}
+								class="calendar-trigger date-calendar-trigger"
 							>
-								<Icon name="decrement" />
-							</button>
-						</div>
-						<DatePicker.Trigger
-							aria-label={`Open calendar for ${label}`}
-							class="calendar-trigger date-calendar-trigger"
-						>
-							<Icon name="calendar" />
-						</DatePicker.Trigger>
-					{/snippet}
-				</DatePicker.Input>
+								<Icon name="calendar" />
+							</DatePicker.Trigger>
+						{/snippet}
+					</DatePicker.Input>
+				</div>
+				{#if pickerMode === 'date-time'}
+					<div class="date-time-picker shiori-form-label">
+						<span>
+							Time
+							<span class="field-hint"
+								>{viewerContext.formatPreferences.timeFormat === 'twelve-hour' ? '12-hour' : '24-hour'}</span
+							>
+						</span>
+						<TimePicker
+							id={`${id}-time`}
+							label={`${label} time`}
+							onChange={setTime}
+							{showQuickTimes}
+							timeFormat={viewerContext.formatPreferences.timeFormat}
+							value={timePart(dateTime)}
+						/>
+					</div>
+				{/if}
 			</div>
 			<DatePicker.Portal disabled={portalTarget === undefined} to={portalTarget}>
 				<DatePicker.Content
@@ -255,47 +293,29 @@
 			</DatePicker.Portal>
 		</DatePicker.Root>
 	{/if}
-	{#if pickerMode === 'date-time'}
-		<div class="date-time-picker shiori-form-label">
-			<span>
-				Time
-				<span class="field-hint"
-					>{viewerContext.formatPreferences.timeFormat === 'twelve-hour' ? '12-hour time' : '24-hour time'}</span
-				>
-			</span>
-			<TimePicker
-				id={`${id}-time`}
-				label={`${label} time`}
-				onChange={setTime}
-				{showQuickTimes}
-				timeFormat={viewerContext.formatPreferences.timeFormat}
-				value={timePart(dateTime)}
-			/>
-		</div>
-	{/if}
-	{#if showTimeZonePicker}
-		<div class="shiori-form-label">
-			<label for={`${id}-time-zone`}>Time zone <span class="field-hint">{timeZoneHint}</span></label>
-			<TimeZonePicker
-				id={`${id}-time-zone`}
-				label={`${label} time zone`}
-				onSelect={onTimeZoneChange}
-				options={timeZoneOptions}
-				value={timeZone}
-			/>
-		</div>
-	{/if}
 </div>
 
 <style>
-	.date-time-grid {
+	.date-time-input {
 		display: grid;
 		gap: 0.875rem;
-		grid-template-columns: minmax(15rem, 1fr) minmax(13rem, 1.25fr);
 	}
 
-	.date-time-grid.single-column {
+	.date-time-fields {
+		display: grid;
+		gap: 0.875rem;
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.date-time-fields.has-date-and-time {
+		column-gap: 0.875rem;
+		row-gap: 0.375rem;
+		grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 0.8fr);
+	}
+
+	.date-time-heading {
+		font-weight: 700;
+		grid-column: 1 / -1;
 	}
 
 	.date-time-picker {
@@ -316,7 +336,7 @@
 	}
 
 	@media (max-width: 32rem) {
-		.date-time-grid {
+		.date-time-fields.has-date-and-time {
 			grid-template-columns: 1fr;
 		}
 	}

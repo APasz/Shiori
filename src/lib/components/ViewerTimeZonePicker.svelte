@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import {
 		browserTimeZoneOptions,
+		timeZoneSelectionLabel,
 		timeZoneShortLabel,
 		type TimeZoneSearchOption
 	} from '$lib/itinerary/time-zone-search';
@@ -14,6 +15,7 @@
 	let timeZoneOptions = $state<TimeZoneSearchOption[]>([]);
 	const timeZone = $derived(viewerContext.timeZone);
 	const timeZoneAbbreviation = $derived(timeZoneShortLabel(timeZone, viewerContext.currentTimestamp));
+	const timeZoneLabel = $derived(timeZoneSelectionLabel(timeZone, timeZoneOptions, viewerContext.currentTimestamp));
 
 	function selectTimeZone(selectedTimeZone: string): void {
 		viewerContext.setTimeZoneOverride(selectedTimeZone);
@@ -79,8 +81,8 @@
 </script>
 
 <details bind:this={pickerElement} bind:open={isOpen} class="viewer-time-zone-picker" ontoggle={synchronizeMenu}>
-	<summary aria-label={`View times in ${timeZone}`} title={`View times in ${timeZone}`}>
-		<span class="time-zone-name">{timeZone}</span>
+	<summary aria-label={`View times in ${timeZoneLabel}`} title={`View times in ${timeZone}`}>
+		<span class="time-zone-name">{timeZoneLabel}</span>
 		<span aria-hidden="true" class="time-zone-abbreviation">{timeZoneAbbreviation}</span>
 		<Icon name="disclosure" size="0.875rem" />
 	</summary>
@@ -96,6 +98,7 @@
 			label="Choose display time zone"
 			onSelect={selectTimeZone}
 			options={timeZoneOptions}
+			referenceTimestamp={viewerContext.currentTimestamp}
 			value={timeZone}
 		/>
 		{#if viewerContext.isTimeZoneOverridden}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
+	import ZonedDateTimeRange from '$lib/components/ZonedDateTimeRange.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import { availabilityTypeEditorLabel } from '$lib/itinerary/availability';
 	import {
@@ -1363,7 +1364,6 @@
 								onTimeZoneChange={changePlacementTimeZone}
 								pickerMode="date"
 								portalTarget={dialogElement}
-								timeZoneHint="Saved with this day placement"
 								timeZone={placementTimeZone}
 								{timeZoneOptions}
 							/>
@@ -1401,29 +1401,6 @@
 										Check-in and check-out times are unknown
 									</label>
 								{/if}
-								<DateTimeInput
-									dateTime={startAt}
-									id="item-start"
-									label={exactTimingDateOnly
-										? 'Check-in date'
-										: timingNeedsConfirmation && suggestedStartDate
-											? 'Start time'
-											: 'Start date and time'}
-									onDateTimeChange={(value) => (startAt = value)}
-									onTimeZoneChange={changeItemTimeZone}
-									portalTarget={dialogElement}
-									pickerMode={exactTimingDateOnly
-										? 'date'
-										: timingNeedsConfirmation && suggestedStartDate
-											? 'time'
-											: 'date-time'}
-									timeZoneHint="Saved with this timing"
-									timeZone={startAtTimeZone}
-									{timeZoneOptions}
-								/>
-								{#if itemType === 'transport'}
-									<p class="field-hint">Leave this empty to use the first transport stop's scheduled time</p>
-								{/if}
 								{#if !exactTimingDateOnly}
 									<label class="toggle-label">
 										<input bind:checked={endAtEnabled} type="checkbox" />
@@ -1431,37 +1408,59 @@
 									</label>
 								{/if}
 								{#if endAtEnabled}
-									<DateTimeInput
-										dateTime={endAt}
-										defaultDate={defaultEndDate()}
-										id="item-end"
-										label={exactTimingDateOnly
-											? 'Check-out date'
-											: timingNeedsConfirmation && suggestedEndDate
-												? 'End time'
-												: 'End date and time'}
-										onDateTimeChange={(value) => (endAt = value)}
+									<ZonedDateTimeRange
+										endDateTime={endAt}
+										endDefaultDate={defaultEndDate()}
+										endId="item-end"
+										endLabel={itemType === 'accommodation' ? 'Check-out' : 'End'}
+										onEndDateTimeChange={(value) => (endAt = value)}
+										onStartDateTimeChange={(value) => (startAt = value)}
 										onTimeZoneChange={changeItemTimeZone}
-										portalTarget={dialogElement}
-										pickerMode={exactTimingDateOnly
+										endPickerMode={exactTimingDateOnly
 											? 'date'
 											: timingNeedsConfirmation && suggestedEndDate
 												? 'time'
 												: 'date-time'}
-										timeZoneHint="Saved with this timing"
+										portalTarget={dialogElement}
+										startDateTime={startAt}
+										startId="item-start"
+										startLabel={itemType === 'accommodation' ? 'Check-in' : 'Start'}
+										startPickerMode={exactTimingDateOnly
+											? 'date'
+											: timingNeedsConfirmation && suggestedStartDate
+												? 'time'
+												: 'date-time'}
 										timeZone={startAtTimeZone}
 										{timeZoneOptions}
 									/>
+								{:else}
+									<DateTimeInput
+										dateTime={startAt}
+										id="item-start"
+										label={itemType === 'accommodation' ? 'Check-in' : 'Start'}
+										onDateTimeChange={(value) => (startAt = value)}
+										onTimeZoneChange={changeItemTimeZone}
+										portalTarget={dialogElement}
+										pickerMode={exactTimingDateOnly
+											? 'date'
+											: timingNeedsConfirmation && suggestedStartDate
+												? 'time'
+												: 'date-time'}
+										timeZone={startAtTimeZone}
+										{timeZoneOptions}
+									/>
+								{/if}
+								{#if itemType === 'transport'}
+									<p class="field-hint">Uses the first stop until set</p>
 								{/if}
 							{:else if timingKind === 'approximate'}
 								<DateTimeInput
 									dateTime={nominalAt}
 									id="item-approximate"
-									label="Approximate date and time"
+									label="Approximate"
 									onDateTimeChange={(value) => (nominalAt = value)}
 									onTimeZoneChange={changeItemTimeZone}
 									portalTarget={dialogElement}
-									timeZoneHint="Saved with this timing"
 									timeZone={startAtTimeZone}
 									{timeZoneOptions}
 								/>
@@ -1477,25 +1476,17 @@
 									/>
 								</label>
 							{:else if timingKind === 'window'}
-								<DateTimeInput
-									dateTime={earliestAt}
-									id="item-earliest"
-									label="Earliest date and time"
-									onDateTimeChange={(value) => (earliestAt = value)}
+								<ZonedDateTimeRange
+									endDateTime={latestAt}
+									endId="item-latest"
+									endLabel="Latest"
+									onEndDateTimeChange={(value) => (latestAt = value)}
+									onStartDateTimeChange={(value) => (earliestAt = value)}
 									onTimeZoneChange={changeItemTimeZone}
 									portalTarget={dialogElement}
-									timeZoneHint="Saved with this timing"
-									timeZone={startAtTimeZone}
-									{timeZoneOptions}
-								/>
-								<DateTimeInput
-									dateTime={latestAt}
-									id="item-latest"
-									label="Latest date and time"
-									onDateTimeChange={(value) => (latestAt = value)}
-									onTimeZoneChange={changeItemTimeZone}
-									portalTarget={dialogElement}
-									timeZoneHint="Saved with this timing"
+									startDateTime={earliestAt}
+									startId="item-earliest"
+									startLabel="Earliest"
 									timeZone={startAtTimeZone}
 									{timeZoneOptions}
 								/>
@@ -1548,38 +1539,31 @@
 											</select>
 										</label>
 										{#if constraint.timingKind === 'period'}
-											<DateTimeInput
-												dateTime={constraint.startAt}
-												defaultDate={defaultAvailabilityDate()}
-												id={`availability-${constraint.id}-start`}
-												label="Start date and time"
-												onDateTimeChange={(value) => (constraint.startAt = value)}
+											<ZonedDateTimeRange
+												endDateTime={constraint.endAt}
+												endDefaultDate={periodEndDefaultDate(constraint)}
+												endId={`availability-${constraint.id}-end`}
+												endLabel="End"
+												onEndDateTimeChange={(value) => (constraint.endAt = value)}
+												onStartDateTimeChange={(value) => (constraint.startAt = value)}
 												onTimeZoneChange={(timeZone) => changeAvailabilityTimeZone(index, timeZone)}
 												portalTarget={dialogElement}
-												timeZoneHint="Saved with this availability"
+												startDateTime={constraint.startAt}
+												startDefaultDate={defaultAvailabilityDate()}
+												startId={`availability-${constraint.id}-start`}
+												startLabel="Start"
 												timeZone={constraint.timeZone}
 												{timeZoneOptions}
-											/>
-											<DateTimeInput
-												dateTime={constraint.endAt}
-												defaultDate={periodEndDefaultDate(constraint)}
-												id={`availability-${constraint.id}-end`}
-												label="End date and time"
-												onDateTimeChange={(value) => (constraint.endAt = value)}
-												portalTarget={dialogElement}
-												showTimeZonePicker={false}
-												timeZone={constraint.timeZone}
 											/>
 										{:else}
 											<DateTimeInput
 												dateTime={constraint.at}
 												defaultDate={defaultAvailabilityDate()}
 												id={`availability-${constraint.id}-deadline`}
-												label="Deadline date and time"
+												label="Deadline"
 												onDateTimeChange={(value) => (constraint.at = value)}
 												onTimeZoneChange={(timeZone) => changeAvailabilityTimeZone(index, timeZone)}
 												portalTarget={dialogElement}
-												timeZoneHint="Saved with this availability"
 												timeZone={constraint.timeZone}
 												{timeZoneOptions}
 											/>
@@ -1734,11 +1718,10 @@
 													<DateTimeInput
 														dateTime={stop.scheduledAt}
 														id={`stop-${locationIndex}-scheduled`}
-														label="Scheduled date and time"
+														label="Scheduled"
 														onDateTimeChange={(value) => (stop.scheduledAt = value)}
 														onTimeZoneChange={(timeZone) => changeStopTimeZone(stop, timeZone)}
 														portalTarget={dialogElement}
-														timeZoneHint="Saved with this stop"
 														timeZone={stop.timeZone}
 														{timeZoneOptions}
 													/>

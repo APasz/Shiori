@@ -3,6 +3,7 @@ import {
 	browserTimeZoneOptions,
 	searchTimeZoneOptions,
 	timeZoneOffsetLabel,
+	timeZoneSelectionLabel,
 	timeZoneShortLabel
 } from './time-zone-search';
 
@@ -65,8 +66,32 @@ describe('time-zone search', () => {
 		expect(timeZoneShortLabel('America/Chicago', Date.UTC(2026, 6, 15, 12))).toBe('CDT');
 	});
 
-	it('uses an event-specific UTC offset in compact time tooltips', () => {
-		expect(timeZoneOffsetLabel('Asia/Hong_Kong', 1_775_952_000_000)).toBe('UTC+08:00');
-		expect(timeZoneOffsetLabel('America/Chicago', 1_775_952_000_000)).toBe('UTC-05:00');
+	it('uses a bare offset when the database has no named abbreviation', () => {
+		expect(timeZoneShortLabel('Asia/Amman', Date.UTC(2026, 0, 15, 12))).toBe('+03:00');
+	});
+
+	it('uses an event-specific offset in compact time tooltips', () => {
+		expect(timeZoneOffsetLabel('Asia/Hong_Kong', 1_775_952_000_000)).toBe('+08:00');
+		expect(timeZoneOffsetLabel('America/Chicago', 1_775_952_000_000)).toBe('-05:00');
+	});
+
+	it('uses a concise place, abbreviation, and offset for picker selections', () => {
+		const timestamp = Date.UTC(2026, 0, 15, 12);
+		const options = browserTimeZoneOptions();
+
+		expect(timeZoneSelectionLabel('UTC', options, timestamp)).toBe('UTC');
+		expect(timeZoneSelectionLabel('Asia/Tokyo', options, timestamp)).toBe('Tokyo · JST · +09:00');
+		expect(timeZoneSelectionLabel('Australia/Melbourne', options, timestamp)).toBe('Melbourne · AEDT · +11:00');
+		expect(timeZoneSelectionLabel('Asia/Amman', options, timestamp)).toBe('Amman · +03:00');
+	});
+
+	it('uses a supplied friendly place name when one is available', () => {
+		expect(
+			timeZoneSelectionLabel(
+				'Asia/Tokyo',
+				[{ aliases: ['JST'], places: ['Tokyo, Japan'], timeZone: 'Asia/Tokyo' }],
+				Date.UTC(2026, 0, 15, 12)
+			)
+		).toBe('Tokyo, Japan · JST · +09:00');
 	});
 });

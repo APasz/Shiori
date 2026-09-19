@@ -32,6 +32,7 @@ const offsetFormatters = new Map<string, Intl.DateTimeFormat>();
 const shortNameFormatters = new Map<string, Intl.DateTimeFormat>();
 const timeZoneNameLocales = ['en-AU', 'en-US', 'en-GB'] as const;
 const shortTimeZoneNamePattern = /^[A-Z]{2,5}$/;
+const offsetStyleTimeZoneNamePattern = /^(?:(?:GMT|UTC)?[+-]\d{1,2}(?::?\d{2})?|GMT|UTC)$/;
 
 function derivedPlace(timeZone: string): string {
 	return timeZone
@@ -112,7 +113,7 @@ function timeZoneAbbreviationAt(timeZone: string, timestamp: number): string | n
 	}
 }
 
-/** Returns the exact UTC offset at a timestamp for compact display and tooltips. */
+/** Returns the exact offset at a timestamp for compact display and tooltips. */
 export function timeZoneOffsetLabel(timeZone: string, timestamp: number): string | null {
 	if (!Number.isSafeInteger(timestamp)) {
 		return null;
@@ -125,19 +126,63 @@ export function timeZoneOffsetLabel(timeZone: string, timestamp: number): string
 		if (!offset) {
 			return null;
 		}
-		return offset === 'GMT' || offset === 'GMT+00:00' ? 'UTC' : offset.replace(/^GMT/, 'UTC');
+		return offset === 'GMT' || offset === 'UTC' || offset === 'GMT+00:00' || offset === 'UTC+00:00'
+			? 'UTC'
+			: offset.replace(/^(?:GMT|UTC)/, '');
 	} catch {
 		return null;
 	}
 }
 
 export function timeZoneShortLabel(timeZone: string, timestamp = Date.now()): string {
-	return (
-		timeZoneAbbreviationAt(timeZone, timestamp) ??
-		timeZoneOptionsByName.get(timeZone)?.aliases[0] ??
-		timeZoneOffsetLabel(timeZone, timestamp) ??
-		timeZone
-	);
+	const browserAbbreviation = timeZoneAbbreviationAt(timeZone, timestamp);
+	if (browserAbbreviation) {
+		return browserAbbreviation;
+	}
+
+	const databaseAbbreviation = timeZoneOptionsByName.get(timeZone)?.aliases[0];
+	if (databaseAbbreviation && !offsetStyleTimeZoneNamePattern.test(databaseAbbreviation)) {
+		return databaseAbbreviation;
+	}
+
+	const offset = timeZoneOffsetLabel(timeZone, timestamp);
+	if (offset) {
+		return offset;
+	}
+	if (!databaseAbbreviation) {
+		return timeZone;
+	}
+	return databaseAbbreviation === 'GMT' || databaseAbbreviation === 'UTC'
+		? 'UTC'
+		: databaseAbbreviation.replace(/^(?:GMT|UTC)/, '');
+}
+
+/** Returns a concise, human-readable label for a selectable time zone. */
+export function timeZoneSelectionLabel(
+	timeZone: string,
+	options: readonly TimeZoneSearchOption[],
+	timestamp = Date.now()
+): string {
+	if (timeZone === 'UTC') {
+		return 'UTC';
+	}
+
+	const option = options.find((candidate) => candidate.timeZone === timeZone);
+	const identifierPlace = timeZone.split('/').at(-1)?.replaceAll('_', ' ');
+	const matchingPlace = option?.places.find((candidate) => candidate === identifierPlace);
+	const solePlace = option?.places.length === 1 ? option?.places[0] : undefined;
+	const place = matchingPlace ?? solePlace ?? identifierPlace ?? option?.places[0] ?? derivedPlace(timeZone);
+	const abbreviation = timeZoneShortLabel(timeZone, timestamp);
+	const offset = timeZoneOffsetLabel(timeZone, timestamp);
+	const details = [
+		...new Set(
+			[abbreviation === timeZone ? null : abbreviation, offset].filter(
+				(detail): detail is string => detail !== null && detail !== place
+			)
+		)
+	];
+
+	return [place, ...details].join(' · ');
 }
 
 function normalized(value: string): string {
