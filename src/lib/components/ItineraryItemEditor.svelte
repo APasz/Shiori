@@ -3,12 +3,24 @@
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
 	import {
+		availabilityConstraintCandidate,
+		availabilityConstraintDraftFromConstraint,
+		availabilityConstraintDraftForTimeZone,
+		availabilityTimingKindLabels,
+		availabilityTypeLabels,
+		availabilityTypesForItem,
+		createAvailabilityConstraintDraft,
+		validateAvailabilityConstraintDraft,
+		type AvailabilityConstraintDraft
+	} from '$lib/itinerary/availability-draft';
+	import {
 		apiErrorSchema,
 		editLockResponseSchema,
 		editSaveResponseSchema,
 		locationResolveResponseSchema
 	} from '$lib/editing/contracts';
 	import {
+		constraintTimingKindSchema,
 		currencyCodeSchema,
 		documentKindSchema,
 		itineraryItemDraftSchema,
@@ -18,7 +30,6 @@
 		timingKindSchema,
 		transportModeSchema,
 		type DocumentReference,
-		type Constraint,
 		type CurrencyCode,
 		type Expense,
 		type ItineraryItem,
@@ -49,6 +60,7 @@
 	type EditorMode = 'create' | 'edit';
 	type EditorState = 'acquiring' | 'editing' | 'error' | 'saving';
 	type EditorSectionId =
+		| 'editor-availability'
 		| 'editor-cost'
 		| 'editor-links'
 		| 'editor-overview'
@@ -129,7 +141,7 @@
 	let lockToken = $state<string | null>(null);
 	let itemType = $state<ItineraryItemType>('activity');
 	let title = $state('');
-	let availability = $state<Constraint[]>([]);
+	let availability = $state<AvailabilityConstraintDraft[]>([]);
 	let timingKind = $state<ItineraryTiming['kind']>('exact');
 	let startAt = $state('');
 	let endAt = $state('');
@@ -175,8 +187,10 @@
 	const reservationStatusOptions = reservationStatusSchema.options;
 	const transportModeOptions = transportModeSchema.options;
 	const documentKindOptions = documentKindSchema.options;
+	const availabilityTimingKindOptions = constraintTimingKindSchema.options;
 	const timingKindOptions = timingKindSchema.options;
 	const currencyOptions = currencyCodeSchema.options;
+	const availabilityTypeOptions = $derived(availabilityTypesForItem(itemType));
 	const selectableExpenses = $derived(
 		[...expenses]
 			.filter((expense) => expense.availableForItemCosts && !linkedExpenseIds.includes(expense.id))
@@ -215,16 +229,12 @@
 		};
 	}
 
-	function copyAvailability(constraints: readonly Constraint[]): Constraint[] {
-		return constraints.map((constraint) => ({ ...constraint, timing: { ...constraint.timing } }));
-	}
-
 	function populateDraft(source: ItineraryItem, defaultTimeZone: string): void {
 		const timeZone = resolveTimingTimeZone(source.timing, defaultTimeZone);
 		startAtTimeZone = timeZone;
 		itemType = source.type;
 		title = source.title;
-		availability = copyAvailability(source.availability);
+		availability = source.availability.map(availabilityConstraintDraftFromConstraint);
 		timingKind = source.timing.kind;
 		startAt = '';
 		endAt = '';
@@ -306,6 +316,60 @@
 
 	function newIdentifier(): string {
 		return crypto.randomUUID();
+	}
+
+	function dateFromDateTimeInput(value: string | undefined): string | undefined {
+		const date = value?.slice(0, 10) ?? '';
+		return isCompleteLocalDateTime(`${date}T00:00`) ? date : undefined;
+	}
+
+	function defaultAvailabilityDate(): string | undefined {
+		const firstStopSchedule = usesFirstTransportStopForSchedule() ? firstTransportStopSchedule() : undefined;
+		const scheduleDateTime = firstStopSchedule
+			? (formatTimestampForTimeZoneInput(firstStopSchedule.scheduledAt, startAtTimeZone) ?? '')
+			: initialDateTimeForTiming();
+		return dateFromDateTimeInput(scheduleDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
+	}
+
+	function periodEndDefaultDate(constraint: AvailabilityConstraintDraft): string | undefined {
+		return dateFromDateTimeInput(constraint.startAt) ?? defaultAvailabilityDate();
+	}
+
+	function addAvailability(): void {
+		availability = [
+			...availability,
+			createAvailabilityConstraintDraft({
+				defaultDate: defaultAvailabilityDate(),
+				id: newIdentifier(),
+				itemType,
+				timeZone: startAtTimeZone
+			})
+		];
+	}
+
+	function removeAvailability(index: number): void {
+		availability = availability.filter((_, current) => current !== index);
+	}
+
+	function changeAvailabilityTimingKind(index: number, value: string): void {
+		const parsedKind = constraintTimingKindSchema.safeParse(value);
+		const constraint = availability[index];
+		if (!parsedKind.success || !constraint) {
+			return;
+		}
+		constraint.timingKind = parsedKind.data;
+	}
+
+	function changeAvailabilityTimeZone(index: number, timeZone: string): void {
+		const constraint = availability[index];
+		if (!constraint) {
+			return;
+		}
+		availability[index] = availabilityConstraintDraftForTimeZone(constraint, timeZone);
+	}
+
+	function availabilitySummary(constraint: AvailabilityConstraintDraft): string {
+		return optionalText(constraint.label) ?? availabilityTypeLabels[constraint.type];
 	}
 
 	function addLocation(): void {
@@ -539,10 +603,10 @@
 		);
 	}
 
-	function reformatInTimeZone(value: string, timeZone: string): string {
-		const currentTimestamp = zonedDateTimeToUnixMilliseconds(value, startAtTimeZone);
-		return currentTimestamp !== null && isValidIanaTimeZone(timeZone)
-			? (formatTimestampForTimeZoneInput(currentTimestamp, timeZone) ?? value)
+	function reformatInTimeZone(value: string, sourceTimeZone: string, targetTimeZone: string): string {
+		const currentTimestamp = zonedDateTimeToUnixMilliseconds(value, sourceTimeZone);
+		return currentTimestamp !== null && isValidIanaTimeZone(targetTimeZone)
+			? (formatTimestampForTimeZoneInput(currentTimestamp, targetTimeZone) ?? value)
 			: value;
 	}
 
@@ -551,16 +615,16 @@
 		switch (timingKind) {
 			case 'exact':
 				if (!exactTimingDateOnly) {
-					startAt = reformatInTimeZone(startAt, timeZone);
-					endAt = reformatInTimeZone(endAt, timeZone);
+					startAt = reformatInTimeZone(startAt, previousTimeZone, timeZone);
+					endAt = reformatInTimeZone(endAt, previousTimeZone, timeZone);
 				}
 				break;
 			case 'approximate':
-				nominalAt = reformatInTimeZone(nominalAt, timeZone);
+				nominalAt = reformatInTimeZone(nominalAt, previousTimeZone, timeZone);
 				break;
 			case 'window':
-				earliestAt = reformatInTimeZone(earliestAt, timeZone);
-				latestAt = reformatInTimeZone(latestAt, timeZone);
+				earliestAt = reformatInTimeZone(earliestAt, previousTimeZone, timeZone);
+				latestAt = reformatInTimeZone(latestAt, previousTimeZone, timeZone);
 				break;
 		}
 		transportStops = transportStops.map((stop) => {
@@ -705,7 +769,7 @@
 				}
 			: undefined;
 		const common = {
-			availability: copyAvailability(availability),
+			availability: availability.map(availabilityConstraintCandidate),
 			id: item.id,
 			timing: timingCandidate(),
 			title: title.trim(),
@@ -805,10 +869,39 @@
 		return null;
 	}
 
+	function validateAvailability(): string | null {
+		for (const [index, constraint] of availability.entries()) {
+			if (!isValidIanaTimeZone(constraint.timeZone)) {
+				return `Availability ${index + 1} time zone: use a valid IANA time zone such as Asia/Tokyo.`;
+			}
+			const timingInputs =
+				constraint.timingKind === 'period'
+					? [
+							{ label: 'start date and time', value: constraint.startAt },
+							{ label: 'end date and time', value: constraint.endAt }
+						]
+					: [{ label: 'deadline date and time', value: constraint.at }];
+			for (const input of timingInputs) {
+				if (zonedDateTimeToUnixMilliseconds(input.value, constraint.timeZone) === null) {
+					return `Availability ${index + 1} ${input.label}: enter a valid local time. Times skipped by daylight saving cannot be used.`;
+				}
+			}
+			const validation = validateAvailabilityConstraintDraft(constraint);
+			if (!validation.success) {
+				return `Availability ${index + 1}: ${formatValidationIssues(validation.error.issues, 'entry')}`;
+			}
+		}
+		return null;
+	}
+
 	function validateItem(): ItemValidation {
 		const dateTimeError = validateDateTimes();
 		if (dateTimeError) {
 			return { error: dateTimeError, valid: false };
+		}
+		const availabilityError = validateAvailability();
+		if (availabilityError) {
+			return { error: availabilityError, valid: false };
 		}
 		const costError = validateCost();
 		if (costError) {
@@ -1083,6 +1176,7 @@
 				<nav aria-label="Edit sections" class="section-nav">
 					<button onclick={() => scrollToSection('editor-overview')} type="button">Overview</button>
 					<button onclick={() => scrollToSection('editor-schedule')} type="button">Schedule</button>
+					<button onclick={() => scrollToSection('editor-availability')} type="button">Availability</button>
 					<button onclick={() => scrollToSection('editor-places')} type="button">Places</button>
 					{#if itemType === 'transport'}
 						<button onclick={() => scrollToSection('editor-transport')} type="button">Transport</button>
@@ -1252,6 +1346,90 @@
 								{timeZoneOptions}
 							/>
 						{/if}
+					</fieldset>
+
+					<fieldset id="editor-availability">
+						<legend>Availability</legend>
+						<div class="collection">
+							{#each availability as constraint, index (constraint.id)}
+								<details bind:open={constraint.isExpanded} class="collection-entry">
+									<summary aria-label={`Edit availability ${index + 1}: ${availabilitySummary(constraint)}`}>
+										<span>Availability {index + 1}</span>
+										<span>{availabilitySummary(constraint)}</span>
+									</summary>
+									<div class="entry-body">
+										<div class="entry-heading">
+											<button class="text-button" onclick={() => removeAvailability(index)} type="button">Remove</button
+											>
+										</div>
+										<div class="field-grid">
+											<label class="shiori-form-label">
+												Availability type <span class="field-hint">Suggested for {itemType} items</span>
+												<select bind:value={constraint.type} class="shiori-form-control">
+													{#each availabilityTypeOptions as type (type)}
+														<option value={type}>{availabilityTypeLabels[type]}</option>
+													{/each}
+												</select>
+											</label>
+											<label class="shiori-form-label">
+												Label <span class="field-hint">Optional</span>
+												<input class="shiori-form-control" bind:value={constraint.label} />
+											</label>
+										</div>
+										<label class="shiori-form-label">
+											Timing mode
+											<select
+												class="shiori-form-control"
+												value={constraint.timingKind}
+												onchange={(event) => changeAvailabilityTimingKind(index, event.currentTarget.value)}
+											>
+												{#each availabilityTimingKindOptions as kind (kind)}
+													<option value={kind}>{availabilityTimingKindLabels[kind]}</option>
+												{/each}
+											</select>
+										</label>
+										{#if constraint.timingKind === 'period'}
+											<DateTimeInput
+												dateTime={constraint.startAt}
+												defaultDate={defaultAvailabilityDate()}
+												id={`availability-${constraint.id}-start`}
+												label="Start date and time"
+												onDateTimeChange={(value) => (constraint.startAt = value)}
+												onTimeZoneChange={(timeZone) => changeAvailabilityTimeZone(index, timeZone)}
+												portalTarget={dialogElement}
+												timeZoneHint="Saved with this availability"
+												timeZone={constraint.timeZone}
+												{timeZoneOptions}
+											/>
+											<DateTimeInput
+												dateTime={constraint.endAt}
+												defaultDate={periodEndDefaultDate(constraint)}
+												id={`availability-${constraint.id}-end`}
+												label="End date and time"
+												onDateTimeChange={(value) => (constraint.endAt = value)}
+												portalTarget={dialogElement}
+												showTimeZonePicker={false}
+												timeZone={constraint.timeZone}
+											/>
+										{:else}
+											<DateTimeInput
+												dateTime={constraint.at}
+												defaultDate={defaultAvailabilityDate()}
+												id={`availability-${constraint.id}-deadline`}
+												label="Deadline date and time"
+												onDateTimeChange={(value) => (constraint.at = value)}
+												onTimeZoneChange={(timeZone) => changeAvailabilityTimeZone(index, timeZone)}
+												portalTarget={dialogElement}
+												timeZoneHint="Saved with this availability"
+												timeZone={constraint.timeZone}
+												{timeZoneOptions}
+											/>
+										{/if}
+									</div>
+								</details>
+							{/each}
+						</div>
+						<button class="text-button" onclick={addAvailability} type="button">Add availability</button>
 					</fieldset>
 
 					<fieldset id="editor-places">

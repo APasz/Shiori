@@ -451,6 +451,7 @@ export const constraintTypeSchema = z.enum([
 	'cutoff',
 	'other'
 ]);
+export const constraintTimingKindSchema = z.enum(['period', 'deadline']);
 
 const constraintPeriodTimingSchema = z.strictObject({
 	kind: z.literal('period'),
@@ -718,6 +719,7 @@ export type ItineraryTiming = z.infer<typeof itineraryTimingSchema>;
 export type Constraint = z.infer<typeof constraintSchema>;
 export type ConstraintType = z.infer<typeof constraintTypeSchema>;
 export type ConstraintTiming = z.infer<typeof constraintTimingSchema>;
+export type ConstraintTimingKind = z.infer<typeof constraintTimingKindSchema>;
 export type IanaTimeZone = z.infer<typeof ianaTimeZoneSchema>;
 export type ItineraryLocation = z.infer<typeof locationSchema>;
 export type ItineraryLink = z.infer<typeof itineraryLinkSchema>;
