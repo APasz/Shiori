@@ -6,8 +6,13 @@ import {
 	type ConstraintType,
 	type ItineraryItemType
 } from './schema';
-import { availabilityTypeSuggestions } from './availability';
-import { formatTimestampForTimeZoneInput, isValidIanaTimeZone, zonedDateTimeToUnixMilliseconds } from './zoned-time';
+import { availabilityTypeSuggestions, preferredAvailabilityTimingKind } from './availability';
+import {
+	formatTimestampForTimeZoneInput,
+	isCompleteLocalDateTime,
+	isValidIanaTimeZone,
+	zonedDateTimeToUnixMilliseconds
+} from './zoned-time';
 
 export type AvailabilityConstraintDraft = {
 	at: string;
@@ -31,6 +36,11 @@ export const availabilityTimingKindLabels = {
 
 function incompleteDateTime(defaultDate: string | undefined): string {
 	return defaultDate === undefined ? '' : `${defaultDate}T`;
+}
+
+function datePortion(value: string): string | undefined {
+	const date = value.slice(0, 10);
+	return isCompleteLocalDateTime(`${date}T00:00`) ? date : undefined;
 }
 
 function optionalText(value: string): string | undefined {
@@ -58,6 +68,41 @@ function reformatInTimeZone(
 		: value;
 }
 
+function incompleteDateTimeForTimingSwitch(draft: AvailabilityConstraintDraft): string {
+	const values =
+		draft.timingKind === 'period' ? [draft.startAt, draft.endAt, draft.at] : [draft.at, draft.startAt, draft.endAt];
+	for (const value of values) {
+		const date = datePortion(value);
+		if (date !== undefined) {
+			return incompleteDateTime(date);
+		}
+	}
+	return '';
+}
+
+function dateTimeWithFallbackDate(value: string, fallback: string): string {
+	return datePortion(value) === undefined ? fallback : value;
+}
+
+function availabilityConstraintDraftForTimingKind(
+	draft: AvailabilityConstraintDraft,
+	timingKind: ConstraintTimingKind
+): AvailabilityConstraintDraft {
+	if (draft.timingKind === timingKind) {
+		return draft;
+	}
+
+	const dateTime = incompleteDateTimeForTimingSwitch(draft);
+	return timingKind === 'period'
+		? {
+				...draft,
+				endAt: dateTimeWithFallbackDate(draft.endAt, dateTime),
+				startAt: dateTimeWithFallbackDate(draft.startAt, dateTime),
+				timingKind
+			}
+		: { ...draft, at: dateTimeWithFallbackDate(draft.at, dateTime), timingKind };
+}
+
 /** Returns item-specific suggestions first while retaining every generic persisted type as an option. */
 export function availabilityTypesForItem(itemType: ItineraryItemType): ConstraintType[] {
 	const suggested = availabilityTypeSuggestions[itemType] as readonly ConstraintType[];
@@ -68,6 +113,38 @@ export function defaultAvailabilityType(itemType: ItineraryItemType): Constraint
 	return availabilityTypeSuggestions[itemType][0];
 }
 
+/** Returns whether the draft's selected timing mode is still missing a complete local date and time. */
+export function isAvailabilityConstraintDraftIncomplete(draft: AvailabilityConstraintDraft): boolean {
+	return draft.timingKind === 'period'
+		? !isCompleteLocalDateTime(draft.startAt) || !isCompleteLocalDateTime(draft.endAt)
+		: !isCompleteLocalDateTime(draft.at);
+}
+
+/**
+ * Updates an availability type and applies its editor timing suggestion only while the draft timing is incomplete.
+ * Persisted type and timing remain independent: a complete timing is never converted by a type change.
+ */
+export function availabilityConstraintDraftForType(
+	draft: AvailabilityConstraintDraft,
+	type: ConstraintType
+): AvailabilityConstraintDraft {
+	if (draft.type === type) {
+		return draft;
+	}
+
+	const typeDraft = { ...draft, type };
+	const preferredTimingKind = preferredAvailabilityTimingKind(type);
+	if (
+		preferredTimingKind === undefined ||
+		preferredTimingKind === draft.timingKind ||
+		!isAvailabilityConstraintDraftIncomplete(draft)
+	) {
+		return typeDraft;
+	}
+
+	return availabilityConstraintDraftForTimingKind(typeDraft, preferredTimingKind);
+}
+
 /** Creates a blank expanded entry without inventing a time of day. */
 export function createAvailabilityConstraintDraft(input: {
 	defaultDate?: string;
@@ -76,6 +153,7 @@ export function createAvailabilityConstraintDraft(input: {
 	timeZone: string;
 }): AvailabilityConstraintDraft {
 	const dateTime = incompleteDateTime(input.defaultDate);
+	const type = defaultAvailabilityType(input.itemType);
 	return {
 		at: dateTime,
 		endAt: dateTime,
@@ -83,9 +161,9 @@ export function createAvailabilityConstraintDraft(input: {
 		isExpanded: true,
 		label: '',
 		startAt: dateTime,
-		timingKind: 'period',
+		timingKind: preferredAvailabilityTimingKind(type) ?? 'period',
 		timeZone: input.timeZone,
-		type: defaultAvailabilityType(input.itemType)
+		type
 	};
 }
 

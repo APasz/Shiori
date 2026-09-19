@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	availabilityConstraintDraftFromConstraint,
+	availabilityConstraintDraftForType,
 	availabilityConstraintDraftForTimeZone,
 	availabilityTypesForItem,
 	createAvailabilityConstraintDraft,
 	defaultAvailabilityType,
+	isAvailabilityConstraintDraftIncomplete,
 	validateAvailabilityConstraintDraft
 } from './availability-draft';
 
@@ -22,7 +24,7 @@ describe('availability constraint drafts', () => {
 		expect(availabilityTypesForItem('activity')).toContain('reception-hours');
 	});
 
-	it('defaults a new period to the item date and time zone without inventing times', () => {
+	it('uses Period for a new Opening hours entry without inventing times', () => {
 		expect(
 			createAvailabilityConstraintDraft({
 				defaultDate: '2026-04-12',
@@ -40,6 +42,142 @@ describe('availability constraint drafts', () => {
 			timingKind: 'period',
 			timeZone: 'Asia/Tokyo',
 			type: 'opening-hours'
+		});
+	});
+
+	it('uses Deadline when a new entry is changed to Last admission', () => {
+		const draft = createAvailabilityConstraintDraft({
+			defaultDate: '2026-04-12',
+			id: 'museum-admission',
+			itemType: 'activity',
+			timeZone: 'Asia/Tokyo'
+		});
+
+		expect(isAvailabilityConstraintDraftIncomplete(draft)).toBe(true);
+		expect(availabilityConstraintDraftForType(draft, 'last-admission')).toMatchObject({
+			at: '2026-04-12T',
+			timingKind: 'deadline',
+			type: 'last-admission'
+		});
+	});
+
+	it('uses Deadline when a new entry is changed to Cutoff', () => {
+		const draft = createAvailabilityConstraintDraft({
+			defaultDate: '2026-04-12',
+			id: 'train-cutoff',
+			itemType: 'transport',
+			timeZone: 'Asia/Tokyo'
+		});
+
+		expect(availabilityConstraintDraftForType(draft, 'cutoff')).toMatchObject({
+			at: '2026-04-12T',
+			timingKind: 'deadline',
+			type: 'cutoff'
+		});
+	});
+
+	it('keeps the existing timing mode when a new entry is changed to Other', () => {
+		const deadlineDraft = availabilityConstraintDraftForType(
+			createAvailabilityConstraintDraft({
+				defaultDate: '2026-04-12',
+				id: 'train-cutoff',
+				itemType: 'transport',
+				timeZone: 'Asia/Tokyo'
+			}),
+			'cutoff'
+		);
+
+		expect(availabilityConstraintDraftForType(deadlineDraft, 'other')).toEqual({
+			...deadlineDraft,
+			type: 'other'
+		});
+	});
+
+	it('retains complete Period and Deadline data when the availability type changes', () => {
+		const periodDraft = availabilityConstraintDraftFromConstraint({
+			id: 'museum-hours',
+			timing: {
+				endAt: Date.UTC(2026, 3, 12, 18),
+				kind: 'period' as const,
+				startAt: Date.UTC(2026, 3, 12, 9),
+				timeZone: 'UTC'
+			},
+			type: 'opening-hours' as const
+		});
+		const deadlineDraft = availabilityConstraintDraftFromConstraint({
+			id: 'ticket-cutoff',
+			timing: { at: Date.UTC(2026, 3, 12, 16), kind: 'deadline' as const, timeZone: 'UTC' },
+			type: 'cutoff' as const
+		});
+
+		expect(isAvailabilityConstraintDraftIncomplete(periodDraft)).toBe(false);
+		expect(isAvailabilityConstraintDraftIncomplete(deadlineDraft)).toBe(false);
+		expect(availabilityConstraintDraftForType(periodDraft, 'last-admission')).toEqual({
+			...periodDraft,
+			type: 'last-admission'
+		});
+		expect(availabilityConstraintDraftForType(deadlineDraft, 'opening-hours')).toEqual({
+			...deadlineDraft,
+			type: 'opening-hours'
+		});
+	});
+
+	it('retains complete timing input that still needs validation when the availability type changes', () => {
+		const draft = {
+			...createAvailabilityConstraintDraft({
+				defaultDate: '2026-04-12',
+				id: 'museum-hours',
+				itemType: 'activity',
+				timeZone: 'UTC'
+			}),
+			endAt: '2026-04-12T09:00',
+			startAt: '2026-04-12T18:00'
+		};
+
+		expect(isAvailabilityConstraintDraftIncomplete(draft)).toBe(false);
+		expect(availabilityConstraintDraftForType(draft, 'last-admission')).toEqual({
+			...draft,
+			type: 'last-admission'
+		});
+	});
+
+	it('preserves a usable date when an incomplete draft automatically switches timing mode', () => {
+		const draft = {
+			...createAvailabilityConstraintDraft({
+				defaultDate: '2026-04-12',
+				id: 'museum-admission',
+				itemType: 'activity',
+				timeZone: 'Asia/Tokyo'
+			}),
+			at: '',
+			endAt: '',
+			startAt: '2026-04-12T09:30'
+		};
+
+		expect(availabilityConstraintDraftForType(draft, 'last-admission')).toMatchObject({
+			at: '2026-04-12T',
+			timingKind: 'deadline',
+			type: 'last-admission'
+		});
+	});
+
+	it('retains entered target-mode input when an incomplete draft automatically switches timing mode', () => {
+		const draft = {
+			...createAvailabilityConstraintDraft({
+				defaultDate: '2026-04-12',
+				id: 'museum-admission',
+				itemType: 'activity',
+				timeZone: 'UTC'
+			}),
+			at: '2026-04-13T16:00',
+			endAt: '',
+			startAt: '2026-04-12T09:00'
+		};
+
+		expect(availabilityConstraintDraftForType(draft, 'last-admission')).toMatchObject({
+			at: '2026-04-13T16:00',
+			timingKind: 'deadline',
+			type: 'last-admission'
 		});
 	});
 

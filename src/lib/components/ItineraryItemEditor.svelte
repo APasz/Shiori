@@ -6,6 +6,7 @@
 	import {
 		availabilityConstraintCandidate,
 		availabilityConstraintDraftFromConstraint,
+		availabilityConstraintDraftForType,
 		availabilityConstraintDraftForTimeZone,
 		availabilityTimingKindLabels,
 		availabilityTypesForItem,
@@ -21,6 +22,7 @@
 	} from '$lib/editing/contracts';
 	import {
 		constraintTimingKindSchema,
+		constraintTypeSchema,
 		currencyCodeSchema,
 		documentKindSchema,
 		itineraryItemDraftSchema,
@@ -393,6 +395,15 @@
 			return;
 		}
 		constraint.timingKind = parsedKind.data;
+	}
+
+	function changeAvailabilityType(index: number, value: string): void {
+		const parsedType = constraintTypeSchema.safeParse(value);
+		const constraint = availability[index];
+		if (!parsedType.success || !constraint) {
+			return;
+		}
+		availability[index] = availabilityConstraintDraftForType(constraint, parsedType.data);
 	}
 
 	function changeAvailabilityTimeZone(index: number, timeZone: string): void {
@@ -1509,7 +1520,11 @@
 										<div class="field-grid">
 											<label class="shiori-form-label">
 												Availability type <span class="field-hint">Suggested for {itemType} items</span>
-												<select bind:value={constraint.type} class="shiori-form-control">
+												<select
+													class="shiori-form-control"
+													value={constraint.type}
+													onchange={(event) => changeAvailabilityType(index, event.currentTarget.value)}
+												>
 													{#each availabilityTypeOptions as type (type)}
 														<option value={type}>{availabilityTypeEditorLabel(type)}</option>
 													{/each}

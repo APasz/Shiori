@@ -52,7 +52,7 @@ describe('availability presentation', () => {
 					contextTimestamps: [Date.UTC(2026, 3, 12, 0)]
 				}
 			)
-		).toMatchObject({ label: 'Admission', timeZone: 'America/Los_Angeles', timing: '12-04-2026, 3:30 pm' });
+		).toMatchObject({ label: 'Last admission', timeZone: 'America/Los_Angeles', timing: '12-04-2026, 3:30 pm' });
 	});
 
 	it('keeps multiple periods as separate split-hour entries', () => {

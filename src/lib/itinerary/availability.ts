@@ -1,4 +1,4 @@
-import type { Constraint, ConstraintTiming, ConstraintType, ItineraryItemType } from './schema';
+import type { Constraint, ConstraintTiming, ConstraintTimingKind, ConstraintType, ItineraryItemType } from './schema';
 
 type ItineraryRecord = Record<string, unknown>;
 type OpeningHoursPeriodConstraint = Constraint &
@@ -8,14 +8,25 @@ type OpeningHoursPeriodConstraint = Constraint &
 	}>;
 
 const availabilityTypeDetails = {
-	'opening-hours': { editorLabel: 'Opening hours', presentationLabel: 'Opening' },
-	'reception-hours': { editorLabel: 'Reception hours', presentationLabel: 'Reception' },
-	'desk-hours': { editorLabel: 'Desk hours', presentationLabel: 'Desk' },
-	'storage-hours': { editorLabel: 'Storage hours', presentationLabel: 'Storage' },
-	'last-admission': { editorLabel: 'Last admission', presentationLabel: 'Admission' },
-	cutoff: { editorLabel: 'Cutoff', presentationLabel: 'Cutoff' },
-	other: { editorLabel: 'Other', presentationLabel: 'Other' }
-} as const satisfies Record<ConstraintType, Readonly<{ editorLabel: string; presentationLabel: string }>>;
+	'opening-hours': { editorLabel: 'Opening hours', preferredTimingKind: 'period', presentationLabel: 'Opening' },
+	'reception-hours': { editorLabel: 'Reception hours', preferredTimingKind: 'period', presentationLabel: 'Reception' },
+	'desk-hours': { editorLabel: 'Desk hours', preferredTimingKind: 'period', presentationLabel: 'Desk' },
+	'storage-hours': { editorLabel: 'Storage hours', preferredTimingKind: 'period', presentationLabel: 'Storage' },
+	'last-admission': {
+		editorLabel: 'Last admission',
+		preferredTimingKind: 'deadline',
+		presentationLabel: 'Last admission'
+	},
+	cutoff: { editorLabel: 'Cutoff', preferredTimingKind: 'deadline', presentationLabel: 'Cutoff' },
+	other: { editorLabel: 'Other', preferredTimingKind: undefined, presentationLabel: 'Other' }
+} as const satisfies Record<
+	ConstraintType,
+	Readonly<{
+		editorLabel: string;
+		preferredTimingKind: ConstraintTimingKind | undefined;
+		presentationLabel: string;
+	}>
+>;
 
 export const availabilityTypeSuggestions = {
 	activity: ['opening-hours', 'last-admission', 'desk-hours', 'other'],
@@ -29,6 +40,11 @@ export function availabilityTypeEditorLabel(type: ConstraintType): string {
 
 export function availabilityTypePresentationLabel(type: ConstraintType): string {
 	return availabilityTypeDetails[type].presentationLabel;
+}
+
+/** Returns the editor's suggested timing mode, without imposing a persisted type-to-timing relationship. */
+export function preferredAvailabilityTimingKind(type: ConstraintType): ConstraintTimingKind | undefined {
+	return availabilityTypeDetails[type].preferredTimingKind;
 }
 
 export type AvailabilityConstraintBounds = Readonly<{

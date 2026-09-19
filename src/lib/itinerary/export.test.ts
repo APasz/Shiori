@@ -367,7 +367,7 @@ describe('itinerary exports', () => {
 		expect(text).toContain('When: 04-12-2026, 9:00 am (Asia/Tokyo)');
 		expect(text).toContain('Availability:');
 		expect(text).toContain('Ticket office · 9:00 am–6:00 pm');
-		expect(text).toContain('Admission · 4:30 pm');
+		expect(text).toContain('Last admission · 4:30 pm');
 		expect(text).toContain('Tokyo Station · TYO — 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
@@ -458,6 +458,6 @@ describe('itinerary exports', () => {
 		]);
 		expect(text).toContain('Opening · 10:00 am–12:00 pm');
 		expect(text).toContain('Opening · 1:00 pm–4:00 pm');
-		expect(text).toContain('Admission · 04-12-2026, 3:30 pm (America/Los_Angeles)');
+		expect(text).toContain('Last admission · 04-12-2026, 3:30 pm (America/Los_Angeles)');
 	});
 });

@@ -295,7 +295,7 @@ describe('itinerary item details', () => {
 		expect(occurrences(html, 'Opening')).toBe(2);
 		expect(html).toContain('10:00 am–12:00 pm');
 		expect(html).toContain('1:00 pm–4:00 pm');
-		expect(html).toContain('Admission');
+		expect(html).toContain('Last admission');
 		expect(html).toContain('12-04-2026, 3:30 pm');
 		expect(html).toContain('PDT');
 	});
