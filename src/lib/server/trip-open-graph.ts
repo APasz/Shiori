@@ -1,7 +1,7 @@
 import { getLocalItineraryDayCount } from '$lib/itinerary/presentation';
 import type { Itinerary } from '$lib/itinerary/schema';
 import { timingEarliestTimestamp, timingEndTimestamp } from '$lib/itinerary/timing';
-import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
+import { resolveItemTimeZone, resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 
 const openGraphDateLocale = 'en-AU';
 const openGraphDateRangeSeparator = ' >>> ';
@@ -88,9 +88,12 @@ function scheduleDateRange(itinerary: Itinerary): ScheduleDateRange | null {
 	};
 
 	for (const item of itinerary.items) {
-		const timingTimeZone = resolveTimingTimeZone(item.timing, itinerary.timeZone);
-		consider({ timestamp: timingEarliestTimestamp(item.timing), timeZone: timingTimeZone });
-		consider({ timestamp: timingEndTimestamp(item.timing), timeZone: timingTimeZone });
+		const itemTimeZone = resolveItemTimeZone(item, itinerary.timeZone);
+		if (item.timing) {
+			const timingTimeZone = resolveTimingTimeZone(item.timing, itinerary.timeZone);
+			consider({ timestamp: timingEarliestTimestamp(item.timing), timeZone: timingTimeZone });
+			consider({ timestamp: timingEndTimestamp(item.timing), timeZone: timingTimeZone });
+		}
 
 		if (item.type !== 'transport') {
 			continue;
@@ -99,7 +102,7 @@ function scheduleDateRange(itinerary: Itinerary): ScheduleDateRange | null {
 			if (stop.scheduledAt !== undefined) {
 				consider({
 					timestamp: stop.scheduledAt,
-					timeZone: resolveTransportStopTimeZone(stop, timingTimeZone)
+					timeZone: resolveTransportStopTimeZone(stop, itemTimeZone)
 				});
 			}
 		}

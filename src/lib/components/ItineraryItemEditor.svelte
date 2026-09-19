@@ -34,6 +34,7 @@
 		type Expense,
 		type ItineraryItem,
 		type ItineraryItemDraft,
+		type ItineraryItemPlacement,
 		type ItineraryItemType,
 		type ItineraryLocation,
 		type ReservationStatus,
@@ -50,6 +51,8 @@
 	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { defaultEndDateForTimingInput } from '$lib/itinerary/timing-input';
+	import { itemPlacementAnchorAt, itemPlacementAnchorForDate, itemPlacementDate } from '$lib/itinerary/item-placement';
+	import { timingStartTimestamp } from '$lib/itinerary/timing';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
 	import { resolveTransportScheduleStart, type TransportStopSchedule } from '$lib/itinerary/transport-stop-schedule';
@@ -142,6 +145,10 @@
 	let itemType = $state<ItineraryItemType>('activity');
 	let title = $state('');
 	let availability = $state<AvailabilityConstraintDraft[]>([]);
+	let scheduleEnabled = $state(true);
+	let placementDateTime = $state('');
+	let placementTimeZone = $state('UTC');
+	let persistedPlacement = $state<ItineraryItemPlacement | undefined>(undefined);
 	let timingKind = $state<ItineraryTiming['kind']>('exact');
 	let startAt = $state('');
 	let endAt = $state('');
@@ -218,8 +225,8 @@
 		};
 	}
 
-	function stopDraft(stop: TransportDetails['stops'][number], timingTimeZone: string): StopDraft {
-		const timeZone = resolveTransportStopTimeZone(stop, timingTimeZone);
+	function stopDraft(stop: TransportDetails['stops'][number], defaultTimeZone: string): StopDraft {
+		const timeZone = resolveTransportStopTimeZone(stop, defaultTimeZone);
 		return {
 			inheritsTimingTimeZone: stop.timeZone === undefined,
 			locationId: stop.locationId,
@@ -230,12 +237,22 @@
 	}
 
 	function populateDraft(source: ItineraryItem, defaultTimeZone: string): void {
-		const timeZone = resolveTimingTimeZone(source.timing, defaultTimeZone);
+		const timeZone = source.timing
+			? resolveTimingTimeZone(source.timing, defaultTimeZone)
+			: (source.placement?.timeZone ?? defaultTimeZone);
 		startAtTimeZone = timeZone;
+		placementTimeZone = source.placement?.timeZone ?? timeZone;
+		persistedPlacement = source.placement;
+		placementDateTime = source.placement
+			? placementDateTimeFor(source.placement.anchorAt, source.placement.timeZone)
+			: source.timing
+				? placementDateTimeFor(timingStartTimestamp(source.timing), timeZone)
+				: '';
+		scheduleEnabled = source.timing !== undefined;
 		itemType = source.type;
 		title = source.title;
 		availability = source.availability.map(availabilityConstraintDraftFromConstraint);
-		timingKind = source.timing.kind;
+		timingKind = source.timing?.kind ?? 'exact';
 		startAt = '';
 		endAt = '';
 		endAtEnabled = false;
@@ -244,24 +261,26 @@
 		toleranceMinutes = 60;
 		earliestAt = '';
 		latestAt = '';
-		switch (source.timing.kind) {
-			case 'exact':
-				startAt = formatTimestampForTimeZoneInput(source.timing.startAt, timeZone) ?? '';
-				endAt =
-					source.timing.endAt !== undefined
-						? (formatTimestampForTimeZoneInput(source.timing.endAt, timeZone) ?? '')
-						: '';
-				endAtEnabled = source.timing.endAt !== undefined;
-				exactTimingDateOnly = source.timing.timePrecision === 'date';
-				break;
-			case 'approximate':
-				nominalAt = formatTimestampForTimeZoneInput(source.timing.nominalAt, timeZone) ?? '';
-				toleranceMinutes = source.timing.toleranceMinutes;
-				break;
-			case 'window':
-				earliestAt = formatTimestampForTimeZoneInput(source.timing.earliestAt, timeZone) ?? '';
-				latestAt = formatTimestampForTimeZoneInput(source.timing.latestAt, timeZone) ?? '';
-				break;
+		if (source.timing) {
+			switch (source.timing.kind) {
+				case 'exact':
+					startAt = formatTimestampForTimeZoneInput(source.timing.startAt, timeZone) ?? '';
+					endAt =
+						source.timing.endAt !== undefined
+							? (formatTimestampForTimeZoneInput(source.timing.endAt, timeZone) ?? '')
+							: '';
+					endAtEnabled = source.timing.endAt !== undefined;
+					exactTimingDateOnly = source.timing.timePrecision === 'date';
+					break;
+				case 'approximate':
+					nominalAt = formatTimestampForTimeZoneInput(source.timing.nominalAt, timeZone) ?? '';
+					toleranceMinutes = source.timing.toleranceMinutes;
+					break;
+				case 'window':
+					earliestAt = formatTimestampForTimeZoneInput(source.timing.earliestAt, timeZone) ?? '';
+					latestAt = formatTimestampForTimeZoneInput(source.timing.latestAt, timeZone) ?? '';
+					break;
+			}
 		}
 		notes = source.notes.join('\n');
 		locations = source.locations.map(locationDraft);
@@ -323,15 +342,23 @@
 		return isCompleteLocalDateTime(`${date}T00:00`) ? date : undefined;
 	}
 
+	function placementDateTimeFor(anchorAt: number, timeZone: string): string {
+		const date = itemPlacementDate({ anchorAt, timeZone });
+		return date === null ? '' : `${date}T00:00`;
+	}
+
 	function availabilityScheduleStart(): TransportStopSchedule | undefined {
 		return usesFirstTransportStopForSchedule() ? firstTransportStopSchedule() : undefined;
 	}
 
 	function defaultAvailabilityTimeZone(): string {
-		return availabilityScheduleStart()?.timeZone ?? startAtTimeZone;
+		return scheduleEnabled ? (availabilityScheduleStart()?.timeZone ?? startAtTimeZone) : placementTimeZone;
 	}
 
 	function defaultAvailabilityDate(): string | undefined {
+		if (!scheduleEnabled) {
+			return dateFromDateTimeInput(placementDateTime);
+		}
 		const scheduleStart = availabilityScheduleStart();
 		const scheduleDateTime = scheduleStart
 			? (formatTimestampForTimeZoneInput(scheduleStart.scheduledAt, scheduleStart.timeZone) ?? '')
@@ -464,7 +491,7 @@
 			locationId,
 			platform: '',
 			scheduledAt: '',
-			timeZone: startAtTimeZone
+			timeZone: itemDefaultTimeZone()
 		};
 	}
 
@@ -570,6 +597,10 @@
 		return timeZone === defaultTimeZone ? {} : { timeZone };
 	}
 
+	function itemDefaultTimeZone(): string {
+		return scheduleEnabled ? startAtTimeZone : placementTimeZone;
+	}
+
 	function timestampValue(value: string, timeZone: string): number {
 		return zonedDateTimeToUnixMilliseconds(value, timeZone) ?? Number.NaN;
 	}
@@ -604,6 +635,7 @@
 
 	function usesFirstTransportStopForSchedule(): boolean {
 		return (
+			scheduleEnabled &&
 			itemType === 'transport' &&
 			timingKind === 'exact' &&
 			completeDateTimeValue(startAt) === undefined &&
@@ -616,6 +648,26 @@
 		return currentTimestamp !== null && isValidIanaTimeZone(targetTimeZone)
 			? (formatTimestampForTimeZoneInput(currentTimestamp, targetTimeZone) ?? value)
 			: value;
+	}
+
+	function reformatInheritedStopTimes(sourceTimeZone: string, targetTimeZone: string): void {
+		if (sourceTimeZone === targetTimeZone) {
+			return;
+		}
+		transportStops = transportStops.map((stop) => {
+			if (!stop.inheritsTimingTimeZone) {
+				return stop;
+			}
+			const currentTimestamp = zonedDateTimeToUnixMilliseconds(stop.scheduledAt, sourceTimeZone);
+			return {
+				...stop,
+				scheduledAt:
+					currentTimestamp !== null
+						? (formatTimestampForTimeZoneInput(currentTimestamp, targetTimeZone) ?? stop.scheduledAt)
+						: stop.scheduledAt,
+				timeZone: targetTimeZone
+			};
+		});
 	}
 
 	function changeItemTimeZone(timeZone: string): void {
@@ -635,27 +687,14 @@
 				latestAt = reformatInTimeZone(latestAt, previousTimeZone, timeZone);
 				break;
 		}
-		transportStops = transportStops.map((stop) => {
-			if (!stop.inheritsTimingTimeZone) {
-				return stop;
-			}
-			const currentTimestamp = zonedDateTimeToUnixMilliseconds(stop.scheduledAt, previousTimeZone);
-			return {
-				...stop,
-				scheduledAt:
-					currentTimestamp !== null
-						? (formatTimestampForTimeZoneInput(currentTimestamp, timeZone) ?? stop.scheduledAt)
-						: stop.scheduledAt,
-				timeZone
-			};
-		});
+		reformatInheritedStopTimes(previousTimeZone, timeZone);
 		startAtTimeZone = timeZone;
 	}
 
 	function changeStopTimeZone(stop: StopDraft, timeZone: string): void {
 		const currentTimestamp = zonedDateTimeToUnixMilliseconds(stop.scheduledAt, stop.timeZone);
 		stop.timeZone = timeZone;
-		stop.inheritsTimingTimeZone = timeZone === startAtTimeZone;
+		stop.inheritsTimingTimeZone = timeZone === itemDefaultTimeZone();
 		if (currentTimestamp !== null && isValidIanaTimeZone(timeZone)) {
 			stop.scheduledAt = formatTimestampForTimeZoneInput(currentTimestamp, timeZone) ?? stop.scheduledAt;
 		}
@@ -692,6 +731,50 @@
 				break;
 		}
 		timingKind = nextKind.data;
+	}
+
+	function changeScheduleEnabled(enabled: boolean): void {
+		if (scheduleEnabled === enabled) {
+			return;
+		}
+
+		const previousDefaultTimeZone = itemDefaultTimeZone();
+		if (!enabled) {
+			const scheduleStart = availabilityScheduleStart();
+			const scheduleDateTime = scheduleStart
+				? (formatTimestampForTimeZoneInput(scheduleStart.scheduledAt, scheduleStart.timeZone) ?? '')
+				: initialDateTimeForTiming();
+			const date = dateFromDateTimeInput(scheduleDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
+			placementDateTime = date ? `${date}T00:00` : placementDateTime;
+			placementTimeZone = scheduleStart?.timeZone ?? startAtTimeZone;
+		} else {
+			const date = dateFromDateTimeInput(placementDateTime);
+			if (date) {
+				switch (timingKind) {
+					case 'exact':
+						startAt ||= `${date}T`;
+						break;
+					case 'approximate':
+						nominalAt ||= `${date}T`;
+						break;
+					case 'window':
+						earliestAt ||= `${date}T`;
+						latestAt ||= `${date}T`;
+						break;
+				}
+			}
+		}
+
+		scheduleEnabled = enabled;
+		reformatInheritedStopTimes(previousDefaultTimeZone, itemDefaultTimeZone());
+	}
+
+	function changePlacementTimeZone(timeZone: string): void {
+		const previousTimeZone = placementTimeZone;
+		placementTimeZone = timeZone;
+		if (!scheduleEnabled) {
+			reformatInheritedStopTimes(previousTimeZone, timeZone);
+		}
 	}
 
 	function changeExactTimingDateOnly(enabled: boolean): void {
@@ -731,7 +814,10 @@
 		};
 	}
 
-	function timingCandidate(): unknown {
+	function timingCandidate(): unknown | undefined {
+		if (!scheduleEnabled) {
+			return undefined;
+		}
 		switch (timingKind) {
 			case 'exact': {
 				const end = optionalText(endAt);
@@ -767,6 +853,19 @@
 		}
 	}
 
+	function placementCandidate(): unknown | undefined {
+		if (scheduleEnabled) {
+			return undefined;
+		}
+		const date = dateFromDateTimeInput(placementDateTime);
+		return {
+			anchorAt: date
+				? (itemPlacementAnchorForDate(persistedPlacement, date, placementTimeZone) ?? Number.NaN)
+				: Number.NaN,
+			timeZone: placementTimeZone
+		};
+	}
+
 	function itemCandidate(): unknown {
 		const cost = costCandidate();
 		const reservation = reservationEnabled
@@ -776,10 +875,13 @@
 					...(optionalText(reservationReference) ? { reference: optionalText(reservationReference) } : {})
 				}
 			: undefined;
+		const timing = timingCandidate();
+		const placement = placementCandidate();
 		const common = {
 			availability: availability.map(availabilityConstraintCandidate),
 			id: item.id,
-			timing: timingCandidate(),
+			...(timing === undefined ? {} : { timing }),
+			...(placement === undefined ? {} : { placement }),
 			title: title.trim(),
 			locations: locations.map(locationValue),
 			notes: notes
@@ -814,7 +916,7 @@
 					return {
 						locationId: stop.locationId.trim(),
 						...(scheduledAt ? { scheduledAt: timestampValue(scheduledAt, stop.timeZone) } : {}),
-						...(stop.inheritsTimingTimeZone ? {} : timeZoneOverride(stop.timeZone, startAtTimeZone)),
+						...(stop.inheritsTimingTimeZone ? {} : timeZoneOverride(stop.timeZone, itemDefaultTimeZone())),
 						...(optionalText(stop.platform) ? { platform: optionalText(stop.platform) } : {})
 					};
 				})
@@ -823,31 +925,44 @@
 	}
 
 	function validateDateTimes(): string | null {
-		if (!isValidIanaTimeZone(startAtTimeZone)) {
-			return 'Time zone: use a valid IANA time zone such as Asia/Tokyo.';
-		}
-
-		const timingInputs =
-			timingKind === 'exact'
-				? [
-						...(usesFirstTransportStopForSchedule() ? [] : [{ label: 'Start date and time', value: startAt }]),
-						...(endAtEnabled ? [{ label: 'End date and time', value: endAt }] : [])
-					]
-				: timingKind === 'approximate'
-					? [{ label: 'Approximate date and time', value: nominalAt }]
-					: [
-							{ label: 'Earliest date and time', value: earliestAt },
-							{ label: 'Latest date and time', value: latestAt }
-						];
-
-		for (const input of timingInputs) {
-			if (zonedDateTimeToUnixMilliseconds(input.value, startAtTimeZone) === null) {
-				return `${input.label}: enter a valid local time. Times skipped by daylight saving cannot be used.`;
+		if (!scheduleEnabled) {
+			if (!isValidIanaTimeZone(placementTimeZone)) {
+				return 'Itinerary date time zone: use a valid IANA time zone such as Asia/Tokyo.';
 			}
-		}
+			const date = dateFromDateTimeInput(placementDateTime);
+			if (!date || itemPlacementAnchorAt(date, placementTimeZone) === null) {
+				return 'Itinerary date: choose a valid local date.';
+			}
+			if (availability.length === 0) {
+				return 'Schedule: add a scheduled time or at least one availability entry.';
+			}
+		} else {
+			if (!isValidIanaTimeZone(startAtTimeZone)) {
+				return 'Time zone: use a valid IANA time zone such as Asia/Tokyo.';
+			}
 
-		if (timingKind === 'exact' && endAtEnabled && endAt.trim() === '') {
-			return 'End date and time: complete the end time or turn it off.';
+			const timingInputs =
+				timingKind === 'exact'
+					? [
+							...(usesFirstTransportStopForSchedule() ? [] : [{ label: 'Start date and time', value: startAt }]),
+							...(endAtEnabled ? [{ label: 'End date and time', value: endAt }] : [])
+						]
+					: timingKind === 'approximate'
+						? [{ label: 'Approximate date and time', value: nominalAt }]
+						: [
+								{ label: 'Earliest date and time', value: earliestAt },
+								{ label: 'Latest date and time', value: latestAt }
+							];
+
+			for (const input of timingInputs) {
+				if (zonedDateTimeToUnixMilliseconds(input.value, startAtTimeZone) === null) {
+					return `${input.label}: enter a valid local time. Times skipped by daylight saving cannot be used.`;
+				}
+			}
+
+			if (timingKind === 'exact' && endAtEnabled && endAt.trim() === '') {
+				return 'End date and time: complete the end time or turn it off.';
+			}
 		}
 
 		for (const [index, stop] of transportStops.entries()) {
@@ -1222,137 +1337,161 @@
 
 					<fieldset id="editor-schedule">
 						<legend>Schedule</legend>
-						{#if timingNeedsConfirmation}
-							<p class="timing-confirmation">
-								{suggestedStartDate && suggestedEndDate
-									? `The imported link confirms ${suggestedStartDate} to ${suggestedEndDate}. Add the check-in and check-out times before saving`
-									: suggestedStartDate
-										? `The imported link confirms ${suggestedStartDate}. Add the time before saving`
-										: 'The imported link did not include a reliable time. Confirm the schedule before saving'}
-							</p>
-						{/if}
-						<label class="shiori-form-label">
-							Timing
-							<select
-								class="shiori-form-control"
-								value={timingKind}
-								onchange={(event) => changeTimingKind(event.currentTarget.value)}
-							>
-								{#each timingKindOptions as option (option)}
-									<option value={option}>{timingKindLabels[option]}</option>
-								{/each}
-							</select>
+						<label class="toggle-label">
+							<input
+								checked={!scheduleEnabled}
+								onchange={(event) => changeScheduleEnabled(!event.currentTarget.checked)}
+								type="checkbox"
+							/>
+							Time is not scheduled
 						</label>
-
-						{#if timingKind === 'exact'}
-							{#if itemType === 'accommodation'}
-								<label class="toggle-label">
-									<input
-										checked={exactTimingDateOnly}
-										onchange={(event) => changeExactTimingDateOnly(event.currentTarget.checked)}
-										type="checkbox"
-									/>
-									Check-in and check-out times are unknown
-								</label>
-							{/if}
+						{#if !scheduleEnabled}
+							<p class="field-hint">Place this item on a day instead. Add availability before saving.</p>
 							<DateTimeInput
-								dateTime={startAt}
-								id="item-start"
-								label={exactTimingDateOnly
-									? 'Check-in date'
-									: timingNeedsConfirmation && suggestedStartDate
-										? 'Start time'
-										: 'Start date and time'}
-								onDateTimeChange={(value) => (startAt = value)}
-								onTimeZoneChange={changeItemTimeZone}
+								dateTime={placementDateTime}
+								id="item-placement"
+								label="Itinerary date"
+								onDateTimeChange={(value) => (placementDateTime = value)}
+								onTimeZoneChange={changePlacementTimeZone}
+								pickerMode="date"
 								portalTarget={dialogElement}
-								pickerMode={exactTimingDateOnly
-									? 'date'
-									: timingNeedsConfirmation && suggestedStartDate
-										? 'time'
-										: 'date-time'}
-								timeZoneHint="Saved with this timing"
-								timeZone={startAtTimeZone}
+								timeZoneHint="Saved with this day placement"
+								timeZone={placementTimeZone}
 								{timeZoneOptions}
 							/>
-							{#if itemType === 'transport'}
-								<p class="field-hint">Leave this empty to use the first transport stop's scheduled time</p>
+						{:else}
+							{#if timingNeedsConfirmation}
+								<p class="timing-confirmation">
+									{suggestedStartDate && suggestedEndDate
+										? `The imported link confirms ${suggestedStartDate} to ${suggestedEndDate}. Add the check-in and check-out times before saving`
+										: suggestedStartDate
+											? `The imported link confirms ${suggestedStartDate}. Add the time before saving`
+											: 'The imported link did not include a reliable time. Confirm the schedule before saving'}
+								</p>
 							{/if}
-							{#if !exactTimingDateOnly}
-								<label class="toggle-label">
-									<input bind:checked={endAtEnabled} type="checkbox" />
-									Include an end time
-								</label>
-							{/if}
-							{#if endAtEnabled}
+							<label class="shiori-form-label">
+								Timing
+								<select
+									class="shiori-form-control"
+									value={timingKind}
+									onchange={(event) => changeTimingKind(event.currentTarget.value)}
+								>
+									{#each timingKindOptions as option (option)}
+										<option value={option}>{timingKindLabels[option]}</option>
+									{/each}
+								</select>
+							</label>
+
+							{#if timingKind === 'exact'}
+								{#if itemType === 'accommodation'}
+									<label class="toggle-label">
+										<input
+											checked={exactTimingDateOnly}
+											onchange={(event) => changeExactTimingDateOnly(event.currentTarget.checked)}
+											type="checkbox"
+										/>
+										Check-in and check-out times are unknown
+									</label>
+								{/if}
 								<DateTimeInput
-									dateTime={endAt}
-									defaultDate={defaultEndDate()}
-									id="item-end"
+									dateTime={startAt}
+									id="item-start"
 									label={exactTimingDateOnly
-										? 'Check-out date'
-										: timingNeedsConfirmation && suggestedEndDate
-											? 'End time'
-											: 'End date and time'}
-									onDateTimeChange={(value) => (endAt = value)}
+										? 'Check-in date'
+										: timingNeedsConfirmation && suggestedStartDate
+											? 'Start time'
+											: 'Start date and time'}
+									onDateTimeChange={(value) => (startAt = value)}
 									onTimeZoneChange={changeItemTimeZone}
 									portalTarget={dialogElement}
 									pickerMode={exactTimingDateOnly
 										? 'date'
-										: timingNeedsConfirmation && suggestedEndDate
+										: timingNeedsConfirmation && suggestedStartDate
 											? 'time'
 											: 'date-time'}
 									timeZoneHint="Saved with this timing"
 									timeZone={startAtTimeZone}
 									{timeZoneOptions}
 								/>
-							{/if}
-						{:else if timingKind === 'approximate'}
-							<DateTimeInput
-								dateTime={nominalAt}
-								id="item-approximate"
-								label="Approximate date and time"
-								onDateTimeChange={(value) => (nominalAt = value)}
-								onTimeZoneChange={changeItemTimeZone}
-								portalTarget={dialogElement}
-								timeZoneHint="Saved with this timing"
-								timeZone={startAtTimeZone}
-								{timeZoneOptions}
-							/>
-							<label class="shiori-form-label">
-								Tolerance <span class="field-hint">Minutes either side of the nominal time</span>
-								<input
-									class="shiori-form-control"
-									bind:value={toleranceMinutes}
-									max="1440"
-									min="1"
-									step="1"
-									type="number"
+								{#if itemType === 'transport'}
+									<p class="field-hint">Leave this empty to use the first transport stop's scheduled time</p>
+								{/if}
+								{#if !exactTimingDateOnly}
+									<label class="toggle-label">
+										<input bind:checked={endAtEnabled} type="checkbox" />
+										Include an end time
+									</label>
+								{/if}
+								{#if endAtEnabled}
+									<DateTimeInput
+										dateTime={endAt}
+										defaultDate={defaultEndDate()}
+										id="item-end"
+										label={exactTimingDateOnly
+											? 'Check-out date'
+											: timingNeedsConfirmation && suggestedEndDate
+												? 'End time'
+												: 'End date and time'}
+										onDateTimeChange={(value) => (endAt = value)}
+										onTimeZoneChange={changeItemTimeZone}
+										portalTarget={dialogElement}
+										pickerMode={exactTimingDateOnly
+											? 'date'
+											: timingNeedsConfirmation && suggestedEndDate
+												? 'time'
+												: 'date-time'}
+										timeZoneHint="Saved with this timing"
+										timeZone={startAtTimeZone}
+										{timeZoneOptions}
+									/>
+								{/if}
+							{:else if timingKind === 'approximate'}
+								<DateTimeInput
+									dateTime={nominalAt}
+									id="item-approximate"
+									label="Approximate date and time"
+									onDateTimeChange={(value) => (nominalAt = value)}
+									onTimeZoneChange={changeItemTimeZone}
+									portalTarget={dialogElement}
+									timeZoneHint="Saved with this timing"
+									timeZone={startAtTimeZone}
+									{timeZoneOptions}
 								/>
-							</label>
-						{:else if timingKind === 'window'}
-							<DateTimeInput
-								dateTime={earliestAt}
-								id="item-earliest"
-								label="Earliest date and time"
-								onDateTimeChange={(value) => (earliestAt = value)}
-								onTimeZoneChange={changeItemTimeZone}
-								portalTarget={dialogElement}
-								timeZoneHint="Saved with this timing"
-								timeZone={startAtTimeZone}
-								{timeZoneOptions}
-							/>
-							<DateTimeInput
-								dateTime={latestAt}
-								id="item-latest"
-								label="Latest date and time"
-								onDateTimeChange={(value) => (latestAt = value)}
-								onTimeZoneChange={changeItemTimeZone}
-								portalTarget={dialogElement}
-								timeZoneHint="Saved with this timing"
-								timeZone={startAtTimeZone}
-								{timeZoneOptions}
-							/>
+								<label class="shiori-form-label">
+									Tolerance <span class="field-hint">Minutes either side of the nominal time</span>
+									<input
+										class="shiori-form-control"
+										bind:value={toleranceMinutes}
+										max="1440"
+										min="1"
+										step="1"
+										type="number"
+									/>
+								</label>
+							{:else if timingKind === 'window'}
+								<DateTimeInput
+									dateTime={earliestAt}
+									id="item-earliest"
+									label="Earliest date and time"
+									onDateTimeChange={(value) => (earliestAt = value)}
+									onTimeZoneChange={changeItemTimeZone}
+									portalTarget={dialogElement}
+									timeZoneHint="Saved with this timing"
+									timeZone={startAtTimeZone}
+									{timeZoneOptions}
+								/>
+								<DateTimeInput
+									dateTime={latestAt}
+									id="item-latest"
+									label="Latest date and time"
+									onDateTimeChange={(value) => (latestAt = value)}
+									onTimeZoneChange={changeItemTimeZone}
+									portalTarget={dialogElement}
+									timeZoneHint="Saved with this timing"
+									timeZone={startAtTimeZone}
+									{timeZoneOptions}
+								/>
+							{/if}
 						{/if}
 					</fieldset>
 

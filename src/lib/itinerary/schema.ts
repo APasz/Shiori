@@ -299,7 +299,8 @@ const itineraryNoteBaseShape = {
 	text: z.string().max(100_000, 'Use at most 100,000 characters.').default(''),
 	timeZone: ianaTimeZoneSchema
 };
-const noteAnchorTimestampSchema = unixTimestampSchema.refine(
+/** A minute-aligned timestamp used to anchor a local calendar day. */
+const dayAnchorTimestampSchema = unixTimestampSchema.refine(
 	(timestamp) => timestamp % 60_000 === 0,
 	'Use a Unix-millisecond timestamp aligned to a whole minute.'
 );
@@ -308,7 +309,7 @@ export const itineraryNoteSchema = z.discriminatedUnion('kind', [
 	z.strictObject({ ...itineraryNoteBaseShape, kind: z.literal('trip') }),
 	z.strictObject({
 		...itineraryNoteBaseShape,
-		anchorAt: noteAnchorTimestampSchema,
+		anchorAt: dayAnchorTimestampSchema,
 		id: itineraryIdentifierSchema,
 		kind: z.literal('day')
 	})
@@ -318,6 +319,12 @@ export const itineraryNoteTargetSchema = z.discriminatedUnion('kind', [
 	z.strictObject({ kind: z.literal('trip') }),
 	z.strictObject({ id: itineraryIdentifierSchema, kind: z.literal('day') })
 ]);
+
+/** A local-day anchor used only when an item has no scheduled timing. */
+export const itineraryItemPlacementSchema = z.strictObject({
+	anchorAt: dayAnchorTimestampSchema,
+	timeZone: ianaTimeZoneSchema
+});
 
 const expenseBaseShape = {
 	amountMinor: minorUnitAmountSchema.min(1, 'Use an amount greater than zero.'),
@@ -489,7 +496,10 @@ export const constraintSchema = z.strictObject({
 const itineraryItemBaseShape = {
 	availability: z.array(constraintSchema).default([]),
 	id: itineraryIdentifierSchema,
-	timing: itineraryTimingSchema,
+	/** A day-only placement for an item whose schedule has not been decided. */
+	placement: itineraryItemPlacementSchema.optional(),
+	/** Schedule data remains independent from availability and may be absent for day-anchored items. */
+	timing: itineraryTimingSchema.optional(),
 	title: nonEmptyTextSchema,
 	locations: z.array(locationSchema).default([]),
 	notes: z.array(nonEmptyTextSchema).default([]),
@@ -522,6 +532,37 @@ function validateUniqueAvailabilityIds(
 	}
 }
 
+function validateItemPlacement(
+	item: { availability: readonly unknown[]; placement?: unknown; timing?: unknown },
+	context: z.RefinementCtx
+): void {
+	if (item.timing !== undefined && item.placement !== undefined) {
+		context.addIssue({
+			code: 'custom',
+			path: ['placement'],
+			message: 'Use either a schedule or a day placement, not both.'
+		});
+		return;
+	}
+
+	if (item.timing === undefined && item.placement === undefined) {
+		context.addIssue({
+			code: 'custom',
+			path: ['placement'],
+			message: 'Choose a scheduled time or a day placement.'
+		});
+		return;
+	}
+
+	if (item.timing === undefined && item.availability.length === 0) {
+		context.addIssue({
+			code: 'custom',
+			path: ['availability'],
+			message: 'An item without a schedule needs at least one availability entry.'
+		});
+	}
+}
+
 export const itineraryItemSchema = z
 	.discriminatedUnion('type', [
 		z.strictObject({
@@ -538,7 +579,8 @@ export const itineraryItemSchema = z
 			type: z.literal('accommodation')
 		})
 	])
-	.superRefine(validateUniqueAvailabilityIds);
+	.superRefine(validateUniqueAvailabilityIds)
+	.superRefine(validateItemPlacement);
 
 export const itineraryItemDraftSchema = z
 	.discriminatedUnion('type', [
@@ -556,7 +598,8 @@ export const itineraryItemDraftSchema = z
 			type: z.literal('accommodation')
 		})
 	])
-	.superRefine(validateUniqueAvailabilityIds);
+	.superRefine(validateUniqueAvailabilityIds)
+	.superRefine(validateItemPlacement);
 
 export const tripDetailsSchema = z.strictObject({
 	title: nonEmptyTextSchema,
@@ -716,6 +759,7 @@ export type ItineraryItem = z.infer<typeof itineraryItemSchema>;
 export type ItineraryItemDraft = z.infer<typeof itineraryItemDraftSchema>;
 export type ItineraryItemType = z.infer<typeof itineraryItemTypeSchema>;
 export type ItineraryTiming = z.infer<typeof itineraryTimingSchema>;
+export type ItineraryItemPlacement = z.infer<typeof itineraryItemPlacementSchema>;
 export type Constraint = z.infer<typeof constraintSchema>;
 export type ConstraintType = z.infer<typeof constraintTypeSchema>;
 export type ConstraintTiming = z.infer<typeof constraintTimingSchema>;

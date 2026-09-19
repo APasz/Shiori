@@ -36,6 +36,36 @@ describe('itinerary timing schema', () => {
 		}
 	});
 
+	it('allows a day-anchored availability-only item without changing timing shapes', () => {
+		const placement = { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' };
+		const availability = [
+			{
+				id: 'museum-hours',
+				timing: {
+					endAt: Date.UTC(2026, 3, 12, 8),
+					kind: 'period' as const,
+					startAt: Date.UTC(2026, 3, 12),
+					timeZone: 'Asia/Tokyo'
+				},
+				type: 'opening-hours' as const
+			}
+		];
+
+		for (const schema of [itineraryItemSchema, itineraryItemDraftSchema]) {
+			expect(schema.safeParse({ ...itemBase, availability, placement }).success).toBe(true);
+			expect(schema.safeParse({ ...itemBase, availability }).success).toBe(false);
+			expect(schema.safeParse({ ...itemBase, placement }).success).toBe(false);
+			expect(
+				schema.safeParse({
+					...itemBase,
+					availability,
+					placement,
+					timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 10) }
+				}).success
+			).toBe(false);
+		}
+	});
+
 	it('rejects inverted timing bounds and unsupported timing kinds', () => {
 		expect(
 			itineraryItemSchema.safeParse({

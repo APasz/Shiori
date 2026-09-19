@@ -1,15 +1,17 @@
 import { addCalendarDays } from './calendar';
+import { hasItemTiming, type TimedItem as ItemWithTiming } from './item-placement';
 import type { ItineraryItem, ItineraryTiming } from './schema';
 import { formatTimestampInTimeZone } from './time';
 import { resolveTimingTimeZone } from './time-zone';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
-type TimedItem = Readonly<{
+type SchedulableItem = Readonly<{
 	id: string;
-	timing: ItineraryTiming;
+	timing?: ItineraryTiming;
 	type: ItineraryItem['type'];
 }>;
+type TimedItem<Item extends SchedulableItem = SchedulableItem> = ItemWithTiming<Item>;
 
 export type AccommodationBoundary = 'check-in' | 'check-out';
 
@@ -206,12 +208,15 @@ function nextUpcomingEntry<Item extends TimedItem>(
  * Selects an honest Now / Next presentation state for an ordered trip timeline.
  * Approximate timings are never treated as definitely current.
  */
-export function getNowNextState<Item extends TimedItem>(
+export function getNowNextState<Item extends SchedulableItem>(
 	items: Item[],
 	currentTimestamp: number,
 	tripTimeZone: string
-): NowNextState<Item> {
-	const entries = items.flatMap((item) => entriesForItem(item, tripTimeZone)).sort(compareNowNextEntries);
+): NowNextState<TimedItem<Item>> {
+	const entries = items
+		.filter(hasItemTiming)
+		.flatMap((item) => entriesForItem(item, tripTimeZone))
+		.sort(compareNowNextEntries);
 	if (entries.length === 0) {
 		return { kind: 'empty' };
 	}

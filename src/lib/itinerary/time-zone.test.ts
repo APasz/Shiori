@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
+import { resolveItemTimeZone, resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
 
 describe('itinerary time-zone resolution', () => {
 	it('uses the trip zone unless a timing or transport stop overrides it', () => {
@@ -26,5 +26,19 @@ describe('itinerary time-zone resolution', () => {
 				'Australia/Melbourne'
 			)
 		).toBe('Asia/Tokyo');
+	});
+
+	it('uses a day placement zone only when an item has no schedule', () => {
+		const tripTimeZone = 'Asia/Tokyo';
+
+		expect(
+			resolveItemTimeZone(
+				{ placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Australia/Melbourne' } },
+				tripTimeZone
+			)
+		).toBe('Australia/Melbourne');
+		expect(resolveItemTimeZone({ timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 4) } }, tripTimeZone)).toBe(
+			tripTimeZone
+		);
 	});
 });

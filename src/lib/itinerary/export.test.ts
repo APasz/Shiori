@@ -191,6 +191,92 @@ describe('itinerary exports', () => {
 		expect(exported.notes[0].entries[0].estimatedCosts[0]).not.toHaveProperty('id');
 	});
 
+	it('exports a day-anchored availability-only item without inventing a schedule', () => {
+		const availabilityOnly = itinerarySchema.parse({
+			items: [
+				{
+					availability: [
+						{
+							id: 'museum-hours',
+							timing: {
+								endAt: Date.UTC(2026, 3, 12, 7),
+								kind: 'period',
+								startAt: Date.UTC(2026, 3, 12, 1),
+								timeZone: 'Asia/Tokyo'
+							},
+							type: 'opening-hours'
+						}
+					],
+					id: 'museum',
+					placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' },
+					title: 'Museum',
+					type: 'activity'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Japan 2026'
+		});
+
+		const json = JSON.parse(renderItineraryExport(availabilityOnly, 'json', defaultItineraryExportOptions));
+		const yaml = parse(renderItineraryExport(availabilityOnly, 'yaml', defaultItineraryExportOptions));
+		const text = renderItineraryExport(availabilityOnly, 'txt', defaultItineraryExportOptions);
+
+		expect(json.items[0]).toMatchObject({
+			availability: [
+				{
+					timing: {
+						end: { at: '2026-04-12T07:00:00.000Z', timeZone: 'Asia/Tokyo' },
+						start: { at: '2026-04-12T01:00:00.000Z', timeZone: 'Asia/Tokyo' }
+					},
+					type: 'opening-hours'
+				}
+			],
+			placement: { anchor: { at: '2026-04-12T03:00:00.000Z', timeZone: 'Asia/Tokyo' } },
+			title: 'Museum'
+		});
+		expect(json.items[0]).not.toHaveProperty('timing');
+		expect(yaml).toEqual(json);
+		expect(text).toContain('When: Time not scheduled');
+		expect(text).toMatch(/Day: .*\(Asia\/Tokyo\)/);
+		expect(text).toContain('Opening · 10:00–16:00');
+	});
+
+	it('keeps day-anchored items after scheduled items on their shared calendar day', () => {
+		const source = itinerarySchema.parse({
+			items: [
+				{
+					availability: [
+						{
+							id: 'museum-hours',
+							timing: {
+								at: Date.UTC(2026, 3, 12, 7),
+								kind: 'deadline',
+								timeZone: 'Asia/Tokyo'
+							},
+							type: 'last-admission'
+						}
+					],
+					id: 'museum',
+					placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' },
+					title: 'Museum',
+					type: 'activity'
+				},
+				{
+					id: 'dinner',
+					timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 8), timeZone: 'Asia/Tokyo' },
+					title: 'Dinner',
+					type: 'activity'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Japan 2026'
+		});
+
+		const exported = JSON.parse(renderItineraryExport(source, 'json', defaultItineraryExportOptions));
+
+		expect(exported.items.map((item: { title: string }) => item.title)).toEqual(['Dinner', 'Museum']);
+	});
+
 	it('uses the same data for YAML and omits unchecked details in every format', () => {
 		const options = {
 			...defaultItineraryExportOptions,

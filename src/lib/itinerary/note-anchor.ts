@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { calendarDateSchema, ianaTimeZoneSchema } from './schema';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
-export const defaultNoteAnchorTime = '12:00';
+/** A neutral local time used solely to anchor date-only records. */
+export const defaultDayAnchorTime = '12:00';
+export const defaultNoteAnchorTime = defaultDayAnchorTime;
 
 const legacyDayNoteSchema = z
 	.object({
@@ -14,9 +16,14 @@ const legacyDayNoteSchema = z
 
 type ItineraryRecord = Record<string, unknown>;
 
+/** Produces the neutral local-noon instant used to anchor a calendar day. */
+export function defaultDayAnchorAt(date: string, timeZone: string): number | null {
+	return zonedDateTimeToUnixMilliseconds(`${date}T${defaultDayAnchorTime}`, timeZone);
+}
+
 /** Produces the default local-noon placement for a daily note. */
 export function defaultDayNoteAnchorAt(date: string, timeZone: string): number | null {
-	return zonedDateTimeToUnixMilliseconds(`${date}T${defaultNoteAnchorTime}`, timeZone);
+	return defaultDayAnchorAt(date, timeZone);
 }
 
 /** Converts the pre-anchor daily-note shape without changing unrelated note fields. */

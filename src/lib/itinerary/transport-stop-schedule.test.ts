@@ -25,6 +25,10 @@ describe('transport stop schedule resolution', () => {
 		).toEqual({ scheduledAt: Date.UTC(2026, 9, 27, 10), timeZone: 'Asia/Tokyo' });
 	});
 
+	it('does not invent a first-stop schedule when the item is day-anchored', () => {
+		expect(resolveTransportStopSchedule(undefined, { locationId: 'departure' }, 0, 'Asia/Tokyo')).toBeUndefined();
+	});
+
 	it('keeps an explicit first-stop time separate from the item schedule', () => {
 		expect(
 			resolveTransportStopSchedule(

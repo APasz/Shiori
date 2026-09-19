@@ -88,6 +88,38 @@ describe('item location flow', () => {
 		expect(shouldShowTransportStopSchedule(arrival, 1, item.timing)).toBe(true);
 	});
 
+	it('uses a day placement zone for explicit transport-stop times without inventing a journey schedule', () => {
+		const item = itineraryItemSchema.parse({
+			availability: [
+				{
+					id: 'counter-cutoff',
+					timing: { at: Date.UTC(2026, 9, 27, 8), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+					type: 'cutoff'
+				}
+			],
+			id: 'journey',
+			locations: [{ id: 'departure', name: 'Departure', role: 'departure' }],
+			placement: { anchorAt: Date.UTC(2026, 9, 27, 3), timeZone: 'Asia/Tokyo' },
+			title: 'Journey',
+			transport: {
+				mode: 'rail',
+				stops: [{ locationId: 'departure', scheduledAt: Date.UTC(2026, 9, 27, 8) }]
+			},
+			type: 'transport'
+		});
+
+		const [departure] = itemLocationFlow(item, 'Australia/Melbourne');
+
+		expect(departure).toMatchObject({
+			hasScheduledTime: true,
+			schedule: { scheduledAt: Date.UTC(2026, 9, 27, 8), timeZone: 'Asia/Tokyo' }
+		});
+		if (departure?.kind !== 'transport-stop') {
+			throw new Error('A transport journey must expose its departure stop.');
+		}
+		expect(shouldShowTransportStopSchedule(departure, 0, item.timing)).toBe(true);
+	});
+
 	it('calculates travel time only between consecutive scheduled stops', () => {
 		const departure = {
 			kind: 'transport-stop' as const,

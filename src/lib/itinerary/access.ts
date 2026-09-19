@@ -6,7 +6,10 @@ export const tripAccessRoleSchema = z.enum(['visitor', 'user', 'admin', 'sudo'])
 export type TripAccessRole = z.infer<typeof tripAccessRoleSchema>;
 export type DetailedTripAccessRole = Exclude<TripAccessRole, 'visitor'>;
 
-export type PublicItineraryItem = Pick<ItineraryItem, 'availability' | 'id' | 'timing' | 'type' | 'title'>;
+export type PublicItineraryItem = Pick<
+	ItineraryItem,
+	'availability' | 'id' | 'placement' | 'timing' | 'type' | 'title'
+>;
 export type PublicItinerary = Pick<Itinerary, 'title' | 'timeZone'> & {
 	items: PublicItineraryItem[];
 };
@@ -40,10 +43,11 @@ export function projectPublicItinerary(itinerary: Itinerary): PublicItinerary {
 	return {
 		title: itinerary.title,
 		timeZone: itinerary.timeZone,
-		items: itinerary.items.map(({ availability, id, timing, type, title }) => ({
+		items: itinerary.items.map(({ availability, id, placement, timing, type, title }) => ({
 			availability,
 			id,
-			timing,
+			...(placement === undefined ? {} : { placement }),
+			...(timing === undefined ? {} : { timing }),
 			type,
 			title
 		}))

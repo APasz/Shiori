@@ -9,7 +9,8 @@ const tripTimeZone = 'UTC';
 
 type TestItem = Readonly<{
 	id: string;
-	timing: ItineraryTiming;
+	placement?: Readonly<{ anchorAt: number; timeZone: string }>;
+	timing?: ItineraryTiming;
 	type: 'accommodation' | 'activity';
 }>;
 
@@ -198,6 +199,22 @@ describe('Now / Next presentation', () => {
 		expect(nowNext([exactItem('return', now - day)])).toEqual({
 			kind: 'complete'
 		});
+	});
+
+	it('excludes day-anchored availability-only items from Now / Next', () => {
+		const availabilityOnly: TestItem = {
+			id: 'museum',
+			placement: { anchorAt: now, timeZone: tripTimeZone },
+			type: 'activity'
+		};
+		const scheduled = exactItem('dinner', now + 60 * 60_000);
+
+		expect(nowNext([availabilityOnly, scheduled])).toEqual({
+			kind: 'before-trip',
+			hoursUntilStart: 1,
+			nextItem: scheduled
+		});
+		expect(nowNext([availabilityOnly])).toEqual({ kind: 'empty' });
 	});
 
 	it('handles an empty itinerary', () => {

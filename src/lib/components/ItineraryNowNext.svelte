@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { PublicItineraryItem } from '$lib/itinerary/access';
 	import { getNowNextState, type AccommodationBoundary } from '$lib/itinerary/now-next';
+	import type { ItineraryTiming as ItineraryTimingData } from '$lib/itinerary/schema';
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
@@ -20,6 +21,7 @@
 	} = $props();
 	let browserReady = $state(false);
 	let currentTimestamp = $state(0);
+	type ScheduledPublicItem = PublicItineraryItem & Readonly<{ timing: ItineraryTimingData }>;
 	const nowNextState = $derived(browserReady ? getNowNextState(items, currentTimestamp, tripTimeZone) : null);
 
 	$effect(() => {
@@ -79,7 +81,7 @@
 	{#if !nowNextState}
 		<p class="status">Localizing your schedule…</p>
 	{:else if nowNextState.kind === 'empty'}
-		<p class="status">No items planned yet</p>
+		<p class="status">Nothing scheduled yet</p>
 	{:else if nowNextState.kind === 'idle'}
 		<p class="status">Nothing scheduled right now</p>
 	{:else if nowNextState.kind === 'complete'}
@@ -114,7 +116,7 @@
 </section>
 
 {#snippet itemSummary(
-	item: PublicItineraryItem,
+	item: ScheduledPublicItem,
 	label: string,
 	subdued: boolean,
 	boundary: AccommodationBoundary | undefined
@@ -137,7 +139,7 @@
 	{/if}
 {/snippet}
 
-{#snippet itemSummaryContent(item: PublicItineraryItem, label: string, boundary: AccommodationBoundary | undefined)}
+{#snippet itemSummaryContent(item: ScheduledPublicItem, label: string, boundary: AccommodationBoundary | undefined)}
 	<p class="item-label">{itemLabel(label, boundary)}</p>
 	<ItineraryTiming
 		display={timingDisplay(boundary)}

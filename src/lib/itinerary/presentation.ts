@@ -6,32 +6,35 @@ import {
 	type CalendarLocale
 } from './calendar';
 import { defaultFormatPreferences, type DateFormat } from '$lib/format-preferences';
-import type { ItineraryItem, ItineraryTiming } from './schema';
+import { hasItemTiming } from './item-placement';
+import type { ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 import { timingEarliestTimestamp, timingEndTimestamp, timingStartTimestamp } from './timing';
 import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export { timingStartTimestamp as timingAnchor } from './timing';
 
-type TimedItem = Readonly<{
+type PlacedItem = Readonly<{
 	id: string;
-	timing: ItineraryTiming;
+	placement?: ItineraryItemPlacement;
+	timing?: ItineraryTiming;
 }>;
 type ItemWithType = Readonly<{
 	type: ItineraryItem['type'];
 }>;
-type TimedItemWithType = TimedItem & ItemWithType;
+type PlacedItemWithType = PlacedItem & ItemWithType;
 
-export type LocalItineraryDay<Item extends TimedItem> = Readonly<{
+export type LocalItineraryDay<Item extends PlacedItem> = Readonly<{
 	date: string;
 	items: Item[];
 }>;
 
-export type DayTimelineEntry<Item extends TimedItemWithType> =
+export type DayTimelineEntry<Item extends PlacedItemWithType> =
 	| Readonly<{
 			item: Item;
 			kind: 'item';
-			timestamp: number;
+			/** Undefined means a day-anchored item with no Schedule. */
+			timestamp?: number;
 	  }>
 	| Readonly<{
 			boundary: 'check-in' | 'check-out';
@@ -40,7 +43,7 @@ export type DayTimelineEntry<Item extends TimedItemWithType> =
 			timestamp: number;
 	  }>;
 
-export type DayItemPartition<Item extends TimedItemWithType> = Readonly<{
+export type DayItemPartition<Item extends PlacedItemWithType> = Readonly<{
 	arrivingStays: Item[];
 	ongoingStays: Item[];
 	timelineEntries: DayTimelineEntry<Item>[];
@@ -61,10 +64,16 @@ function dayBounds(date: string, timeZone: string): DayBounds {
 	return { dayEnd, dayStart };
 }
 
-function timelineEntryOrder<Item extends TimedItemWithType>(
+function timelineEntryOrder<Item extends PlacedItemWithType>(
 	left: DayTimelineEntry<Item>,
 	right: DayTimelineEntry<Item>
 ): number {
+	if (left.timestamp === undefined || right.timestamp === undefined) {
+		if (left.timestamp !== right.timestamp) {
+			return left.timestamp === undefined ? 1 : -1;
+		}
+		return left.item.id.localeCompare(right.item.id);
+	}
 	if (left.timestamp !== right.timestamp) {
 		return left.timestamp - right.timestamp;
 	}
@@ -92,7 +101,7 @@ function isOngoingAccommodation(timing: ItineraryTiming, bounds: DayBounds): boo
 }
 
 /** Places continuing stays above a day and new check-ins below it, with known stay boundaries in chronological order. */
-export function partitionDayItems<Item extends TimedItemWithType>(
+export function partitionDayItems<Item extends PlacedItemWithType>(
 	items: readonly Item[],
 	date: string,
 	timeZone: string
@@ -103,7 +112,7 @@ export function partitionDayItems<Item extends TimedItemWithType>(
 	const bounds = dayBounds(date, timeZone);
 
 	for (const item of items) {
-		if (item.type === 'accommodation') {
+		if (item.type === 'accommodation' && hasItemTiming(item)) {
 			const checkInAt = timingStartTimestamp(item.timing);
 			if (isOngoingAccommodation(item.timing, bounds)) {
 				ongoingStays.push(item);
@@ -119,12 +128,14 @@ export function partitionDayItems<Item extends TimedItemWithType>(
 					timelineEntries.push({ boundary: 'check-out', item, kind: 'stay-boundary', timestamp: item.timing.endAt });
 				}
 			}
-		} else {
+		} else if (hasItemTiming(item)) {
 			timelineEntries.push({
 				item,
 				kind: 'item',
 				timestamp: timingTimestampOnLocalDay(item.timing, date, timeZone)
 			});
+		} else {
+			timelineEntries.push({ item, kind: 'item' });
 		}
 	}
 
@@ -160,23 +171,46 @@ function timingTimestampOnLocalDay(timing: ItineraryTiming, date: string, timeZo
 	return date === endDate && startDate !== endDate ? timingEndTimestamp(timing) : timingStartTimestamp(timing);
 }
 
-function compareTimedItemsOnLocalDay<Item extends TimedItem>(
+function comparePlacedItemsOnLocalDay<Item extends PlacedItem>(
 	date: string,
 	timeZone: string | undefined,
 	left: Item,
 	right: Item
 ): number {
+	const leftIsTimed = hasItemTiming(left);
+	const rightIsTimed = hasItemTiming(right);
+	if (!leftIsTimed || !rightIsTimed) {
+		if (leftIsTimed !== rightIsTimed) {
+			return leftIsTimed ? -1 : 1;
+		}
+		return left.id.localeCompare(right.id);
+	}
 	return (
 		timingTimestampOnLocalDay(left.timing, date, timeZone) - timingTimestampOnLocalDay(right.timing, date, timeZone) ||
 		left.id.localeCompare(right.id)
 	);
 }
 
-function itemsByLocalDay<Item extends TimedItem>(items: Item[], timeZone?: string): Map<string, Item[]> {
+function placementDateBounds(placement: ItineraryItemPlacement, timeZone: string | undefined): [string, string] {
+	const date = localDateForTimestamp(placement.anchorAt, timeZone);
+	return [date, date];
+}
+
+function itemDateBounds<Item extends PlacedItem>(item: Item, timeZone: string | undefined): [string, string] {
+	if (hasItemTiming(item)) {
+		return timingDateBounds(item.timing, timeZone);
+	}
+	if (item.placement === undefined) {
+		throw new Error(`Item ${item.id} has neither a schedule nor a day placement.`);
+	}
+	return placementDateBounds(item.placement, timeZone);
+}
+
+function itemsByLocalDay<Item extends PlacedItem>(items: Item[], timeZone?: string): Map<string, Item[]> {
 	const days = new Map<string, Item[]>();
 
 	for (const item of items) {
-		const [startDate, endDate] = timingDateBounds(item.timing, timeZone);
+		const [startDate, endDate] = itemDateBounds(item, timeZone);
 		let date = startDate;
 
 		while (date <= endDate) {
@@ -195,13 +229,13 @@ function itemsByLocalDay<Item extends TimedItem>(items: Item[], timeZone?: strin
 	}
 
 	for (const [date, dayItems] of days) {
-		dayItems.sort((left, right) => compareTimedItemsOnLocalDay(date, timeZone, left, right));
+		dayItems.sort((left, right) => comparePlacedItemsOnLocalDay(date, timeZone, left, right));
 	}
 
 	return days;
 }
 
-export function groupItemsByLocalDay<Item extends TimedItem>(
+export function groupItemsByLocalDay<Item extends PlacedItem>(
 	items: Item[],
 	timeZone?: string
 ): LocalItineraryDay<Item>[] {
@@ -223,15 +257,18 @@ export function formatLocalDay(
 	return formatted;
 }
 
-export function getItineraryDateRange(items: TimedItem[], timeZone?: string): [string, string] | null {
+export function getItineraryDateRange<Item extends PlacedItem>(
+	items: Item[],
+	timeZone?: string
+): [string, string] | null {
 	const firstItem = items[0];
 	if (!firstItem) {
 		return null;
 	}
 
-	let [earliest, latest] = timingDateBounds(firstItem.timing, timeZone);
+	let [earliest, latest] = itemDateBounds(firstItem, timeZone);
 	for (const item of items.slice(1)) {
-		const [startDate, endDate] = timingDateBounds(item.timing, timeZone);
+		const [startDate, endDate] = itemDateBounds(item, timeZone);
 		earliest = startDate < earliest ? startDate : earliest;
 		latest = endDate > latest ? endDate : latest;
 	}
@@ -239,7 +276,7 @@ export function getItineraryDateRange(items: TimedItem[], timeZone?: string): [s
 }
 
 /** Returns the inclusive number of local calendar days covered by the itinerary. */
-export function getLocalItineraryDayCount<Item extends TimedItem>(items: Item[], timeZone?: string): number {
+export function getLocalItineraryDayCount<Item extends PlacedItem>(items: Item[], timeZone?: string): number {
 	const dateRange = getItineraryDateRange(items, timeZone);
 	if (!dateRange) {
 		return 0;
@@ -253,7 +290,7 @@ export function getLocalItineraryDayCount<Item extends TimedItem>(items: Item[],
 }
 
 /** Returns every local calendar day covered by the itinerary, including days without items. */
-export function getLocalItineraryDays<Item extends TimedItem>(
+export function getLocalItineraryDays<Item extends PlacedItem>(
 	items: Item[],
 	timeZone?: string
 ): LocalItineraryDay<Item>[] {

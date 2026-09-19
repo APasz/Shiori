@@ -29,6 +29,35 @@ function occurrences(value: string, search: string): number {
 }
 
 describe('itinerary item details', () => {
+	it('shows a day-anchored availability-only item without presenting an invented schedule time', () => {
+		const item = itineraryItemSchema.parse({
+			availability: [
+				{
+					id: 'museum-hours',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 7),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12, 1),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'opening-hours'
+				}
+			],
+			id: 'museum',
+			placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' },
+			title: 'Museum',
+			type: 'activity'
+		});
+
+		const html = renderDetails(item);
+
+		expect(html).toContain('Schedule');
+		expect(html).toContain('>Day<');
+		expect(html).toContain('Time not set');
+		expect(html).toContain('Availability');
+		expect(html).toContain('Opening');
+	});
+
 	it('uses check-in and check-out without repeating the accommodation time at its location', () => {
 		const item = itineraryItemSchema.parse({
 			id: 'stay',

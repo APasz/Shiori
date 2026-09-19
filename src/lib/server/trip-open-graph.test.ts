@@ -73,6 +73,37 @@ describe('tripOpenGraphDescription', () => {
 		);
 	});
 
+	it('does not present a day placement as a public schedule boundary', () => {
+		const availabilityOnlyItinerary = itinerarySchema.parse({
+			items: [
+				{
+					availability: [
+						{
+							id: 'museum-hours',
+							timing: {
+								endAt: Date.UTC(2026, 3, 12, 7),
+								kind: 'period',
+								startAt: Date.UTC(2026, 3, 12, 1),
+								timeZone: 'Asia/Tokyo'
+							},
+							type: 'opening-hours'
+						}
+					],
+					id: 'museum',
+					placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' },
+					title: 'Museum',
+					type: 'activity'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Tokyo day'
+		});
+
+		expect(tripOpenGraphDescription({ isPublic: true, itinerary: availabilityOnlyItinerary })).toBe(
+			'Public trip: 1 day'
+		);
+	});
+
 	it('does not disclose private trip scheduling details', () => {
 		expect(tripOpenGraphDescription({ isPublic: false, itinerary })).toBe('Private trip: sign-in required');
 	});

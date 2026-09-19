@@ -13,9 +13,10 @@
 		shouldShowTransportStopSchedule,
 		transportTravelDuration
 	} from '$lib/itinerary/item-location-flow';
+	import { itemPlacementDate } from '$lib/itinerary/item-placement';
 	import type { Cost, CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
 	import { timingEndTimestamp, timingStartTimestamp } from '$lib/itinerary/timing';
-	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
+	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -53,11 +54,12 @@
 	let dialogElement: HTMLDialogElement;
 	type AvailabilityEntry = AvailabilityPresentation & Readonly<{ id: string }>;
 
-	const timingTimeZone = $derived(resolveTimingTimeZone(item.timing, tripTimeZone));
+	const itemTimeZone = $derived(resolveItemTimeZone(item, tripTimeZone));
 	const linkedExpenses = $derived(resolveLinkedExpenses(expenses, item.linkedExpenseIds));
 	const locationFlow = $derived(itemLocationFlow(item, tripTimeZone));
 	const availabilityEntries = $derived(availabilityEntriesFor(item));
-	const hasEndTime = $derived(item.timing.kind === 'exact' && item.timing.endAt !== undefined);
+	const hasEndTime = $derived(item.timing?.kind === 'exact' && item.timing.endAt !== undefined);
+	const placementLabel = $derived(dayPlacementLabel());
 	const startLabel = $derived(item.type === 'accommodation' ? 'Check-in' : 'Start');
 	const endLabel = $derived(item.type === 'accommodation' ? 'Check-out' : 'End');
 
@@ -79,11 +81,15 @@
 	}
 
 	function availabilityEntriesFor(item: ItineraryItem): AvailabilityEntry[] {
-		const contextTimestamps = [timingStartTimestamp(item.timing), timingEndTimestamp(item.timing)];
+		const contextTimestamps = item.timing
+			? [timingStartTimestamp(item.timing), timingEndTimestamp(item.timing)]
+			: item.placement
+				? [item.placement.anchorAt]
+				: [];
 		const entries: AvailabilityEntry[] = [];
 		for (const constraint of item.availability) {
 			const presentation = availabilityConstraintPresentation(constraint, {
-				contextTimeZone: timingTimeZone,
+				contextTimeZone: itemTimeZone,
 				contextTimestamps,
 				formatPreferences: viewerContext.formatPreferences,
 				locale: viewerContext.locale
@@ -93,6 +99,16 @@
 			}
 		}
 		return entries;
+	}
+
+	function dayPlacementLabel(): string | null {
+		if (!item.placement) {
+			return null;
+		}
+		const date = itemPlacementDate(item.placement);
+		return date
+			? formatCalendarDate(date, 'date-with-weekday', viewerContext.locale, viewerContext.formatPreferences.dateFormat)
+			: null;
 	}
 
 	function paidAtLabel(paidAt: number): string {
@@ -150,14 +166,21 @@
 			{#if item.type !== 'transport'}<h3>Schedule</h3>{/if}
 			<div class="item-flow">
 				<div class="timing-boundary">
-					{#if item.type !== 'transport'}<span class="timing-boundary-label">{startLabel}</span>{/if}
-					<ItineraryTiming
-						calendarDateFormat="date-with-weekday"
-						display="start"
-						includeDate
-						timing={item.timing}
-						timeZone={timingTimeZone}
-					/>
+					{#if item.type !== 'transport' || !item.timing}
+						<span class="timing-boundary-label">{item.timing ? startLabel : 'Day'}</span>
+					{/if}
+					{#if item.timing}
+						<ItineraryTiming
+							calendarDateFormat="date-with-weekday"
+							display="start"
+							includeDate
+							timing={item.timing}
+							timeZone={itemTimeZone}
+						/>
+					{:else}
+						<span class="day-placement">{placementLabel ?? 'Day not set'}</span>
+						<span class="unscheduled-label">Time not set</span>
+					{/if}
 				</div>
 
 				{#if locationFlow.length > 0}
@@ -191,7 +214,7 @@
 										</span>
 									{/if}
 									{#if entry.platform}<span>Platform {entry.platform}</span>{/if}
-								{:else if item.type !== 'accommodation'}
+								{:else if item.type !== 'accommodation' && item.timing}
 									<span class="location-time">
 										<span class="location-time-label">At</span>
 										<ItineraryTiming
@@ -199,7 +222,7 @@
 											display="start"
 											includeDate
 											timing={item.timing}
-											timeZone={timingTimeZone}
+											timeZone={itemTimeZone}
 										/>
 									</span>
 								{/if}
@@ -220,7 +243,7 @@
 					</ol>
 				{/if}
 
-				{#if hasEndTime}
+				{#if item.timing && hasEndTime}
 					<div class="timing-boundary">
 						{#if item.type !== 'transport'}<span class="timing-boundary-label">{endLabel}</span>{/if}
 						<ItineraryTiming
@@ -228,7 +251,7 @@
 							display="end"
 							includeDate
 							timing={item.timing}
-							timeZone={timingTimeZone}
+							timeZone={itemTimeZone}
 						/>
 					</div>
 				{/if}
@@ -242,7 +265,7 @@
 					{#each availabilityEntries as entry (entry.id)}
 						<li>
 							<strong>{entry.label}</strong><span aria-hidden="true"> · </span><span>{entry.timing}</span>
-							{#if entry.timeZone !== timingTimeZone}
+							{#if entry.timeZone !== itemTimeZone}
 								<span
 									class="availability-time-zone"
 									title={timeZoneOffsetLabel(entry.timeZone, entry.timestamp) ?? undefined}
@@ -565,6 +588,15 @@
 	.location-time {
 		display: grid;
 		gap: 0.25rem;
+	}
+
+	.day-placement {
+		font-weight: 700;
+	}
+
+	.unscheduled-label {
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
 	}
 
 	.cost-summary {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { projectDetailedItinerary, projectPublicItinerary } from './access';
-import { externalUrlSchema, type Itinerary } from './schema';
+import { externalUrlSchema, itinerarySchema, type Itinerary } from './schema';
 
 const testItinerary = {
 	localCurrency: 'AUD' as const,
@@ -119,6 +119,40 @@ describe('itinerary visibility projection', () => {
 		});
 		expect(item).not.toHaveProperty('reservation');
 		expect(publicItinerary).not.toHaveProperty('notes');
+	});
+
+	it('retains a day placement for an availability-only public item', () => {
+		const itinerary = itinerarySchema.parse({
+			items: [
+				{
+					availability: [
+						{
+							id: 'museum-hours',
+							timing: {
+								endAt: Date.UTC(2026, 3, 12, 7),
+								kind: 'period',
+								startAt: Date.UTC(2026, 3, 12, 1),
+								timeZone: 'Asia/Tokyo'
+							},
+							type: 'opening-hours'
+						}
+					],
+					id: 'museum',
+					placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' },
+					title: 'Museum',
+					type: 'activity'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Japan 2026'
+		});
+
+		const item = projectPublicItinerary(itinerary).items[0];
+		expect(item).toMatchObject({
+			availability: itinerary.items[0]?.availability,
+			placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' }
+		});
+		expect(item).not.toHaveProperty('timing');
 	});
 
 	it('withholds every restricted detail from standard users', () => {

@@ -6,7 +6,8 @@ import { itinerarySchema, unixTimestampSchema, type Itinerary } from '$lib/itine
 export const tripBackupFormat = 'shiori-trip-backup';
 export const legacyTripBackupVersion = 1;
 export const preAvailabilityTripBackupVersion = 2;
-export const tripBackupVersion = 3;
+export const preDayPlacementTripBackupVersion = 3;
+export const tripBackupVersion = 4;
 export const tripBackupFileExtension = 'shiori-bak';
 export const tripBackupMediaType = 'application/vnd.shiori.trip-backup+json';
 export const maximumTripBackupBytes = 20 * 1024 * 1024;
@@ -27,7 +28,11 @@ const migratableTripBackupSchema = z.strictObject({
 	exportedAt: unixTimestampSchema,
 	format: z.literal(tripBackupFormat),
 	itinerary: z.object({}).passthrough(),
-	version: z.union([z.literal(legacyTripBackupVersion), z.literal(preAvailabilityTripBackupVersion)])
+	version: z.union([
+		z.literal(legacyTripBackupVersion),
+		z.literal(preAvailabilityTripBackupVersion),
+		z.literal(preDayPlacementTripBackupVersion)
+	])
 });
 
 export type TripBackup = z.infer<typeof tripBackupSchema>;

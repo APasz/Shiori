@@ -12,6 +12,7 @@ import type {
 	CurrencyCode,
 	DocumentReference,
 	ItineraryItem,
+	ItineraryItemPlacement,
 	ItineraryLink,
 	ItineraryLocation,
 	ItineraryNote,
@@ -22,11 +23,11 @@ import type {
 import { formatCalendarDate, formatCalendarDateTime, type CalendarLocale } from './calendar';
 import { timingStartTimestamp } from './timing';
 import { formatTimestampInTimeZone } from './time';
-import { resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
+import { resolveItemTimeZone, resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
 
 export const itineraryExportFormats = ['json', 'yaml', 'txt'] as const;
 /** Bumped whenever the portable itinerary export shape changes. */
-export const itineraryExportVersion = 3;
+export const itineraryExportVersion = 4;
 
 export type ItineraryExportFormat = (typeof itineraryExportFormats)[number];
 
@@ -73,7 +74,7 @@ export const defaultItineraryExportOptions: ItineraryExportOptions = {
 	useEpochTimestamps: false
 };
 
-type BasicItineraryItem = Pick<ItineraryItem, 'availability' | 'id' | 'timing' | 'title' | 'type'>;
+type BasicItineraryItem = Pick<ItineraryItem, 'availability' | 'id' | 'placement' | 'timing' | 'title' | 'type'>;
 
 export type ItineraryExportSource = Readonly<{
 	title: string;
@@ -104,6 +105,10 @@ type ExportedTiming =
 			earliest: ExportedTimestamp;
 			latest: ExportedTimestamp;
 	  }>;
+
+type ExportedPlacement = Readonly<{
+	anchor: ExportedTimestamp;
+}>;
 
 type ExportedConstraintTiming =
 	| Readonly<{
@@ -190,8 +195,9 @@ type ExportedCost =
 type ExportedItem = {
 	type: BasicItineraryItem['type'];
 	title: string;
-	timing: ExportedTiming;
 	availability: ExportedConstraint[];
+	placement?: ExportedPlacement;
+	timing?: ExportedTiming;
 	locations?: ExportedLocation[];
 	transport?: ExportedTransport;
 	notes?: string[];
@@ -284,6 +290,10 @@ function exportTiming(timing: ItineraryTiming, tripTimeZone: string, useEpochTim
 	}
 }
 
+function exportPlacement(placement: ItineraryItemPlacement, useEpochTimestamps: boolean): ExportedPlacement {
+	return { anchor: exportTimestamp(placement.anchorAt, placement.timeZone, useEpochTimestamps) };
+}
+
 function exportConstraintTiming(timing: Constraint['timing'], useEpochTimestamps: boolean): ExportedConstraintTiming {
 	switch (timing.kind) {
 		case 'period':
@@ -326,7 +336,7 @@ function locationForId(item: ItineraryItem, locationId: string): ItineraryLocati
 
 function exportTransport(
 	item: Extract<ItineraryItem, { type: 'transport' }>,
-	timingTimeZone: string,
+	itemTimeZone: string,
 	useEpochTimestamps: boolean
 ): ExportedTransport {
 	return {
@@ -344,7 +354,7 @@ function exportTransport(
 					: {
 							scheduledAt: exportTimestamp(
 								stop.scheduledAt,
-								resolveTransportStopTimeZone(stop, timingTimeZone),
+								resolveTransportStopTimeZone(stop, itemTimeZone),
 								useEpochTimestamps
 							)
 						}),
@@ -404,7 +414,30 @@ function isNormalizedCost(cost: ExportedCost): cost is Extract<ExportedCost, { a
 	return 'amount' in cost;
 }
 
-function compareItems(left: BasicItineraryItem, right: BasicItineraryItem): number {
+function itemLocalDate(item: BasicItineraryItem, timeZone: string): string | undefined {
+	const timestamp = item.timing ? timingStartTimestamp(item.timing) : item.placement?.anchorAt;
+	return timestamp === undefined ? undefined : formatTimestampInTimeZone(timestamp, timeZone)?.date;
+}
+
+/** Keeps day-only items in calendar order without treating their neutral anchor as a scheduled time. */
+function compareItems(left: BasicItineraryItem, right: BasicItineraryItem, timeZone: string): number {
+	const leftDate = itemLocalDate(left, timeZone);
+	const rightDate = itemLocalDate(right, timeZone);
+	if (leftDate === undefined || rightDate === undefined) {
+		if (leftDate !== rightDate) {
+			return leftDate === undefined ? 1 : -1;
+		}
+		return left.id.localeCompare(right.id);
+	}
+	if (leftDate !== rightDate) {
+		return leftDate.localeCompare(rightDate);
+	}
+	if (left.timing === undefined || right.timing === undefined) {
+		if (left.timing !== right.timing) {
+			return left.timing === undefined ? 1 : -1;
+		}
+		return left.id.localeCompare(right.id);
+	}
 	return timingStartTimestamp(left.timing) - timingStartTimestamp(right.timing) || left.id.localeCompare(right.id);
 }
 
@@ -416,8 +449,11 @@ function exportItem(
 	const exported: ExportedItem = {
 		type: item.type,
 		title: item.title,
-		timing: exportTiming(item.timing, tripTimeZone, options.useEpochTimestamps),
-		availability: exportAvailability(item.availability, options.useEpochTimestamps)
+		availability: exportAvailability(item.availability, options.useEpochTimestamps),
+		...(item.placement === undefined ? {} : { placement: exportPlacement(item.placement, options.useEpochTimestamps) }),
+		...(item.timing === undefined
+			? {}
+			: { timing: exportTiming(item.timing, tripTimeZone, options.useEpochTimestamps) })
 	};
 
 	if (!isDetailedItem(item)) {
@@ -426,11 +462,7 @@ function exportItem(
 
 	exported.locations = exportLocations(item, options.includeCoordinates);
 	if (item.type === 'transport') {
-		exported.transport = exportTransport(
-			item,
-			resolveTimingTimeZone(item.timing, tripTimeZone),
-			options.useEpochTimestamps
-		);
+		exported.transport = exportTransport(item, resolveItemTimeZone(item, tripTimeZone), options.useEpochTimestamps);
 	}
 	if (options.includeNotes) {
 		exported.notes = [...item.notes];
@@ -476,7 +508,9 @@ export function createItineraryExport(source: ItineraryExportSource, options: It
 		title: source.title,
 		timeZone: source.timeZone,
 		...(source.localCurrency === undefined ? {} : { localCurrency: source.localCurrency }),
-		items: [...source.items].sort(compareItems).map((item) => exportItem(item, source.timeZone, options)),
+		items: [...source.items]
+			.sort((left, right) => compareItems(left, right, source.timeZone))
+			.map((item) => exportItem(item, source.timeZone, options)),
 		...(options.includeNotes && source.notes !== undefined
 			? { notes: source.notes.map((note) => exportItineraryNote(note, options)) }
 			: {})
@@ -512,6 +546,19 @@ function timingText(timing: ExportedTiming, textFormat: ItineraryTextFormatOptio
 		case 'window':
 			return `Between ${timestampText(timing.earliest, textFormat)} and ${timestampText(timing.latest, textFormat)}`;
 	}
+}
+
+function placementText(placement: ExportedPlacement, textFormat: ItineraryTextFormatOptions): string {
+	if (typeof placement.anchor.at === 'number') {
+		return `${placement.anchor.at} (epoch milliseconds; ${placement.anchor.timeZone})`;
+	}
+	const timestamp = timestampValue(placement.anchor);
+	const local = timestamp === null ? null : formatTimestampInTimeZone(timestamp, placement.anchor.timeZone);
+	if (!local) {
+		return timestampText(placement.anchor, textFormat);
+	}
+	const date = formatCalendarDate(local.date, 'date', textFormat.locale, textFormat.dateFormat);
+	return date ? `${date} (${placement.anchor.timeZone})` : timestampText(placement.anchor, textFormat);
 }
 
 function constraintTimingText(timing: ExportedConstraintTiming, textFormat: ItineraryTextFormatOptions): string {
@@ -571,7 +618,7 @@ function itemTimingTimestamps(timing: ExportedTiming): readonly ExportedTimestam
 
 function availabilityText(
 	constraint: ExportedConstraint,
-	itemTiming: ExportedTiming,
+	item: ExportedItem,
 	textFormat: ItineraryTextFormatOptions
 ): string {
 	if (usesEpochTimestamps(constraint.timing)) {
@@ -583,7 +630,11 @@ function availabilityText(
 		return `${availabilityConstraintLabel(constraint)} · ${constraintTimingText(constraint.timing, textFormat)}`;
 	}
 
-	const itemTimestamps = itemTimingTimestamps(itemTiming);
+	const itemTimestamps = item.timing
+		? itemTimingTimestamps(item.timing)
+		: item.placement
+			? [item.placement.anchor]
+			: [];
 	const itemTimeZone = itemTimestamps[0]?.timeZone;
 	const contextTimestamps = itemTimestamps
 		.map(timestampValue)
@@ -616,11 +667,17 @@ function reservationText(reservation: Reservation): string {
 }
 
 function textLinesForItem(item: ExportedItem, index: number, textFormat: ItineraryTextFormatOptions): string[] {
-	const lines = [`${index + 1}. ${item.title} (${item.type})`, `   When: ${timingText(item.timing, textFormat)}`];
+	const lines = [
+		`${index + 1}. ${item.title} (${item.type})`,
+		`   When: ${item.timing ? timingText(item.timing, textFormat) : 'Time not scheduled'}`
+	];
+	if (item.placement) {
+		lines.push(`   Day: ${placementText(item.placement, textFormat)}`);
+	}
 	if (item.availability.length > 0) {
 		lines.push('   Availability:');
 		for (const constraint of item.availability) {
-			lines.push(`     - ${availabilityText(constraint, item.timing, textFormat)}`);
+			lines.push(`     - ${availabilityText(constraint, item, textFormat)}`);
 		}
 	}
 	if (item.locations && item.locations.length > 0) {

@@ -12,6 +12,7 @@ import { migrateLegacyDayNotes } from '$lib/itinerary/note-anchor';
 import {
 	dailyExpenseStoredDataVersion,
 	preAvailabilityStoredDataVersion,
+	preDayPlacementStoredDataVersion,
 	preAppearanceStoredDataVersion,
 	preFormatPreferencesStoredDataVersion,
 	preNoteAnchorStoredDataVersion,
@@ -84,7 +85,8 @@ const migratableStoredDataVersionSchema = z.union([
 	z.literal(preFormatPreferencesStoredDataVersion),
 	z.literal(preSudoOwnedTripsStoredDataVersion),
 	z.literal(preNoteAnchorStoredDataVersion),
-	z.literal(preAvailabilityStoredDataVersion)
+	z.literal(preAvailabilityStoredDataVersion),
+	z.literal(preDayPlacementStoredDataVersion)
 ]);
 const migratableStoredTripFileEnvelopeSchema = z
 	.object({
@@ -139,7 +141,8 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 		parsedFile.data.version === preFormatPreferencesStoredDataVersion ||
 		parsedFile.data.version === preSudoOwnedTripsStoredDataVersion ||
 		parsedFile.data.version === preNoteAnchorStoredDataVersion ||
-		parsedFile.data.version === preAvailabilityStoredDataVersion;
+		parsedFile.data.version === preAvailabilityStoredDataVersion ||
+		parsedFile.data.version === preDayPlacementStoredDataVersion;
 	return {
 		file: {
 			version: storedDataVersion,

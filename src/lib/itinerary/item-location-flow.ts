@@ -1,6 +1,7 @@
 import type { ItineraryItem, ItineraryLocation, ItineraryTiming } from './schema';
 import { timingStartTimestamp } from './timing';
 import { resolveTransportStopSchedule, type TransportStopSchedule } from './transport-stop-schedule';
+import { resolveItemTimeZone } from './time-zone';
 
 export type TransportStopLocationFlowEntry = Readonly<{
 	kind: 'transport-stop';
@@ -34,7 +35,12 @@ export function itemLocationFlow(item: ItineraryItem, tripTimeZone: string): rea
 	}
 
 	return item.transport.stops.map((stop, stopIndex) => {
-		const schedule = resolveTransportStopSchedule(item.timing, stop, stopIndex, tripTimeZone);
+		const schedule = resolveTransportStopSchedule(
+			item.timing,
+			stop,
+			stopIndex,
+			resolveItemTimeZone(item, tripTimeZone)
+		);
 		return {
 			kind: 'transport-stop',
 			location: requireItemLocation(item, stop.locationId),
@@ -49,12 +55,15 @@ export function itemLocationFlow(item: ItineraryItem, tripTimeZone: string): rea
 export function shouldShowTransportStopSchedule(
 	entry: TransportStopLocationFlowEntry,
 	stopIndex: number,
-	timing: ItineraryTiming
+	timing: ItineraryTiming | undefined
 ): boolean {
 	if (!entry.schedule) {
 		return false;
 	}
 	if (stopIndex !== 0) {
+		return true;
+	}
+	if (!timing) {
 		return true;
 	}
 	if (!entry.hasScheduledTime) {

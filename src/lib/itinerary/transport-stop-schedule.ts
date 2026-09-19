@@ -20,16 +20,16 @@ export function resolveTransportScheduleStart(
  * only the first stop when that stop has no separately recorded time.
  */
 export function resolveTransportStopSchedule(
-	timing: ItineraryTiming,
+	timing: ItineraryTiming | undefined,
 	stop: TransportDetails['stops'][number],
 	stopIndex: number,
-	tripTimeZone: string
+	defaultTimeZone: string
 ): TransportStopSchedule | undefined {
-	const timingTimeZone = resolveTimingTimeZone(timing, tripTimeZone);
+	const itemTimeZone = timing ? resolveTimingTimeZone(timing, defaultTimeZone) : defaultTimeZone;
 	if (stop.scheduledAt !== undefined) {
 		return {
 			scheduledAt: stop.scheduledAt,
-			timeZone: resolveTransportStopTimeZone(stop, timingTimeZone)
+			timeZone: resolveTransportStopTimeZone(stop, itemTimeZone)
 		};
 	}
 
@@ -37,5 +37,5 @@ export function resolveTransportStopSchedule(
 		return undefined;
 	}
 
-	return { scheduledAt: timingStartTimestamp(timing), timeZone: timingTimeZone };
+	return timing ? { scheduledAt: timingStartTimestamp(timing), timeZone: itemTimeZone } : undefined;
 }

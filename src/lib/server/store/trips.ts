@@ -124,12 +124,12 @@ function addTrip(data: StoredData, sudoUserId: string, itinerary: Itinerary): Tr
 }
 
 function latestItemStartAt(itinerary: Itinerary): number | null {
-	if (itinerary.items.length === 0) {
-		return null;
-	}
-	let latestStartAt = timingStartTimestamp(itinerary.items[0]!.timing);
-	for (let index = 1; index < itinerary.items.length; index += 1) {
-		latestStartAt = Math.max(latestStartAt, timingStartTimestamp(itinerary.items[index]!.timing));
+	let latestStartAt: number | null = null;
+	for (const item of itinerary.items) {
+		if (item.timing) {
+			const startAt = timingStartTimestamp(item.timing);
+			latestStartAt = latestStartAt === null ? startAt : Math.max(latestStartAt, startAt);
+		}
 	}
 	return latestStartAt;
 }

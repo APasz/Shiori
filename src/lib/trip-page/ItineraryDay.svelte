@@ -2,8 +2,12 @@
 	import ItineraryItemIllustration from '$lib/components/ItineraryItemIllustration.svelte';
 	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
+	import {
+		availabilityConstraintPresentation,
+		type AvailabilityPresentation
+	} from '$lib/itinerary/availability-presentation';
 	import { formatLocalDay, partitionDayItems, type DayTimelineEntry } from '$lib/itinerary/presentation';
-	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
+	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import type { DayItem } from './types';
@@ -52,7 +56,46 @@
 			onSelectItem(itemId);
 		}
 	}
+
+	function unscheduledAvailabilityPresentation(item: DayItem): AvailabilityPresentation | null {
+		if (item.timing) {
+			return null;
+		}
+
+		const constraint = item.availability[0];
+		if (!constraint) {
+			return null;
+		}
+
+		return availabilityConstraintPresentation(constraint, {
+			contextTimeZone: resolveItemTimeZone(item, tripTimeZone),
+			contextTimestamps: item.placement ? [item.placement.anchorAt] : [],
+			formatPreferences: viewerContext.formatPreferences,
+			locale: viewerContext.locale
+		});
+	}
 </script>
+
+{#snippet itemTime(item: DayItem)}
+	{#if item.timing}
+		<ItineraryTiming
+			day={date}
+			itemType={item.type}
+			timing={item.timing}
+			timeZone={resolveItemTimeZone(item, tripTimeZone)}
+		/>
+	{:else}
+		{@const availability = unscheduledAvailabilityPresentation(item)}
+		{#if availability}
+			<span class="availability-timing">
+				<span class="availability-label">{availability.label}</span>
+				<span>{availability.timing}</span>
+			</span>
+		{:else}
+			<span class="unscheduled-timing">Time not set</span>
+		{/if}
+	{/if}
+{/snippet}
 
 {#snippet dayItem(item: DayItem, display: Display)}
 	<li class={display === 'stay' ? 'stay-row' : 'item-row'}>
@@ -66,12 +109,7 @@
 				onclick={() => selectItem(item.id)}
 				style={itemTypeAccentStyle(item.type)}
 			>
-				<ItineraryTiming
-					day={date}
-					itemType={item.type}
-					timing={item.timing}
-					timeZone={resolveTimingTimeZone(item.timing, tripTimeZone)}
-				/>
+				{@render itemTime(item)}
 				{#if display === 'timeline'}
 					<span class="item-type">{itemTypeLabels[item.type]}</span>
 				{/if}
@@ -84,12 +122,7 @@
 			</button>
 		{:else}
 			<div class={display === 'stay' ? 'stay-summary' : 'item-summary'} style={itemTypeAccentStyle(item.type)}>
-				<ItineraryTiming
-					day={date}
-					itemType={item.type}
-					timing={item.timing}
-					timeZone={resolveTimingTimeZone(item.timing, tripTimeZone)}
-				/>
+				{@render itemTime(item)}
 				{#if display === 'timeline'}
 					<span class="item-type">{itemTypeLabels[item.type]}</span>
 				{/if}
@@ -118,12 +151,12 @@
 				style={itemTypeAccentStyle(entry.item.type)}
 				type="button"
 			>
-				<ItineraryTime startAt={entry.timestamp} timeZone={resolveTimingTimeZone(entry.item.timing, tripTimeZone)} />
+				<ItineraryTime startAt={entry.timestamp} timeZone={resolveItemTimeZone(entry.item, tripTimeZone)} />
 				<span class="stay-boundary-label">{boundaryLabel}</span>
 			</button>
 		{:else}
 			<div class="stay-boundary-summary" style={itemTypeAccentStyle(entry.item.type)}>
-				<ItineraryTime startAt={entry.timestamp} timeZone={resolveTimingTimeZone(entry.item.timing, tripTimeZone)} />
+				<ItineraryTime startAt={entry.timestamp} timeZone={resolveItemTimeZone(entry.item, tripTimeZone)} />
 				<span class="stay-boundary-label">{boundaryLabel}</span>
 			</div>
 		{/if}
@@ -163,7 +196,7 @@
 			<p class="empty-day">No items planned for this day</p>
 		{:else if dayItems.timelineEntries.length > 0}
 			<ul>
-				{#each dayItems.timelineEntries as entry (`${entry.item.id}:${entry.kind}:${entry.timestamp}`)}
+				{#each dayItems.timelineEntries as entry (`${entry.item.id}:${entry.kind}:${entry.timestamp ?? 'unscheduled'}`)}
 					{#if entry.kind === 'item'}
 						{@render dayItem(entry.item, 'timeline')}
 					{:else}
@@ -359,6 +392,29 @@
 	.stay-boundary-label,
 	.item-type {
 		color: var(--item-accent);
+	}
+
+	.unscheduled-timing {
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+		font-weight: 700;
+	}
+
+	.availability-timing {
+		display: grid;
+		font-size: 0.75rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+		gap: 0.0625rem;
+		line-height: 1.35;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.availability-label {
+		color: var(--color-text-secondary);
+		font-size: 0.6875rem;
+		font-weight: 600;
 	}
 
 	.stay-boundary-label {

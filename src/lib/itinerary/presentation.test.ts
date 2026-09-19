@@ -156,6 +156,42 @@ describe('browser-local itinerary presentation', () => {
 		]);
 	});
 
+	it('groups an unscheduled item by its day anchor, not by availability or its neutral anchor time', () => {
+		const date = '2026-04-12';
+		const timeZone = 'Asia/Tokyo';
+		const scheduled = {
+			id: 'late-lunch',
+			timing: { kind: 'exact' as const, startAt: requiredZonedTimestamp(`${date}T17:00`, timeZone) },
+			type: 'activity' as const
+		};
+		const availabilityOnly = {
+			availability: [
+				{
+					id: 'museum-hours',
+					timing: {
+						endAt: requiredZonedTimestamp('2026-04-20T17:00', timeZone),
+						kind: 'period' as const,
+						startAt: requiredZonedTimestamp('2026-04-20T09:00', timeZone),
+						timeZone
+					},
+					type: 'opening-hours' as const
+				}
+			],
+			id: 'museum',
+			placement: { anchorAt: requiredZonedTimestamp(`${date}T12:00`, timeZone), timeZone },
+			type: 'activity' as const
+		};
+
+		expect(groupItemsByLocalDay([availabilityOnly, scheduled], timeZone)).toEqual([
+			{ date, items: [scheduled, availabilityOnly] }
+		]);
+		expect(getItineraryDateRange([availabilityOnly, scheduled], timeZone)).toEqual([date, date]);
+		expect(partitionDayItems([availabilityOnly, scheduled], date, timeZone).timelineEntries).toEqual([
+			{ item: scheduled, kind: 'item', timestamp: requiredZonedTimestamp(`${date}T17:00`, timeZone) },
+			{ item: availabilityOnly, kind: 'item' }
+		]);
+	});
+
 	it('includes empty calendar days between itinerary items', () => {
 		const departure = requiredTimestamp('2026-04-12T09:00');
 		const returnFlight = requiredTimestamp('2026-04-20T09:00');
