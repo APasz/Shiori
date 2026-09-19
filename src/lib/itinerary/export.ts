@@ -1,6 +1,11 @@
 import { stringify } from 'yaml';
 import { defaultFormatPreferences, formatTime, type DateFormat, type TimeFormat } from '$lib/format-preferences';
 import { currencyFractionDigits } from '$lib/money';
+import {
+	availabilityConstraintLabel,
+	formatAvailabilityConstraintTiming,
+	type AvailabilityPresentationConstraint
+} from './availability-presentation';
 import type {
 	Cost,
 	Constraint,
@@ -515,6 +520,88 @@ function constraintTimingText(timing: ExportedConstraintTiming, textFormat: Itin
 		: `By ${timestampText(timing.at, textFormat)}`;
 }
 
+function timestampValue(timestamp: ExportedTimestamp): number | null {
+	if (typeof timestamp.at === 'number') {
+		return Number.isSafeInteger(timestamp.at) ? timestamp.at : null;
+	}
+
+	const value = Date.parse(timestamp.at);
+	return Number.isSafeInteger(value) ? value : null;
+}
+
+function usesEpochTimestamps(timing: ExportedConstraintTiming): boolean {
+	return timing.kind === 'period'
+		? typeof timing.start.at === 'number' || typeof timing.end.at === 'number'
+		: typeof timing.at.at === 'number';
+}
+
+function constraintForPresentation(constraint: ExportedConstraint): AvailabilityPresentationConstraint | null {
+	const label = constraint.label === undefined ? {} : { label: constraint.label };
+	if (constraint.timing.kind === 'period') {
+		const startAt = timestampValue(constraint.timing.start);
+		const endAt = timestampValue(constraint.timing.end);
+		if (startAt === null || endAt === null || constraint.timing.start.timeZone !== constraint.timing.end.timeZone) {
+			return null;
+		}
+
+		return {
+			...label,
+			timing: { endAt, kind: 'period', startAt, timeZone: constraint.timing.start.timeZone },
+			type: constraint.type
+		};
+	}
+
+	const at = timestampValue(constraint.timing.at);
+	if (at === null) {
+		return null;
+	}
+	return { ...label, timing: { at, kind: 'deadline', timeZone: constraint.timing.at.timeZone }, type: constraint.type };
+}
+
+function itemTimingTimestamps(timing: ExportedTiming): readonly ExportedTimestamp[] {
+	switch (timing.kind) {
+		case 'exact':
+			return timing.end === undefined ? [timing.start] : [timing.start, timing.end];
+		case 'approximate':
+			return [timing.nominal];
+		case 'window':
+			return [timing.earliest, timing.latest];
+	}
+}
+
+function availabilityText(
+	constraint: ExportedConstraint,
+	itemTiming: ExportedTiming,
+	textFormat: ItineraryTextFormatOptions
+): string {
+	if (usesEpochTimestamps(constraint.timing)) {
+		return `${availabilityConstraintLabel(constraint)} · ${constraintTimingText(constraint.timing, textFormat)}`;
+	}
+
+	const presentation = constraintForPresentation(constraint);
+	if (!presentation) {
+		return `${availabilityConstraintLabel(constraint)} · ${constraintTimingText(constraint.timing, textFormat)}`;
+	}
+
+	const itemTimestamps = itemTimingTimestamps(itemTiming);
+	const itemTimeZone = itemTimestamps[0]?.timeZone;
+	const contextTimestamps = itemTimestamps
+		.map(timestampValue)
+		.filter((timestamp): timestamp is number => timestamp !== null);
+	const timing = formatAvailabilityConstraintTiming(presentation.timing, {
+		contextTimeZone: itemTimeZone,
+		contextTimestamps,
+		formatPreferences: textFormat,
+		locale: textFormat.locale
+	});
+	if (timing === null) {
+		return `${availabilityConstraintLabel(presentation)} · ${constraintTimingText(constraint.timing, textFormat)}`;
+	}
+
+	const timeZone = presentation.timing.timeZone === itemTimeZone ? '' : ` (${presentation.timing.timeZone})`;
+	return `${availabilityConstraintLabel(presentation)} · ${timing}${timeZone}`;
+}
+
 function monetaryAmountText(amount: number, currency: CurrencyCode, isNormalized: boolean): string {
 	if (!isNormalized) {
 		return `${currency} ${amount} minor units`;
@@ -528,16 +615,12 @@ function reservationText(reservation: Reservation): string {
 	return details.length === 0 ? reservation.status : `${reservation.status} · ${details.join(' · ')}`;
 }
 
-function constraintLabel(constraint: ExportedConstraint): string {
-	return constraint.label ?? constraint.type.replaceAll('-', ' ');
-}
-
 function textLinesForItem(item: ExportedItem, index: number, textFormat: ItineraryTextFormatOptions): string[] {
 	const lines = [`${index + 1}. ${item.title} (${item.type})`, `   When: ${timingText(item.timing, textFormat)}`];
 	if (item.availability.length > 0) {
 		lines.push('   Availability:');
 		for (const constraint of item.availability) {
-			lines.push(`     - ${constraintLabel(constraint)}: ${constraintTimingText(constraint.timing, textFormat)}`);
+			lines.push(`     - ${availabilityText(constraint, item.timing, textFormat)}`);
 		}
 	}
 	if (item.locations && item.locations.length > 0) {

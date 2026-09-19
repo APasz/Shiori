@@ -6,6 +6,7 @@ import {
 	type ConstraintType,
 	type ItineraryItemType
 } from './schema';
+import { availabilityTypeSuggestions } from './availability';
 import { formatTimestampForTimeZoneInput, isValidIanaTimeZone, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export type AvailabilityConstraintDraft = {
@@ -23,26 +24,10 @@ export type AvailabilityConstraintDraft = {
 	type: ConstraintType;
 };
 
-export const availabilityTypeLabels = {
-	'opening-hours': 'Opening hours',
-	'reception-hours': 'Reception hours',
-	'desk-hours': 'Desk hours',
-	'storage-hours': 'Storage hours',
-	'last-admission': 'Last admission',
-	cutoff: 'Cutoff',
-	other: 'Other'
-} as const satisfies Record<ConstraintType, string>;
-
 export const availabilityTimingKindLabels = {
 	period: 'Period',
 	deadline: 'Deadline'
 } as const satisfies Record<ConstraintTimingKind, string>;
-
-export const availabilityTypeSuggestions = {
-	activity: ['opening-hours', 'last-admission', 'desk-hours', 'other'],
-	accommodation: ['reception-hours', 'storage-hours', 'desk-hours', 'other'],
-	transport: ['desk-hours', 'cutoff', 'storage-hours', 'other']
-} as const satisfies Record<ItineraryItemType, readonly ConstraintType[]>;
 
 function incompleteDateTime(defaultDate: string | undefined): string {
 	return defaultDate === undefined ? '' : `${defaultDate}T`;

@@ -2,6 +2,10 @@
 	import ItineraryTime from '$lib/components/ItineraryTime.svelte';
 	import ItineraryTiming from '$lib/components/ItineraryTiming.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
+	import {
+		availabilityConstraintPresentation,
+		type AvailabilityPresentation
+	} from '$lib/itinerary/availability-presentation';
 	import { formatCalendarDate, formatCalendarDateTime } from '$lib/itinerary/calendar';
 	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
 	import {
@@ -10,7 +14,9 @@
 		transportTravelDuration
 	} from '$lib/itinerary/item-location-flow';
 	import type { Cost, CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
+	import { timingEndTimestamp, timingStartTimestamp } from '$lib/itinerary/timing';
 	import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
+	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { formatMonetaryAmount } from '$lib/money';
@@ -45,9 +51,12 @@
 		onEdit: () => void;
 	} = $props();
 	let dialogElement: HTMLDialogElement;
+	type AvailabilityEntry = AvailabilityPresentation & Readonly<{ id: string }>;
+
 	const timingTimeZone = $derived(resolveTimingTimeZone(item.timing, tripTimeZone));
 	const linkedExpenses = $derived(resolveLinkedExpenses(expenses, item.linkedExpenseIds));
 	const locationFlow = $derived(itemLocationFlow(item, tripTimeZone));
+	const availabilityEntries = $derived(availabilityEntriesFor(item));
 	const hasEndTime = $derived(item.timing.kind === 'exact' && item.timing.endAt !== undefined);
 	const startLabel = $derived(item.type === 'accommodation' ? 'Check-in' : 'Start');
 	const endLabel = $derived(item.type === 'accommodation' ? 'Check-out' : 'End');
@@ -67,6 +76,23 @@
 
 	function locationMapUrl(location: ItineraryLocation): string | undefined {
 		return location.googleMapsUrl ?? location.openRailwayMapUrl;
+	}
+
+	function availabilityEntriesFor(item: ItineraryItem): AvailabilityEntry[] {
+		const contextTimestamps = [timingStartTimestamp(item.timing), timingEndTimestamp(item.timing)];
+		const entries: AvailabilityEntry[] = [];
+		for (const constraint of item.availability) {
+			const presentation = availabilityConstraintPresentation(constraint, {
+				contextTimeZone: timingTimeZone,
+				contextTimestamps,
+				formatPreferences: viewerContext.formatPreferences,
+				locale: viewerContext.locale
+			});
+			if (presentation) {
+				entries.push({ ...presentation, id: constraint.id });
+			}
+		}
+		return entries;
 	}
 
 	function paidAtLabel(paidAt: number): string {
@@ -208,6 +234,27 @@
 				{/if}
 			</div>
 		</section>
+
+		{#if availabilityEntries.length > 0}
+			<section aria-labelledby="availability-heading">
+				<h3 id="availability-heading">Availability</h3>
+				<ul class="availability-list">
+					{#each availabilityEntries as entry (entry.id)}
+						<li>
+							<strong>{entry.label}</strong><span aria-hidden="true"> · </span><span>{entry.timing}</span>
+							{#if entry.timeZone !== timingTimeZone}
+								<span
+									class="availability-time-zone"
+									title={timeZoneOffsetLabel(entry.timeZone, entry.timestamp) ?? undefined}
+								>
+									· {timeZoneShortLabel(entry.timeZone, entry.timestamp)}
+								</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 
 		{#if item.type === 'transport'}
 			<section aria-labelledby="transport-heading">
@@ -598,6 +645,20 @@
 	li {
 		display: grid;
 		gap: 0.125rem;
+	}
+
+	.availability-list li {
+		align-items: baseline;
+		display: flex;
+		flex-wrap: wrap;
+		font-variant-numeric: tabular-nums;
+		gap: 0;
+	}
+
+	.availability-time-zone {
+		color: var(--color-text-secondary);
+		font-size: 0.6875rem;
+		font-weight: 500;
 	}
 
 	dl {

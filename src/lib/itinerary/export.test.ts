@@ -243,6 +243,14 @@ describe('itinerary exports', () => {
 		});
 		expect(exported.items[0].locations[0]).not.toHaveProperty('coordinates');
 		expect(text).toContain('When: 1775952000000 (epoch milliseconds; Asia/Tokyo)');
+		expect(text).toContain(
+			`Ticket office · ${Date.UTC(2026, 3, 12)} (epoch milliseconds; Asia/Tokyo) – ${Date.UTC(
+				2026,
+				3,
+				12,
+				9
+			)} (epoch milliseconds; Asia/Tokyo)`
+		);
 		expect(text).toContain('Day note · 1776049200000 (epoch milliseconds; Asia/Tokyo)');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
 		expect(text).toContain('Scheduled payment: 2026-04-04');
@@ -272,7 +280,8 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Japan 2026');
 		expect(text).toContain('When: 04-12-2026, 9:00 am (Asia/Tokyo)');
 		expect(text).toContain('Availability:');
-		expect(text).toContain('Ticket office: 04-12-2026, 9:00 am (Asia/Tokyo) – 04-12-2026, 6:00 pm (Asia/Tokyo)');
+		expect(text).toContain('Ticket office · 9:00 am–6:00 pm');
+		expect(text).toContain('Admission · 4:30 pm');
 		expect(text).toContain('Tokyo Station · TYO — 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
@@ -284,5 +293,85 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Link: Museum details: https://example.com/museum');
 		expect(text).toContain('Day note · 04-13-2026, 12:00 pm (Asia/Tokyo)');
 		expect(file).toMatchObject({ filename: 'japan-2026-itinerary.yaml', mediaType: 'application/yaml' });
+	});
+
+	it('renders split availability in saved zones while keeping JSON and YAML structural', () => {
+		const source = itinerarySchema.parse({
+			items: [
+				{
+					availability: [
+						{
+							id: 'morning-opening',
+							timing: {
+								endAt: Date.UTC(2026, 3, 12, 3),
+								kind: 'period',
+								startAt: Date.UTC(2026, 3, 12, 1),
+								timeZone: 'Asia/Tokyo'
+							},
+							type: 'opening-hours'
+						},
+						{
+							id: 'afternoon-opening',
+							timing: {
+								endAt: Date.UTC(2026, 3, 12, 7),
+								kind: 'period',
+								startAt: Date.UTC(2026, 3, 12, 4),
+								timeZone: 'Asia/Tokyo'
+							},
+							type: 'opening-hours'
+						},
+						{
+							id: 'last-admission',
+							timing: {
+								at: Date.UTC(2026, 3, 12, 22, 30),
+								kind: 'deadline',
+								timeZone: 'America/Los_Angeles'
+							},
+							type: 'last-admission'
+						}
+					],
+					id: 'museum',
+					timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12), timeZone: 'Asia/Tokyo' },
+					title: 'Museum',
+					type: 'activity'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Tokyo day'
+		});
+		const textFormat = { dateFormat: 'month-day-year' as const, locale: 'en-US', timeFormat: 'twelve-hour' as const };
+		const json = JSON.parse(renderItineraryExport(source, 'json', defaultItineraryExportOptions));
+		const yaml = parse(renderItineraryExport(source, 'yaml', defaultItineraryExportOptions));
+		const text = renderItineraryExport(source, 'txt', defaultItineraryExportOptions, textFormat);
+
+		expect(yaml).toEqual(json);
+		expect(json.items[0].availability).toEqual([
+			{
+				timing: {
+					end: { at: '2026-04-12T03:00:00.000Z', timeZone: 'Asia/Tokyo' },
+					kind: 'period',
+					start: { at: '2026-04-12T01:00:00.000Z', timeZone: 'Asia/Tokyo' }
+				},
+				type: 'opening-hours'
+			},
+			{
+				timing: {
+					end: { at: '2026-04-12T07:00:00.000Z', timeZone: 'Asia/Tokyo' },
+					kind: 'period',
+					start: { at: '2026-04-12T04:00:00.000Z', timeZone: 'Asia/Tokyo' }
+				},
+				type: 'opening-hours'
+			},
+			{
+				timing: {
+					at: { at: '2026-04-12T22:30:00.000Z', timeZone: 'America/Los_Angeles' },
+					kind: 'deadline'
+				},
+				type: 'last-admission'
+			}
+		]);
+		expect(text).toContain('Opening · 10:00 am–12:00 pm');
+		expect(text).toContain('Opening · 1:00 pm–4:00 pm');
+		expect(text).toContain('Admission · 04-12-2026, 3:30 pm (America/Los_Angeles)');
 	});
 });

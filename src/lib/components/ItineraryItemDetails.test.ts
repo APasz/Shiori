@@ -49,6 +49,7 @@ describe('itinerary item details', () => {
 		expect(html).toContain('Check-in');
 		expect(html).toContain('Check-out');
 		expect(html).not.toContain('>At');
+		expect(html).not.toContain('availability-heading');
 	});
 
 	it('keeps activity start and end labels with its location time', () => {
@@ -191,5 +192,55 @@ describe('itinerary item details', () => {
 		const html = renderDetails(item, true, { dateFormat: 'day-month-year', timeFormat: 'twelve-hour' });
 
 		expect(html).toContain('Due 26-10-2026');
+	});
+
+	it('presents availability separately in each entry’s saved time zone', () => {
+		const item = itineraryItemSchema.parse({
+			availability: [
+				{
+					id: 'morning-opening',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 3),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12, 1),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'opening-hours'
+				},
+				{
+					id: 'afternoon-opening',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 7),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12, 4),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'opening-hours'
+				},
+				{
+					id: 'last-admission',
+					timing: {
+						at: Date.UTC(2026, 3, 12, 22, 30),
+						kind: 'deadline',
+						timeZone: 'America/Los_Angeles'
+					},
+					type: 'last-admission'
+				}
+			],
+			id: 'museum',
+			timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12), timeZone: 'Asia/Tokyo' },
+			title: 'Museum visit',
+			type: 'activity'
+		});
+
+		const html = renderDetails(item, false, { dateFormat: 'day-month-year', timeFormat: 'twelve-hour' });
+
+		expect(html).toContain('Availability');
+		expect(occurrences(html, 'Opening')).toBe(2);
+		expect(html).toContain('10:00 am–12:00 pm');
+		expect(html).toContain('1:00 pm–4:00 pm');
+		expect(html).toContain('Admission');
+		expect(html).toContain('12-04-2026, 3:30 pm');
+		expect(html).toContain('PDT');
 	});
 });

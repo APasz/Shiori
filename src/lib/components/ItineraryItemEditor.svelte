@@ -2,12 +2,12 @@
 	import { onMount } from 'svelte';
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
+	import { availabilityTypeEditorLabel } from '$lib/itinerary/availability';
 	import {
 		availabilityConstraintCandidate,
 		availabilityConstraintDraftFromConstraint,
 		availabilityConstraintDraftForTimeZone,
 		availabilityTimingKindLabels,
-		availabilityTypeLabels,
 		availabilityTypesForItem,
 		createAvailabilityConstraintDraft,
 		validateAvailabilityConstraintDraft,
@@ -323,10 +323,18 @@
 		return isCompleteLocalDateTime(`${date}T00:00`) ? date : undefined;
 	}
 
+	function availabilityScheduleStart(): TransportStopSchedule | undefined {
+		return usesFirstTransportStopForSchedule() ? firstTransportStopSchedule() : undefined;
+	}
+
+	function defaultAvailabilityTimeZone(): string {
+		return availabilityScheduleStart()?.timeZone ?? startAtTimeZone;
+	}
+
 	function defaultAvailabilityDate(): string | undefined {
-		const firstStopSchedule = usesFirstTransportStopForSchedule() ? firstTransportStopSchedule() : undefined;
-		const scheduleDateTime = firstStopSchedule
-			? (formatTimestampForTimeZoneInput(firstStopSchedule.scheduledAt, startAtTimeZone) ?? '')
+		const scheduleStart = availabilityScheduleStart();
+		const scheduleDateTime = scheduleStart
+			? (formatTimestampForTimeZoneInput(scheduleStart.scheduledAt, scheduleStart.timeZone) ?? '')
 			: initialDateTimeForTiming();
 		return dateFromDateTimeInput(scheduleDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
 	}
@@ -342,7 +350,7 @@
 				defaultDate: defaultAvailabilityDate(),
 				id: newIdentifier(),
 				itemType,
-				timeZone: startAtTimeZone
+				timeZone: defaultAvailabilityTimeZone()
 			})
 		];
 	}
@@ -369,7 +377,7 @@
 	}
 
 	function availabilitySummary(constraint: AvailabilityConstraintDraft): string {
-		return optionalText(constraint.label) ?? availabilityTypeLabels[constraint.type];
+		return optionalText(constraint.label) ?? availabilityTypeEditorLabel(constraint.type);
 	}
 
 	function addLocation(): void {
@@ -1367,7 +1375,7 @@
 												Availability type <span class="field-hint">Suggested for {itemType} items</span>
 												<select bind:value={constraint.type} class="shiori-form-control">
 													{#each availabilityTypeOptions as type (type)}
-														<option value={type}>{availabilityTypeLabels[type]}</option>
+														<option value={type}>{availabilityTypeEditorLabel(type)}</option>
 													{/each}
 												</select>
 											</label>
