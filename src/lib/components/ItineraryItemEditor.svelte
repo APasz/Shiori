@@ -7,6 +7,7 @@
 	import {
 		availabilityConstraintCandidate,
 		availabilityConstraintDraftFromConstraint,
+		availabilityConstraintDraftForTimingKind,
 		availabilityConstraintDraftForType,
 		availabilityConstraintDraftForTimeZone,
 		availabilityTimingKindLabels,
@@ -395,7 +396,7 @@
 		if (!parsedKind.success || !constraint) {
 			return;
 		}
-		constraint.timingKind = parsedKind.data;
+		availability[index] = availabilityConstraintDraftForTimingKind(constraint, parsedKind.data);
 	}
 
 	function changeAvailabilityType(index: number, value: string): void {

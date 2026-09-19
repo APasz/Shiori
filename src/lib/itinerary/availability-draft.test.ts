@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	availabilityConstraintDraftFromConstraint,
+	availabilityConstraintDraftForTimingKind,
 	availabilityConstraintDraftForType,
 	availabilityConstraintDraftForTimeZone,
 	availabilityTypesForItem,
@@ -178,6 +179,38 @@ describe('availability constraint drafts', () => {
 			at: '2026-04-13T16:00',
 			timingKind: 'deadline',
 			type: 'last-admission'
+		});
+	});
+
+	it('keeps a period date when switching directly to Deadline', () => {
+		const periodDraft = availabilityConstraintDraftFromConstraint({
+			id: 'museum-hours',
+			timing: {
+				endAt: Date.UTC(2026, 3, 12, 18),
+				kind: 'period' as const,
+				startAt: Date.UTC(2026, 3, 12, 9),
+				timeZone: 'UTC'
+			},
+			type: 'opening-hours' as const
+		});
+
+		expect(availabilityConstraintDraftForTimingKind(periodDraft, 'deadline')).toMatchObject({
+			at: '2026-04-12T',
+			timingKind: 'deadline'
+		});
+	});
+
+	it('keeps a deadline date when switching directly to Period', () => {
+		const deadlineDraft = availabilityConstraintDraftFromConstraint({
+			id: 'last-entry',
+			timing: { at: Date.UTC(2026, 3, 12, 16, 30), kind: 'deadline' as const, timeZone: 'UTC' },
+			type: 'last-admission' as const
+		});
+
+		expect(availabilityConstraintDraftForTimingKind(deadlineDraft, 'period')).toMatchObject({
+			endAt: '2026-04-12T',
+			startAt: '2026-04-12T',
+			timingKind: 'period'
 		});
 	});
 

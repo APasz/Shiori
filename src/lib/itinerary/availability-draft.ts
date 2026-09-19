@@ -84,7 +84,8 @@ function dateTimeWithFallbackDate(value: string, fallback: string): string {
 	return datePortion(value) === undefined ? fallback : value;
 }
 
-function availabilityConstraintDraftForTimingKind(
+/** Switches timing modes while retaining entered target-mode values and a usable source date. */
+export function availabilityConstraintDraftForTimingKind(
 	draft: AvailabilityConstraintDraft,
 	timingKind: ConstraintTimingKind
 ): AvailabilityConstraintDraft {
