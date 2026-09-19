@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	availabilityConstraintBounds,
 	currentOrNextAvailabilityConstraint,
+	isOpeningHoursPeriodConstraint,
 	latestAvailabilityConstraint
 } from './availability';
 import type { Constraint } from './schema';
@@ -30,6 +31,24 @@ describe('availability constraint selection', () => {
 			endAt: now + 5 * 60_000,
 			startAt: now + 5 * 60_000
 		});
+	});
+
+	it('identifies only opening-hour periods as making an item usable', () => {
+		expect(isOpeningHoursPeriodConstraint(morningHours)).toBe(true);
+		expect(
+			isOpeningHoursPeriodConstraint({
+				id: 'desk-hours',
+				timing: { endAt: now + 60 * 60_000, kind: 'period', startAt: now, timeZone: 'UTC' },
+				type: 'desk-hours'
+			})
+		).toBe(false);
+		expect(
+			isOpeningHoursPeriodConstraint({
+				id: 'last-admission',
+				timing: { at: now, kind: 'deadline', timeZone: 'UTC' },
+				type: 'last-admission'
+			})
+		).toBe(false);
 	});
 
 	it('chooses the active constraint before the nearest future constraint regardless of input order', () => {

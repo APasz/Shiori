@@ -11,8 +11,12 @@ describe('item day placement', () => {
 		expect(itemPlacementDate({ anchorAt, timeZone: 'Asia/Tokyo' })).toBe('2026-04-12');
 	});
 
-	it('distinguishes real schedules from a day-only placement', () => {
-		const unscheduled = { id: 'museum', placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' } };
+	it('distinguishes real schedules from a day-only placement regardless of availability', () => {
+		const unscheduled = {
+			availability: [] as const,
+			id: 'museum',
+			placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' }
+		};
 		const scheduled = { id: 'train', timing: { kind: 'exact' as const, startAt: Date.UTC(2026, 3, 12, 4) } };
 
 		expect(hasItemTiming(unscheduled)).toBe(false);

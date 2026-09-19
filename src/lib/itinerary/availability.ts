@@ -1,6 +1,11 @@
 import type { Constraint, ConstraintTiming, ConstraintType, ItineraryItemType } from './schema';
 
 type ItineraryRecord = Record<string, unknown>;
+type OpeningHoursPeriodConstraint = Constraint &
+	Readonly<{
+		timing: Extract<ConstraintTiming, { kind: 'period' }>;
+		type: 'opening-hours';
+	}>;
 
 const availabilityTypeDetails = {
 	'opening-hours': { editorLabel: 'Opening hours', presentationLabel: 'Opening' },
@@ -42,6 +47,11 @@ export function availabilityConstraintBounds(timing: ConstraintTiming): Availabi
 	return timing.kind === 'period'
 		? { endAt: timing.endAt, startAt: timing.startAt }
 		: { endAt: timing.at, startAt: timing.at };
+}
+
+/** Returns whether a constraint makes the intended item itself usable for a period. */
+export function isOpeningHoursPeriodConstraint(constraint: Constraint): constraint is OpeningHoursPeriodConstraint {
+	return constraint.type === 'opening-hours' && constraint.timing.kind === 'period';
 }
 
 /** Selects the active constraint, or the nearest future one, without treating it as itinerary timing. */

@@ -532,10 +532,7 @@ function validateUniqueAvailabilityIds(
 	}
 }
 
-function validateItemPlacement(
-	item: { availability: readonly unknown[]; placement?: unknown; timing?: unknown },
-	context: z.RefinementCtx
-): void {
+function validateItemPlacement(item: { placement?: unknown; timing?: unknown }, context: z.RefinementCtx): void {
 	if (item.timing !== undefined && item.placement !== undefined) {
 		context.addIssue({
 			code: 'custom',
@@ -552,14 +549,6 @@ function validateItemPlacement(
 			message: 'Choose a scheduled time or a day placement.'
 		});
 		return;
-	}
-
-	if (item.timing === undefined && item.availability.length === 0) {
-		context.addIssue({
-			code: 'custom',
-			path: ['availability'],
-			message: 'An item without a schedule needs at least one availability entry.'
-		});
 	}
 }
 

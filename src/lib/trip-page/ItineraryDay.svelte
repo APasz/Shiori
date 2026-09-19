@@ -6,7 +6,11 @@
 		availabilityConstraintPresentation,
 		type AvailabilityPresentation
 	} from '$lib/itinerary/availability-presentation';
-	import { currentOrNextAvailabilityConstraint, latestAvailabilityConstraint } from '$lib/itinerary/availability';
+	import {
+		currentOrNextAvailabilityConstraint,
+		isOpeningHoursPeriodConstraint,
+		latestAvailabilityConstraint
+	} from '$lib/itinerary/availability';
 	import { formatLocalDay, partitionDayItems, type DayTimelineEntry } from '$lib/itinerary/presentation';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -60,14 +64,15 @@
 		}
 	}
 
-	function unscheduledAvailabilityPresentation(item: DayItem): AvailabilityPresentation | null {
+	function openingHoursPresentation(item: DayItem): AvailabilityPresentation | null {
 		if (item.timing) {
 			return null;
 		}
 
+		const openingHours = item.availability.filter(isOpeningHoursPeriodConstraint);
 		const constraint =
-			currentOrNextAvailabilityConstraint(item.availability, availabilityTimestamp)?.constraint ??
-			latestAvailabilityConstraint(item.availability);
+			currentOrNextAvailabilityConstraint(openingHours, availabilityTimestamp)?.constraint ??
+			latestAvailabilityConstraint(openingHours);
 		if (!constraint) {
 			return null;
 		}
@@ -90,7 +95,7 @@
 			timeZone={resolveItemTimeZone(item, tripTimeZone)}
 		/>
 	{:else}
-		{@const availability = unscheduledAvailabilityPresentation(item)}
+		{@const availability = openingHoursPresentation(item)}
 		{#if availability}
 			<span class="availability-timing">
 				<span class="availability-label">{availability.label}</span>

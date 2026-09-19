@@ -1,7 +1,7 @@
-import { availabilityConstraintBounds } from './availability';
+import { isOpeningHoursPeriodConstraint } from './availability';
 import { addCalendarDays } from './calendar';
 import { hasItemTiming, type TimedItem as ItemWithTiming } from './item-placement';
-import type { Constraint, ItineraryItem, ItineraryTiming } from './schema';
+import type { Constraint, ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
 import { formatTimestampInTimeZone } from './time';
 import { resolveTimingTimeZone } from './time-zone';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
@@ -10,6 +10,7 @@ import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 type NowNextItem = Readonly<{
 	availability?: readonly Constraint[];
 	id: string;
+	placement?: ItineraryItemPlacement;
 	timing?: ItineraryTiming;
 	type: ItineraryItem['type'];
 }>;
@@ -161,17 +162,21 @@ function timingEntry<Item extends NowNextItem>(
 }
 
 function availabilityEntriesForItem<Item extends NowNextItem>(item: Item): AvailabilityNowNextEntry<Item>[] {
-	return (item.availability ?? []).map((constraint) => {
-		const { endAt, startAt } = availabilityConstraintBounds(constraint.timing);
-		return {
+	const entries: AvailabilityNowNextEntry<Item>[] = [];
+	for (const constraint of item.availability ?? []) {
+		if (!isOpeningHoursPeriodConstraint(constraint)) {
+			continue;
+		}
+		entries.push({
 			constraint,
-			endTimestamp: endAt,
+			endTimestamp: constraint.timing.endAt,
 			isHiddenBeforeStart: false,
 			item,
 			source: 'availability',
-			startTimestamp: startAt
-		};
-	});
+			startTimestamp: constraint.timing.startAt
+		});
+	}
+	return entries;
 }
 
 function accommodationBoundaryOrder(boundary: AccommodationBoundary | undefined): number {
@@ -189,6 +194,10 @@ function entryBoundaryOrder<Item extends NowNextItem>(entry: NowNextEntry<Item>)
 	return entry.source === 'timing' ? accommodationBoundaryOrder(entry.boundary) : 1;
 }
 
+function entrySourceOrder<Item extends NowNextItem>(entry: NowNextEntry<Item>): number {
+	return entry.source === 'timing' ? 0 : 1;
+}
+
 function entryTieBreakId<Item extends NowNextItem>(entry: NowNextEntry<Item>): string {
 	return entry.source === 'availability' ? entry.constraint.id : '';
 }
@@ -196,6 +205,7 @@ function entryTieBreakId<Item extends NowNextItem>(entry: NowNextEntry<Item>): s
 function compareNowNextEntries<Item extends NowNextItem>(left: NowNextEntry<Item>, right: NowNextEntry<Item>): number {
 	return (
 		left.startTimestamp - right.startTimestamp ||
+		entrySourceOrder(left) - entrySourceOrder(right) ||
 		entryBoundaryOrder(left) - entryBoundaryOrder(right) ||
 		left.item.id.localeCompare(right.item.id) ||
 		entryTieBreakId(left).localeCompare(entryTieBreakId(right))
@@ -224,12 +234,13 @@ function entryIsPast<Item extends NowNextItem>(entry: NowNextEntry<Item>, curren
 }
 
 function latestActiveEntry<Item extends NowNextItem>(
-	entries: NowNextEntry<Item>[],
-	currentTimestamp: number
+	entries: readonly NowNextEntry<Item>[],
+	currentTimestamp: number,
+	source: NowNextEntry<Item>['source']
 ): NowNextEntry<Item> | undefined {
 	for (let index = entries.length - 1; index >= 0; index -= 1) {
 		const entry = entries[index];
-		if (entry && entryIsActive(entry, currentTimestamp)) {
+		if (entry && entry.source === source && entryIsActive(entry, currentTimestamp)) {
 			return entry;
 		}
 	}
@@ -237,14 +248,14 @@ function latestActiveEntry<Item extends NowNextItem>(
 }
 
 function firstPossiblyActiveEntry<Item extends NowNextItem>(
-	entries: NowNextEntry<Item>[],
+	entries: readonly NowNextEntry<Item>[],
 	currentTimestamp: number
 ): NowNextEntry<Item> | undefined {
 	return entries.find((entry) => entryIsPossiblyActive(entry, currentTimestamp));
 }
 
 function nextUpcomingEntry<Item extends NowNextItem>(
-	entries: NowNextEntry<Item>[],
+	entries: readonly NowNextEntry<Item>[],
 	currentTimestamp: number,
 	currentEntry?: NowNextEntry<Item>
 ): NowNextEntry<Item> | undefined {
@@ -274,8 +285,8 @@ function nextEntryProperties<Item extends NowNextItem>(entry: NowNextEntry<Item>
 }
 
 /**
- * Selects an honest Now / Next presentation state for itinerary timings and availability-only items.
- * A current or upcoming Schedule always wins; availability is only a fallback and never becomes itinerary timing.
+ * Selects an honest Now / Next presentation state from Schedule and usable day-placement availability candidates.
+ * A current Schedule wins over availability; availability never becomes itinerary timing.
  */
 export function getNowNextState<Item extends NowNextItem>(
 	items: Item[],
@@ -287,23 +298,20 @@ export function getNowNextState<Item extends NowNextItem>(
 		.flatMap((item) =>
 			item.type === 'accommodation' ? accommodationEntries(item, tripTimeZone) : [timingEntry(item)]
 		);
-	const hasCurrentOrUpcomingTiming = timingEntries.some((entry) => !entryIsPast(entry, currentTimestamp));
-	const entries = (
-		hasCurrentOrUpcomingTiming
-			? timingEntries
-			: items.filter((item) => !hasItemTiming(item)).flatMap(availabilityEntriesForItem)
-	).sort(compareNowNextEntries);
+	const availabilityEntries = items
+		.filter((item) => !hasItemTiming(item) && item.placement !== undefined)
+		.flatMap(availabilityEntriesForItem);
+	const entries = [...timingEntries, ...availabilityEntries].sort(compareNowNextEntries);
 	if (entries.length === 0) {
-		return timingEntries.length > 0 ? { kind: 'complete' } : { kind: 'empty' };
+		return { kind: 'empty' };
 	}
 
-	const activeEntry = latestActiveEntry(entries, currentTimestamp);
+	const activeEntry =
+		latestActiveEntry(entries, currentTimestamp, 'timing') ??
+		latestActiveEntry(entries, currentTimestamp, 'availability');
 	if (activeEntry) {
 		const nextEntry = nextUpcomingEntry(entries, currentTimestamp, activeEntry);
-		const isExact =
-			activeEntry.source === 'timing'
-				? activeEntry.timingKind === 'exact'
-				: activeEntry.constraint.timing.kind === 'deadline';
+		const isExact = activeEntry.source === 'timing' ? activeEntry.timingKind === 'exact' : false;
 		return {
 			kind: isExact ? 'exact-current' : 'window-active',
 			...currentEntryProperties(activeEntry),
@@ -324,8 +332,8 @@ export function getNowNextState<Item extends NowNextItem>(
 		};
 	}
 
-	const hasPastTimingEntry = entries.some((entry) => entry.source === 'timing' && entryIsPast(entry, currentTimestamp));
-	const hasTimingEntries = entries.some((entry) => entry.source === 'timing');
+	const hasPastTimingEntry = timingEntries.some((entry) => entryIsPast(entry, currentTimestamp));
+	const hasTimingEntries = timingEntries.length > 0;
 	const nextEntry = entries.find((entry) => !entryIsPast(entry, currentTimestamp) && !entry.isHiddenBeforeStart);
 	if (!hasPastTimingEntry && nextEntry?.source === 'timing') {
 		return {
@@ -338,7 +346,7 @@ export function getNowNextState<Item extends NowNextItem>(
 		return { kind: 'next-only', ...nextEntryProperties(nextEntry) };
 	}
 	if (!hasTimingEntries) {
-		return timingEntries.length > 0 ? { kind: 'complete' } : { kind: 'availability-complete' };
+		return { kind: 'availability-complete' };
 	}
 	if (entries.some((entry) => entry.isHiddenBeforeStart && entry.startTimestamp > currentTimestamp)) {
 		return { kind: 'idle' };

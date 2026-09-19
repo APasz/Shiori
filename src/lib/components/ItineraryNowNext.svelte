@@ -61,6 +61,10 @@
 		return context ? `${label} · ${context}` : label;
 	}
 
+	function nextItemLabel(availability: Constraint | undefined): 'Next' | 'Opens next' {
+		return availability ? 'Opens next' : 'Next';
+	}
+
 	function accommodationBoundaryLabel(boundary: AccommodationBoundary): 'Check-in' | 'Check-out' {
 		return boundary === 'check-in' ? 'Check-in' : 'Check-out';
 	}
@@ -102,7 +106,7 @@
 		{:else if nowNextState.kind === 'window-active'}
 			<p class="status">
 				{nowNextState.currentAvailability
-					? 'Available now'
+					? 'Available now — this planned item is open, not necessarily in progress.'
 					: nowNextState.currentBoundary
 						? `${accommodationBoundaryLabel(nowNextState.currentBoundary)} window now`
 						: 'Open now'}
@@ -113,20 +117,35 @@
 			{#if nowNextState.kind === 'exact-current' || nowNextState.kind === 'window-active'}
 				{@render itemSummary(
 					nowNextState.currentItem,
-					'Now',
+					nowNextState.currentAvailability ? 'Available now' : 'Now',
 					nowNextState.currentBoundary,
 					nowNextState.currentAvailability
 				)}
 				{#if nowNextState.nextItem}
-					{@render itemSummary(nowNextState.nextItem, 'Next', nowNextState.nextBoundary, nowNextState.nextAvailability)}
+					{@render itemSummary(
+						nowNextState.nextItem,
+						nextItemLabel(nowNextState.nextAvailability),
+						nowNextState.nextBoundary,
+						nowNextState.nextAvailability
+					)}
 				{/if}
 			{:else if nowNextState.kind === 'approximate-now'}
 				{@render itemSummary(nowNextState.approximateItem, 'Around now', nowNextState.approximateBoundary, undefined)}
 				{#if nowNextState.nextItem}
-					{@render itemSummary(nowNextState.nextItem, 'Next', nowNextState.nextBoundary, nowNextState.nextAvailability)}
+					{@render itemSummary(
+						nowNextState.nextItem,
+						nextItemLabel(nowNextState.nextAvailability),
+						nowNextState.nextBoundary,
+						nowNextState.nextAvailability
+					)}
 				{/if}
 			{:else}
-				{@render itemSummary(nowNextState.nextItem, 'Next', nowNextState.nextBoundary, nowNextState.nextAvailability)}
+				{@render itemSummary(
+					nowNextState.nextItem,
+					nextItemLabel(nowNextState.nextAvailability),
+					nowNextState.nextBoundary,
+					nowNextState.nextAvailability
+				)}
 			{/if}
 		</div>
 	{/if}

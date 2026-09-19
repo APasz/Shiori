@@ -58,6 +58,33 @@ describe('itinerary item details', () => {
 		expect(html).toContain('Opening');
 	});
 
+	it('keeps non-opening availability in item details without turning it into a schedule', () => {
+		const item = itineraryItemSchema.parse({
+			availability: [
+				{
+					id: 'reception-hours',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 7),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12, 1),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'reception-hours'
+				}
+			],
+			id: 'hotel',
+			placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' },
+			title: 'Hotel',
+			type: 'activity'
+		});
+
+		const html = renderDetails(item);
+
+		expect(html).toContain('Time not set');
+		expect(html).toContain('Availability');
+		expect(html).toContain('Reception');
+	});
+
 	it('uses check-in and check-out without repeating the accommodation time at its location', () => {
 		const item = itineraryItemSchema.parse({
 			id: 'stay',

@@ -933,9 +933,6 @@
 			if (!date || itemPlacementAnchorAt(date, placementTimeZone) === null) {
 				return 'Itinerary date: choose a valid local date.';
 			}
-			if (availability.length === 0) {
-				return 'Schedule: add a scheduled time or at least one availability entry.';
-			}
 		} else {
 			if (!isValidIanaTimeZone(startAtTimeZone)) {
 				return 'Time zone: use a valid IANA time zone such as Asia/Tokyo.';
@@ -1346,7 +1343,7 @@
 							Time is not scheduled
 						</label>
 						{#if !scheduleEnabled}
-							<p class="field-hint">Place this item on a day instead. Add availability before saving.</p>
+							<p class="field-hint">Place this item on a day without assigning a time.</p>
 							<DateTimeInput
 								dateTime={placementDateTime}
 								id="item-placement"

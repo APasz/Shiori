@@ -69,6 +69,33 @@ describe('itinerary day', () => {
 		expect(html).not.toContain('Time not set');
 	});
 
+	it('keeps a day-placed item with no usable availability visible without a time', () => {
+		const item = itineraryItemSchema.parse({
+			availability: [
+				{
+					id: 'reception-hours',
+					timing: {
+						endAt: Date.UTC(2026, 3, 13, 16),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 13, 10),
+						timeZone: 'UTC'
+					},
+					type: 'reception-hours'
+				}
+			],
+			id: 'hotel',
+			placement: { anchorAt: Date.UTC(2026, 3, 13, 12), timeZone: 'UTC' },
+			title: 'Hotel',
+			type: 'activity'
+		});
+
+		const html = renderDay('Notes', [item]);
+
+		expect(html).toContain('Hotel');
+		expect(html).toContain('Time not set');
+		expect(html).not.toContain('Reception');
+	});
+
 	it('uses the current or next chronological availability entry on a day card', () => {
 		const item = itineraryItemSchema.parse({
 			availability: [

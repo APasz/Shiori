@@ -36,7 +36,7 @@ describe('itinerary timing schema', () => {
 		}
 	});
 
-	it('allows a day-anchored availability-only item without changing timing shapes', () => {
+	it('requires exactly one Schedule or day placement independently of availability', () => {
 		const placement = { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' };
 		const availability = [
 			{
@@ -52,9 +52,11 @@ describe('itinerary timing schema', () => {
 		];
 
 		for (const schema of [itineraryItemSchema, itineraryItemDraftSchema]) {
+			expect(schema.safeParse({ ...itemBase, availability: [], placement }).success).toBe(true);
+			expect(schema.safeParse({ ...itemBase, placement }).success).toBe(true);
 			expect(schema.safeParse({ ...itemBase, availability, placement }).success).toBe(true);
 			expect(schema.safeParse({ ...itemBase, availability }).success).toBe(false);
-			expect(schema.safeParse({ ...itemBase, placement }).success).toBe(false);
+			expect(schema.safeParse({ ...itemBase }).success).toBe(false);
 			expect(
 				schema.safeParse({
 					...itemBase,
