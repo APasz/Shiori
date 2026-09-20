@@ -80,7 +80,7 @@ function dateOnlyStayTimestamp(date: string, boundary: 'start' | 'end', timeZone
 function publishedTimeConstraint(boundary: AccommodationBoundary, at: number, timeZone: string): Constraint {
 	return {
 		id: `property-${boundary}`,
-		timing: { at, kind: 'deadline', timeZone },
+		timing: { at, kind: boundary === 'check-in' ? 'from' : 'until', timeZone },
 		type: boundary
 	};
 }

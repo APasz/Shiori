@@ -29,11 +29,6 @@ export type AvailabilityConstraintDraft = {
 	type: ConstraintType;
 };
 
-export const availabilityTimingKindLabels = {
-	period: 'Period',
-	deadline: 'Deadline'
-} as const satisfies Record<ConstraintTimingKind, string>;
-
 function incompleteDateTime(defaultDate: string | undefined): string {
 	return defaultDate === undefined ? '' : `${defaultDate}T`;
 }
@@ -196,7 +191,7 @@ export function availabilityConstraintDraftFromConstraint(constraint: Constraint
 		endAt: '',
 		originalAt: constraint.timing.at,
 		startAt: '',
-		timingKind: 'deadline'
+		timingKind: constraint.timing.kind
 	};
 }
 
@@ -231,7 +226,7 @@ export function availabilityConstraintCandidate(draft: AvailabilityConstraintDra
 				}
 			: {
 					at: timestampValue(draft.at, draft.timeZone, draft.originalAt),
-					kind: 'deadline' as const,
+					kind: draft.timingKind,
 					timeZone: draft.timeZone
 				};
 	return {

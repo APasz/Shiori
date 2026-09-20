@@ -44,10 +44,10 @@ function availabilityPeriod(id: string, startAt: number, endAt: number): Constra
 	};
 }
 
-function availabilityDeadline(id: string, at: number): Constraint {
+function availabilityUntil(id: string, at: number): Constraint {
 	return {
 		id,
-		timing: { at, kind: 'deadline', timeZone: tripTimeZone },
+		timing: { at, kind: 'until', timeZone: tripTimeZone },
 		type: 'cutoff'
 	};
 }
@@ -356,23 +356,33 @@ describe('Now / Next presentation', () => {
 		});
 	});
 
-	it('does not make availability deadlines into timeline candidates', () => {
-		const cutoff = availabilityDeadline('ticket-cutoff', now + 30 * 60_000);
+	it('does not make one-sided availability constraints into timeline candidates', () => {
+		const cutoff = availabilityUntil('ticket-cutoff', now + 30 * 60_000);
 		const lastAdmission: Constraint = {
 			id: 'last-admission',
-			timing: { at: now + 45 * 60_000, kind: 'deadline', timeZone: tripTimeZone },
+			timing: { at: now + 45 * 60_000, kind: 'until', timeZone: tripTimeZone },
 			type: 'last-admission'
 		};
 		const publishedStayTimes: Constraint[] = [
 			{
 				id: 'property-check-in',
-				timing: { at: now + 60 * 60_000, kind: 'deadline', timeZone: tripTimeZone },
+				timing: { at: now + 60 * 60_000, kind: 'from', timeZone: tripTimeZone },
 				type: 'check-in'
 			},
 			{
 				id: 'property-check-out',
-				timing: { at: now + 90 * 60_000, kind: 'deadline', timeZone: tripTimeZone },
+				timing: { at: now + 90 * 60_000, kind: 'until', timeZone: tripTimeZone },
 				type: 'check-out'
+			},
+			{
+				id: 'unusual-opening-from',
+				timing: { at: now + 2 * 60 * 60_000, kind: 'from', timeZone: tripTimeZone },
+				type: 'opening-hours'
+			},
+			{
+				id: 'unusual-opening-until',
+				timing: { at: now + 3 * 60 * 60_000, kind: 'until', timeZone: tripTimeZone },
+				type: 'opening-hours'
 			}
 		];
 		const ferry: TestItem = {

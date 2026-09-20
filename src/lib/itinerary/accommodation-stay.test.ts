@@ -123,12 +123,12 @@ describe('accommodation stay drafts', () => {
 				availability: [
 					{
 						id: 'property-check-in',
-						timing: { at: Date.UTC(2026, 9, 29, 6), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						timing: { at: Date.UTC(2026, 9, 29, 6), kind: 'from', timeZone: 'Asia/Tokyo' },
 						type: 'check-in'
 					},
 					{
 						id: 'property-check-out',
-						timing: { at: Date.UTC(2026, 10, 1, 1), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						timing: { at: Date.UTC(2026, 10, 1, 1), kind: 'until', timeZone: 'Asia/Tokyo' },
 						type: 'check-out'
 					}
 				],
@@ -159,14 +159,14 @@ describe('accommodation stay drafts', () => {
 		).toEqual({ error: 'Published check-in time: choose a valid local time.', valid: false });
 	});
 
-	it('keeps published property times as availability separate from booking-specific stay times', () => {
+	it('keeps published Google Hotels property times as availability separate from booking-specific stay times', () => {
 		const result = accommodationStayDraft({
 			checkInDate: '2026-11-02',
 			checkInTime: '16:00',
 			checkOutDate: '2026-11-04',
 			checkOutTime: '11:00',
 			id: 'ele-hotel-kuzuha',
-			links: [],
+			links: [{ label: 'Google Hotels', url: 'https://www.google.com/travel/search' }],
 			locationId: 'ele-hotel-kuzuha-location',
 			name: 'ELE Hotel 樟葉',
 			publishedTimes: { checkInTime: '15:00', checkOutTime: '10:00' },
@@ -181,12 +181,12 @@ describe('accommodation stay drafts', () => {
 				availability: [
 					{
 						id: 'property-check-in',
-						timing: { at: Date.UTC(2026, 10, 2, 6), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						timing: { at: Date.UTC(2026, 10, 2, 6), kind: 'from', timeZone: 'Asia/Tokyo' },
 						type: 'check-in'
 					},
 					{
 						id: 'property-check-out',
-						timing: { at: Date.UTC(2026, 10, 4, 1), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+						timing: { at: Date.UTC(2026, 10, 4, 1), kind: 'until', timeZone: 'Asia/Tokyo' },
 						type: 'check-out'
 					}
 				],

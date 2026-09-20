@@ -93,7 +93,7 @@ describe('item location flow', () => {
 			availability: [
 				{
 					id: 'counter-cutoff',
-					timing: { at: Date.UTC(2026, 9, 27, 8), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+					timing: { at: Date.UTC(2026, 9, 27, 8), kind: 'until', timeZone: 'Asia/Tokyo' },
 					type: 'cutoff'
 				}
 			],

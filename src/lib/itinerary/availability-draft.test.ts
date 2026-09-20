@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { availabilityTimingKindLabels } from './availability';
 import {
 	availabilityConstraintDraftFromConstraint,
 	availabilityConstraintDraftForTimingKind,
@@ -12,6 +13,10 @@ import {
 } from './availability-draft';
 
 describe('availability constraint drafts', () => {
+	it('labels one-sided timing modes explicitly', () => {
+		expect(availabilityTimingKindLabels).toEqual({ period: 'Period', from: 'From', until: 'Until' });
+	});
+
 	it('uses item-specific suggestions first while retaining every generic availability type', () => {
 		expect(defaultAvailabilityType('activity')).toBe('opening-hours');
 		expect(defaultAvailabilityType('accommodation')).toBe('reception-hours');
@@ -47,7 +52,7 @@ describe('availability constraint drafts', () => {
 		});
 	});
 
-	it('uses Deadline when a new entry is changed to Last admission', () => {
+	it('uses Until when a new entry is changed to Last admission', () => {
 		const draft = createAvailabilityConstraintDraft({
 			defaultDate: '2026-04-12',
 			id: 'museum-admission',
@@ -58,12 +63,12 @@ describe('availability constraint drafts', () => {
 		expect(isAvailabilityConstraintDraftIncomplete(draft)).toBe(true);
 		expect(availabilityConstraintDraftForType(draft, 'last-admission')).toMatchObject({
 			at: '2026-04-12T',
-			timingKind: 'deadline',
+			timingKind: 'until',
 			type: 'last-admission'
 		});
 	});
 
-	it('uses Deadline when a new entry is changed to Cutoff', () => {
+	it('uses Until when a new entry is changed to Cutoff', () => {
 		const draft = createAvailabilityConstraintDraft({
 			defaultDate: '2026-04-12',
 			id: 'train-cutoff',
@@ -73,12 +78,12 @@ describe('availability constraint drafts', () => {
 
 		expect(availabilityConstraintDraftForType(draft, 'cutoff')).toMatchObject({
 			at: '2026-04-12T',
-			timingKind: 'deadline',
+			timingKind: 'until',
 			type: 'cutoff'
 		});
 	});
 
-	it('uses Deadline when a new entry is changed to Check-in or Check-out', () => {
+	it('uses From for Check-in and Until for Check-out', () => {
 		const draft = createAvailabilityConstraintDraft({
 			defaultDate: '2026-04-12',
 			id: 'hotel-check-in',
@@ -88,18 +93,18 @@ describe('availability constraint drafts', () => {
 
 		expect(availabilityConstraintDraftForType(draft, 'check-in')).toMatchObject({
 			at: '2026-04-12T',
-			timingKind: 'deadline',
+			timingKind: 'from',
 			type: 'check-in'
 		});
 		expect(availabilityConstraintDraftForType(draft, 'check-out')).toMatchObject({
 			at: '2026-04-12T',
-			timingKind: 'deadline',
+			timingKind: 'until',
 			type: 'check-out'
 		});
 	});
 
 	it('keeps the existing timing mode when a new entry is changed to Other', () => {
-		const deadlineDraft = availabilityConstraintDraftForType(
+		const untilDraft = availabilityConstraintDraftForType(
 			createAvailabilityConstraintDraft({
 				defaultDate: '2026-04-12',
 				id: 'train-cutoff',
@@ -109,13 +114,13 @@ describe('availability constraint drafts', () => {
 			'cutoff'
 		);
 
-		expect(availabilityConstraintDraftForType(deadlineDraft, 'other')).toEqual({
-			...deadlineDraft,
+		expect(availabilityConstraintDraftForType(untilDraft, 'other')).toEqual({
+			...untilDraft,
 			type: 'other'
 		});
 	});
 
-	it('retains complete Period and Deadline data when the availability type changes', () => {
+	it('retains complete Period and one-sided data when the availability type changes', () => {
 		const periodDraft = availabilityConstraintDraftFromConstraint({
 			id: 'museum-hours',
 			timing: {
@@ -126,20 +131,20 @@ describe('availability constraint drafts', () => {
 			},
 			type: 'opening-hours' as const
 		});
-		const deadlineDraft = availabilityConstraintDraftFromConstraint({
+		const untilDraft = availabilityConstraintDraftFromConstraint({
 			id: 'ticket-cutoff',
-			timing: { at: Date.UTC(2026, 3, 12, 16), kind: 'deadline' as const, timeZone: 'UTC' },
+			timing: { at: Date.UTC(2026, 3, 12, 16), kind: 'until' as const, timeZone: 'UTC' },
 			type: 'cutoff' as const
 		});
 
 		expect(isAvailabilityConstraintDraftIncomplete(periodDraft)).toBe(false);
-		expect(isAvailabilityConstraintDraftIncomplete(deadlineDraft)).toBe(false);
+		expect(isAvailabilityConstraintDraftIncomplete(untilDraft)).toBe(false);
 		expect(availabilityConstraintDraftForType(periodDraft, 'last-admission')).toEqual({
 			...periodDraft,
 			type: 'last-admission'
 		});
-		expect(availabilityConstraintDraftForType(deadlineDraft, 'opening-hours')).toEqual({
-			...deadlineDraft,
+		expect(availabilityConstraintDraftForType(untilDraft, 'opening-hours')).toEqual({
+			...untilDraft,
 			type: 'opening-hours'
 		});
 	});
@@ -178,7 +183,7 @@ describe('availability constraint drafts', () => {
 
 		expect(availabilityConstraintDraftForType(draft, 'last-admission')).toMatchObject({
 			at: '2026-04-12T',
-			timingKind: 'deadline',
+			timingKind: 'until',
 			type: 'last-admission'
 		});
 	});
@@ -198,12 +203,12 @@ describe('availability constraint drafts', () => {
 
 		expect(availabilityConstraintDraftForType(draft, 'last-admission')).toMatchObject({
 			at: '2026-04-13T16:00',
-			timingKind: 'deadline',
+			timingKind: 'until',
 			type: 'last-admission'
 		});
 	});
 
-	it('keeps a period date when switching directly to Deadline', () => {
+	it('keeps a period date when switching directly to Until', () => {
 		const periodDraft = availabilityConstraintDraftFromConstraint({
 			id: 'museum-hours',
 			timing: {
@@ -215,23 +220,36 @@ describe('availability constraint drafts', () => {
 			type: 'opening-hours' as const
 		});
 
-		expect(availabilityConstraintDraftForTimingKind(periodDraft, 'deadline')).toMatchObject({
+		expect(availabilityConstraintDraftForTimingKind(periodDraft, 'until')).toMatchObject({
 			at: '2026-04-12T',
-			timingKind: 'deadline'
+			timingKind: 'until'
 		});
 	});
 
-	it('keeps a deadline date when switching directly to Period', () => {
-		const deadlineDraft = availabilityConstraintDraftFromConstraint({
+	it('keeps a one-sided date when switching directly to Period', () => {
+		const untilDraft = availabilityConstraintDraftFromConstraint({
 			id: 'last-entry',
-			timing: { at: Date.UTC(2026, 3, 12, 16, 30), kind: 'deadline' as const, timeZone: 'UTC' },
+			timing: { at: Date.UTC(2026, 3, 12, 16, 30), kind: 'until' as const, timeZone: 'UTC' },
 			type: 'last-admission' as const
 		});
 
-		expect(availabilityConstraintDraftForTimingKind(deadlineDraft, 'period')).toMatchObject({
+		expect(availabilityConstraintDraftForTimingKind(untilDraft, 'period')).toMatchObject({
 			endAt: '2026-04-12T',
 			startAt: '2026-04-12T',
 			timingKind: 'period'
+		});
+	});
+
+	it('retains an entered instant when switching between one-sided bounds', () => {
+		const fromDraft = availabilityConstraintDraftFromConstraint({
+			id: 'property-check-in',
+			timing: { at: Date.UTC(2026, 3, 12, 6), kind: 'from', timeZone: 'UTC' },
+			type: 'check-in'
+		});
+
+		expect(availabilityConstraintDraftForTimingKind(fromDraft, 'until')).toMatchObject({
+			at: '2026-04-12T06:00',
+			timingKind: 'until'
 		});
 	});
 
@@ -270,24 +288,24 @@ describe('availability constraint drafts', () => {
 		});
 	});
 
-	it('converts deadlines and rejects periods whose end is not after their start', () => {
-		const deadline = validateAvailabilityConstraintDraft({
+	it('converts one-sided bounds and rejects periods whose end is not after their start', () => {
+		const until = validateAvailabilityConstraintDraft({
 			at: '2026-04-12T16:30',
 			endAt: '',
 			id: 'last-entry',
 			isExpanded: true,
 			label: 'Final entry',
 			startAt: '',
-			timingKind: 'deadline',
+			timingKind: 'until',
 			timeZone: 'Asia/Tokyo',
 			type: 'last-admission'
 		});
-		if (!deadline.success) {
-			throw new Error('The availability deadline should be valid.');
+		if (!until.success) {
+			throw new Error('The availability Until bound should be valid.');
 		}
-		expect(deadline.data.timing).toEqual({
+		expect(until.data.timing).toEqual({
 			at: Date.UTC(2026, 3, 12, 7, 30),
-			kind: 'deadline',
+			kind: 'until',
 			timeZone: 'Asia/Tokyo'
 		});
 
@@ -318,7 +336,7 @@ describe('availability constraint drafts', () => {
 		const secondOccurrence = Date.UTC(2026, 10, 1, 9, 30);
 		const original = {
 			id: 'late-admission',
-			timing: { at: secondOccurrence, kind: 'deadline' as const, timeZone: 'America/Los_Angeles' },
+			timing: { at: secondOccurrence, kind: 'until' as const, timeZone: 'America/Los_Angeles' },
 			type: 'last-admission' as const
 		};
 		const draft = availabilityConstraintDraftFromConstraint(original);
@@ -326,7 +344,7 @@ describe('availability constraint drafts', () => {
 		expect(draft.at).toBe('2026-11-01T01:30');
 		const unchanged = validateAvailabilityConstraintDraft(draft);
 		if (!unchanged.success) {
-			throw new Error('The repeated-hour availability deadline should be valid.');
+			throw new Error('The repeated-hour availability Until bound should be valid.');
 		}
 		expect(unchanged.data.timing).toMatchObject({ at: secondOccurrence, timeZone: 'America/Los_Angeles' });
 
@@ -334,7 +352,7 @@ describe('availability constraint drafts', () => {
 		expect(utcDraft).toMatchObject({ at: '2026-11-01T09:30', timeZone: 'UTC' });
 		const converted = validateAvailabilityConstraintDraft(utcDraft);
 		if (!converted.success) {
-			throw new Error('The converted repeated-hour availability deadline should be valid.');
+			throw new Error('The converted repeated-hour availability Until bound should be valid.');
 		}
 		expect(converted.data.timing).toMatchObject({ at: secondOccurrence, timeZone: 'UTC' });
 	});

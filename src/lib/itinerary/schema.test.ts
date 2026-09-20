@@ -98,18 +98,27 @@ describe('item availability schema', () => {
 			type: 'opening-hours' as const
 		},
 		{
-			id: 'museum-last-entry',
-			label: 'Final entry',
+			id: 'museum-check-in',
+			label: 'Arrival',
 			timing: {
 				at: Date.UTC(2026, 3, 12, 16, 30),
-				kind: 'deadline' as const,
+				kind: 'from' as const,
+				timeZone: 'Asia/Tokyo'
+			},
+			type: 'check-in' as const
+		},
+		{
+			id: 'museum-last-entry',
+			timing: {
+				at: Date.UTC(2026, 3, 12, 16, 30),
+				kind: 'until' as const,
 				timeZone: 'Asia/Tokyo'
 			},
 			type: 'last-admission' as const
 		}
 	] as const;
 
-	it('defaults to no constraints and accepts period and deadline constraints', () => {
+	it('defaults to no constraints and accepts period, From, and Until constraints', () => {
 		const item = itineraryItemSchema.parse({
 			...itemBase,
 			availability,
@@ -125,12 +134,61 @@ describe('item availability schema', () => {
 		).toEqual([]);
 	});
 
+	it('does not hard-couple persisted types to timing shapes', () => {
+		const item = itineraryItemSchema.safeParse({
+			...itemBase,
+			availability: [
+				{
+					id: 'unusual-check-in',
+					timing: {
+						endAt: Date.UTC(2026, 3, 12, 17),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 12, 9),
+						timeZone: 'Asia/Tokyo'
+					},
+					type: 'check-in'
+				},
+				{
+					id: 'unusual-opening',
+					timing: { at: Date.UTC(2026, 3, 12, 17), kind: 'until', timeZone: 'Asia/Tokyo' },
+					type: 'opening-hours'
+				}
+			],
+			timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 10) }
+		});
+
+		expect(item.success).toBe(true);
+	});
+
 	it('requires complete valid availability timings with strictly increasing periods', () => {
 		const item = {
 			...itemBase,
 			availability,
 			timing: { kind: 'exact' as const, startAt: Date.UTC(2026, 3, 12, 10) }
 		};
+
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				availability: [
+					{
+						...availability[1],
+						timing: { at: Date.UTC(2026, 3, 12, 16, 30), kind: 'deadline', timeZone: 'Asia/Tokyo' }
+					}
+				]
+			}).success
+		).toBe(false);
+		expect(
+			itineraryItemSchema.safeParse({
+				...item,
+				availability: [
+					{
+						...availability[1],
+						timing: { at: Date.UTC(2026, 3, 12, 16, 30), kind: 'from' }
+					}
+				]
+			}).success
+		).toBe(false);
 
 		expect(
 			itineraryItemSchema.safeParse({
@@ -159,8 +217,8 @@ describe('item availability schema', () => {
 				...item,
 				availability: [
 					{
-						...availability[1],
-						timing: { ...availability[1].timing, at: -1 }
+						...availability[2],
+						timing: { ...availability[2].timing, at: -1 }
 					}
 				]
 			}).success
@@ -170,8 +228,8 @@ describe('item availability schema', () => {
 				...item,
 				availability: [
 					{
-						...availability[1],
-						timing: { ...availability[1].timing, at: Date.UTC(2026, 3, 12, 16, 30) + 0.5 }
+						...availability[2],
+						timing: { ...availability[2].timing, at: Date.UTC(2026, 3, 12, 16, 30) + 0.5 }
 					}
 				]
 			}).success
@@ -181,8 +239,8 @@ describe('item availability schema', () => {
 				...item,
 				availability: [
 					{
-						...availability[1],
-						timing: { ...availability[1].timing, timeZone: 'Not/A-Time-Zone' }
+						...availability[2],
+						timing: { ...availability[2].timing, timeZone: 'Not/A-Time-Zone' }
 					}
 				]
 			}).success

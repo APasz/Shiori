@@ -1,6 +1,6 @@
 import { defaultFormatPreferences, formatTime, type FormatPreferences } from '$lib/format-preferences';
 import { formatCalendarDate, type CalendarDateFormat, type CalendarLocale } from './calendar';
-import { availabilityTypePresentationLabel } from './availability';
+import { availabilityTimingKindLabels, availabilityTypePresentationLabel } from './availability';
 import type { Constraint, ConstraintTiming } from './schema';
 import { formatTimestampInTimeZone, type FormattedLocalTimestamp } from './time';
 
@@ -107,7 +107,11 @@ export function formatAvailabilityConstraintTiming(
 	if (!timestamp) {
 		return null;
 	}
-	return timestampLabel(timestamp, !contextDates(timing.timeZone, options).has(timestamp.date), options);
+	return `${availabilityTimingKindLabels[timing.kind]} ${timestampLabel(
+		timestamp,
+		!contextDates(timing.timeZone, options).has(timestamp.date),
+		options
+	)}`;
 }
 
 /** Builds the display data for one availability entry without treating it as itinerary timing. */

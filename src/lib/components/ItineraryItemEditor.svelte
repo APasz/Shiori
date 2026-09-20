@@ -3,14 +3,13 @@
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 	import ZonedDateTimeRange from '$lib/components/ZonedDateTimeRange.svelte';
 	import { draggableDialog } from '$lib/components/draggable-dialog';
-	import { availabilityTypeEditorLabel } from '$lib/itinerary/availability';
+	import { availabilityTimingKindLabels, availabilityTypeEditorLabel } from '$lib/itinerary/availability';
 	import {
 		availabilityConstraintCandidate,
 		availabilityConstraintDraftFromConstraint,
 		availabilityConstraintDraftForTimingKind,
 		availabilityConstraintDraftForType,
 		availabilityConstraintDraftForTimeZone,
-		availabilityTimingKindLabels,
 		availabilityTypesForItem,
 		createAvailabilityConstraintDraft,
 		validateAvailabilityConstraintDraft,
@@ -1013,7 +1012,12 @@
 							{ label: 'start date and time', value: constraint.startAt },
 							{ label: 'end date and time', value: constraint.endAt }
 						]
-					: [{ label: 'deadline date and time', value: constraint.at }];
+					: [
+							{
+								label: `${availabilityTimingKindLabels[constraint.timingKind].toLowerCase()} date and time`,
+								value: constraint.at
+							}
+						];
 			for (const input of timingInputs) {
 				if (zonedDateTimeToUnixMilliseconds(input.value, constraint.timeZone) === null) {
 					return `Availability ${index + 1} ${input.label}: enter a valid local time. Times skipped by daylight saving cannot be used.`;
@@ -1560,8 +1564,8 @@
 											<DateTimeInput
 												dateTime={constraint.at}
 												defaultDate={defaultAvailabilityDate()}
-												id={`availability-${constraint.id}-deadline`}
-												label="Deadline"
+												id={`availability-${constraint.id}-${constraint.timingKind}`}
+												label={availabilityTimingKindLabels[constraint.timingKind]}
 												onDateTimeChange={(value) => (constraint.at = value)}
 												onTimeZoneChange={(timeZone) => changeAvailabilityTimeZone(index, timeZone)}
 												portalTarget={dialogElement}

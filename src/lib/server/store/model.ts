@@ -24,7 +24,8 @@ export const preSudoOwnedTripsStoredDataVersion = 16;
 export const preNoteAnchorStoredDataVersion = 17;
 export const preAvailabilityStoredDataVersion = 18;
 export const preDayPlacementStoredDataVersion = 19;
-export const storedDataVersion = 20;
+export const preConstraintTimingStoredDataVersion = 20;
+export const storedDataVersion = 21;
 export const tripStructureLockTargetId = 'trip-structure';
 
 export const usernameSchema = z.string().trim().regex(usernamePattern, usernameValidationMessage);
@@ -83,6 +84,7 @@ const supportedStoredDataVersionSchema = z.union([
 	z.literal(preNoteAnchorStoredDataVersion),
 	z.literal(preAvailabilityStoredDataVersion),
 	z.literal(preDayPlacementStoredDataVersion),
+	z.literal(preConstraintTimingStoredDataVersion),
 	z.literal(storedDataVersion)
 ]);
 

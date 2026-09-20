@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { migrateLegacyItemAvailability } from '$lib/itinerary/availability';
+import { migrateLegacyConstraintTiming, migrateLegacyItemAvailability } from '$lib/itinerary/availability';
 import { migrateLegacyDayNotes } from '$lib/itinerary/note-anchor';
 import { itinerarySchema, unixTimestampSchema, type Itinerary } from '$lib/itinerary/schema';
 
@@ -7,7 +7,8 @@ export const tripBackupFormat = 'shiori-trip-backup';
 export const legacyTripBackupVersion = 1;
 export const preAvailabilityTripBackupVersion = 2;
 export const preDayPlacementTripBackupVersion = 3;
-export const tripBackupVersion = 4;
+export const preConstraintTimingTripBackupVersion = 4;
+export const tripBackupVersion = 5;
 export const tripBackupFileExtension = 'shiori-bak';
 export const tripBackupMediaType = 'application/vnd.shiori.trip-backup+json';
 export const maximumTripBackupBytes = 20 * 1024 * 1024;
@@ -31,7 +32,8 @@ const migratableTripBackupSchema = z.strictObject({
 	version: z.union([
 		z.literal(legacyTripBackupVersion),
 		z.literal(preAvailabilityTripBackupVersion),
-		z.literal(preDayPlacementTripBackupVersion)
+		z.literal(preDayPlacementTripBackupVersion),
+		z.literal(preConstraintTimingTripBackupVersion)
 	])
 });
 
@@ -81,7 +83,7 @@ function migrateSupportedTripBackup(value: unknown, version: number): unknown {
 		version === legacyTripBackupVersion ? migrateLegacyDayNotes(backup.data.itinerary) : backup.data.itinerary;
 	return {
 		...backup.data,
-		itinerary: migrateLegacyItemAvailability(itinerary),
+		itinerary: migrateLegacyConstraintTiming(migrateLegacyItemAvailability(itinerary)),
 		version: tripBackupVersion
 	};
 }

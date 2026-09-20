@@ -10,16 +10,16 @@ type OpeningHoursPeriodConstraint = Constraint &
 const availabilityTypeDetails = {
 	'opening-hours': { editorLabel: 'Opening hours', preferredTimingKind: 'period', presentationLabel: 'Opening' },
 	'reception-hours': { editorLabel: 'Reception hours', preferredTimingKind: 'period', presentationLabel: 'Reception' },
-	'check-in': { editorLabel: 'Check-in time', preferredTimingKind: 'deadline', presentationLabel: 'Check-in' },
-	'check-out': { editorLabel: 'Check-out time', preferredTimingKind: 'deadline', presentationLabel: 'Check-out' },
+	'check-in': { editorLabel: 'Check-in time', preferredTimingKind: 'from', presentationLabel: 'Check-in' },
+	'check-out': { editorLabel: 'Check-out time', preferredTimingKind: 'until', presentationLabel: 'Check-out' },
 	'desk-hours': { editorLabel: 'Desk hours', preferredTimingKind: 'period', presentationLabel: 'Desk' },
 	'storage-hours': { editorLabel: 'Storage hours', preferredTimingKind: 'period', presentationLabel: 'Storage' },
 	'last-admission': {
 		editorLabel: 'Last admission',
-		preferredTimingKind: 'deadline',
+		preferredTimingKind: 'until',
 		presentationLabel: 'Last admission'
 	},
-	cutoff: { editorLabel: 'Cutoff', preferredTimingKind: 'deadline', presentationLabel: 'Cutoff' },
+	cutoff: { editorLabel: 'Cutoff', preferredTimingKind: 'until', presentationLabel: 'Cutoff' },
 	other: { editorLabel: 'Other', preferredTimingKind: undefined, presentationLabel: 'Other' }
 } as const satisfies Record<
 	ConstraintType,
@@ -29,6 +29,12 @@ const availabilityTypeDetails = {
 		presentationLabel: string;
 	}>
 >;
+
+export const availabilityTimingKindLabels = {
+	period: 'Period',
+	from: 'From',
+	until: 'Until'
+} as const satisfies Record<ConstraintTimingKind, string>;
 
 export const availabilityTypeSuggestions = {
 	activity: ['opening-hours', 'last-admission', 'desk-hours', 'other'],
@@ -60,11 +66,16 @@ export type AvailabilityConstraintSelection<ConstraintValue extends Pick<Constra
 		kind: 'current' | 'next';
 	}>;
 
-/** Returns the inclusive instant range used to present an availability constraint. */
+/** Returns inclusive availability bounds, with an unbounded side represented by infinity. */
 export function availabilityConstraintBounds(timing: ConstraintTiming): AvailabilityConstraintBounds {
-	return timing.kind === 'period'
-		? { endAt: timing.endAt, startAt: timing.startAt }
-		: { endAt: timing.at, startAt: timing.at };
+	switch (timing.kind) {
+		case 'period':
+			return { endAt: timing.endAt, startAt: timing.startAt };
+		case 'from':
+			return { endAt: Number.POSITIVE_INFINITY, startAt: timing.at };
+		case 'until':
+			return { endAt: timing.at, startAt: Number.NEGATIVE_INFINITY };
+	}
 }
 
 /** Returns whether a constraint makes the intended item itself usable for a period. */
@@ -85,7 +96,7 @@ export function currentOrNextAvailabilityConstraint<ConstraintValue extends Pick
 	for (const constraint of constraints) {
 		const { endAt, startAt } = availabilityConstraintBounds(constraint.timing);
 		if (startAt <= currentTimestamp && currentTimestamp <= endAt) {
-			if (startAt > currentStartAt) {
+			if (currentConstraint === null || startAt > currentStartAt) {
 				currentConstraint = constraint;
 				currentStartAt = startAt;
 			}
@@ -112,7 +123,7 @@ export function latestAvailabilityConstraint<ConstraintValue extends Pick<Constr
 
 	for (const constraint of constraints) {
 		const { startAt } = availabilityConstraintBounds(constraint.timing);
-		if (startAt > latestStartAt) {
+		if (latestConstraint === null || startAt > latestStartAt) {
 			latestConstraint = constraint;
 			latestStartAt = startAt;
 		}
@@ -138,5 +149,38 @@ export function migrateLegacyItemAvailability<SourceItinerary extends ItineraryR
 		items: itinerary.items.map((item) =>
 			isRecord(item) && !Object.hasOwn(item, 'availability') ? { ...item, availability: [] } : item
 		)
+	};
+}
+
+/** Replaces the ambiguous legacy deadline shape while preserving every other persisted field. */
+export function migrateLegacyConstraintTiming<SourceItinerary extends ItineraryRecord>(
+	itinerary: SourceItinerary
+): SourceItinerary {
+	if (!Array.isArray(itinerary.items)) {
+		return itinerary;
+	}
+
+	return {
+		...itinerary,
+		items: itinerary.items.map((item) => {
+			if (!isRecord(item) || !Array.isArray(item.availability)) {
+				return item;
+			}
+			return {
+				...item,
+				availability: item.availability.map((constraint) => {
+					if (!isRecord(constraint) || !isRecord(constraint.timing) || constraint.timing.kind !== 'deadline') {
+						return constraint;
+					}
+					return {
+						...constraint,
+						timing: {
+							...constraint.timing,
+							kind: constraint.type === 'check-in' ? 'from' : 'until'
+						}
+					};
+				})
+			};
+		})
 	};
 }

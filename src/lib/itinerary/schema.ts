@@ -460,7 +460,7 @@ export const constraintTypeSchema = z.enum([
 	'cutoff',
 	'other'
 ]);
-export const constraintTimingKindSchema = z.enum(['period', 'deadline']);
+export const constraintTimingKindSchema = z.enum(['period', 'from', 'until']);
 
 const constraintPeriodTimingSchema = z.strictObject({
 	kind: z.literal('period'),
@@ -468,15 +468,20 @@ const constraintPeriodTimingSchema = z.strictObject({
 	endAt: unixTimestampSchema,
 	timeZone: ianaTimeZoneSchema
 });
-const constraintDeadlineTimingSchema = z.strictObject({
+const constraintFromTimingSchema = z.strictObject({
 	at: unixTimestampSchema,
-	kind: z.literal('deadline'),
+	kind: z.literal('from'),
+	timeZone: ianaTimeZoneSchema
+});
+const constraintUntilTimingSchema = z.strictObject({
+	at: unixTimestampSchema,
+	kind: z.literal('until'),
 	timeZone: ianaTimeZoneSchema
 });
 
 /** A constraint's timing is independent from the timing that places its item on the itinerary. */
 export const constraintTimingSchema = z
-	.discriminatedUnion('kind', [constraintPeriodTimingSchema, constraintDeadlineTimingSchema])
+	.discriminatedUnion('kind', [constraintPeriodTimingSchema, constraintFromTimingSchema, constraintUntilTimingSchema])
 	.superRefine((timing, context) => {
 		if (timing.kind === 'period' && timing.endAt <= timing.startAt) {
 			context.addIssue({

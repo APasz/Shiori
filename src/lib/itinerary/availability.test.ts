@@ -3,7 +3,8 @@ import {
 	availabilityConstraintBounds,
 	currentOrNextAvailabilityConstraint,
 	isOpeningHoursPeriodConstraint,
-	latestAvailabilityConstraint
+	latestAvailabilityConstraint,
+	preferredAvailabilityTimingKind
 } from './availability';
 import type { Constraint } from './schema';
 
@@ -22,14 +23,30 @@ const afternoonHours: Constraint = {
 };
 
 describe('availability constraint selection', () => {
-	it('uses inclusive timestamp bounds for periods and deadlines', () => {
+	it('provides editor-only timing suggestions without constraining persisted shapes', () => {
+		expect(preferredAvailabilityTimingKind('opening-hours')).toBe('period');
+		expect(preferredAvailabilityTimingKind('reception-hours')).toBe('period');
+		expect(preferredAvailabilityTimingKind('desk-hours')).toBe('period');
+		expect(preferredAvailabilityTimingKind('storage-hours')).toBe('period');
+		expect(preferredAvailabilityTimingKind('check-in')).toBe('from');
+		expect(preferredAvailabilityTimingKind('check-out')).toBe('until');
+		expect(preferredAvailabilityTimingKind('last-admission')).toBe('until');
+		expect(preferredAvailabilityTimingKind('cutoff')).toBe('until');
+		expect(preferredAvailabilityTimingKind('other')).toBeUndefined();
+	});
+
+	it('uses inclusive timestamp bounds for periods and one-sided constraints', () => {
 		expect(availabilityConstraintBounds(morningHours.timing)).toEqual({
 			endAt: now - 60 * 60_000,
 			startAt: now - 3 * 60 * 60_000
 		});
-		expect(availabilityConstraintBounds({ at: now + 5 * 60_000, kind: 'deadline', timeZone: 'UTC' })).toEqual({
-			endAt: now + 5 * 60_000,
+		expect(availabilityConstraintBounds({ at: now + 5 * 60_000, kind: 'from', timeZone: 'UTC' })).toEqual({
+			endAt: Number.POSITIVE_INFINITY,
 			startAt: now + 5 * 60_000
+		});
+		expect(availabilityConstraintBounds({ at: now + 5 * 60_000, kind: 'until', timeZone: 'UTC' })).toEqual({
+			endAt: now + 5 * 60_000,
+			startAt: Number.NEGATIVE_INFINITY
 		});
 	});
 
@@ -45,7 +62,7 @@ describe('availability constraint selection', () => {
 		expect(
 			isOpeningHoursPeriodConstraint({
 				id: 'last-admission',
-				timing: { at: now, kind: 'deadline', timeZone: 'UTC' },
+				timing: { at: now, kind: 'until', timeZone: 'UTC' },
 				type: 'last-admission'
 			})
 		).toBe(false);
@@ -65,6 +82,25 @@ describe('availability constraint selection', () => {
 		expect(currentOrNextAvailabilityConstraint([afternoonHours, morningHours], now)).toEqual({
 			constraint: afternoonHours,
 			kind: 'next'
+		});
+	});
+
+	it('treats From as valid after its bound and Until as valid through its bound', () => {
+		const checkIn: Constraint = {
+			id: 'check-in',
+			timing: { at: now + 60 * 60_000, kind: 'from', timeZone: 'UTC' },
+			type: 'check-in'
+		};
+		const lastAdmission: Constraint = {
+			id: 'last-admission',
+			timing: { at: now + 30 * 60_000, kind: 'until', timeZone: 'UTC' },
+			type: 'last-admission'
+		};
+
+		expect(currentOrNextAvailabilityConstraint([checkIn], now)).toEqual({ constraint: checkIn, kind: 'next' });
+		expect(currentOrNextAvailabilityConstraint([lastAdmission], now)).toEqual({
+			constraint: lastAdmission,
+			kind: 'current'
 		});
 	});
 

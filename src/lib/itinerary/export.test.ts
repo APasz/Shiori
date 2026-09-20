@@ -27,7 +27,7 @@ const itinerary = itinerarySchema.parse({
 					id: 'station-last-admission',
 					timing: {
 						at: Date.UTC(2026, 3, 12, 7, 30),
-						kind: 'deadline',
+						kind: 'until',
 						timeZone: 'Asia/Tokyo'
 					},
 					type: 'last-admission'
@@ -139,7 +139,7 @@ describe('itinerary exports', () => {
 			{
 				timing: {
 					at: { at: '2026-04-12T07:30:00.000Z', timeZone: 'Asia/Tokyo' },
-					kind: 'deadline'
+					kind: 'until'
 				},
 				type: 'last-admission'
 			}
@@ -241,6 +241,59 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Opening · 10:00–16:00');
 	});
 
+	it('exports published check-in and check-out rules separately from a booking schedule', () => {
+		const source = itinerarySchema.parse({
+			items: [
+				{
+					availability: [
+						{
+							id: 'property-check-in',
+							timing: { at: Date.UTC(2026, 10, 2, 6), kind: 'from', timeZone: 'Asia/Tokyo' },
+							type: 'check-in'
+						},
+						{
+							id: 'property-check-out',
+							timing: { at: Date.UTC(2026, 10, 4, 1), kind: 'until', timeZone: 'Asia/Tokyo' },
+							type: 'check-out'
+						}
+					],
+					id: 'hotel',
+					timing: {
+						endAt: Date.UTC(2026, 10, 4, 2),
+						kind: 'exact',
+						startAt: Date.UTC(2026, 10, 2, 7),
+						timeZone: 'Asia/Tokyo'
+					},
+					title: 'Hotel',
+					type: 'accommodation'
+				}
+			],
+			timeZone: 'Asia/Tokyo',
+			title: 'Japan 2026'
+		});
+
+		const json = JSON.parse(renderItineraryExport(source, 'json', defaultItineraryExportOptions));
+		const text = renderItineraryExport(source, 'txt', defaultItineraryExportOptions);
+
+		expect(json.items[0].timing).toEqual({
+			end: { at: '2026-11-04T02:00:00.000Z', timeZone: 'Asia/Tokyo' },
+			kind: 'exact',
+			start: { at: '2026-11-02T07:00:00.000Z', timeZone: 'Asia/Tokyo' }
+		});
+		expect(json.items[0].availability).toEqual([
+			{
+				timing: { at: { at: '2026-11-02T06:00:00.000Z', timeZone: 'Asia/Tokyo' }, kind: 'from' },
+				type: 'check-in'
+			},
+			{
+				timing: { at: { at: '2026-11-04T01:00:00.000Z', timeZone: 'Asia/Tokyo' }, kind: 'until' },
+				type: 'check-out'
+			}
+		]);
+		expect(text).toContain('Check-in · From 15:00');
+		expect(text).toContain('Check-out · Until 10:00');
+	});
+
 	it('keeps day-anchored items after scheduled items on their shared calendar day', () => {
 		const source = itinerarySchema.parse({
 			items: [
@@ -250,7 +303,7 @@ describe('itinerary exports', () => {
 							id: 'museum-hours',
 							timing: {
 								at: Date.UTC(2026, 3, 12, 7),
-								kind: 'deadline',
+								kind: 'until',
 								timeZone: 'Asia/Tokyo'
 							},
 							type: 'last-admission'
@@ -367,7 +420,7 @@ describe('itinerary exports', () => {
 		expect(text).toContain('When: 04-12-2026, 9:00 am (Asia/Tokyo)');
 		expect(text).toContain('Availability:');
 		expect(text).toContain('Ticket office · 9:00 am–6:00 pm');
-		expect(text).toContain('Last admission · 4:30 pm');
+		expect(text).toContain('Last admission · Until 4:30 pm');
 		expect(text).toContain('Tokyo Station · TYO — 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
@@ -410,7 +463,7 @@ describe('itinerary exports', () => {
 							id: 'last-admission',
 							timing: {
 								at: Date.UTC(2026, 3, 12, 22, 30),
-								kind: 'deadline',
+								kind: 'until',
 								timeZone: 'America/Los_Angeles'
 							},
 							type: 'last-admission'
@@ -451,13 +504,13 @@ describe('itinerary exports', () => {
 			{
 				timing: {
 					at: { at: '2026-04-12T22:30:00.000Z', timeZone: 'America/Los_Angeles' },
-					kind: 'deadline'
+					kind: 'until'
 				},
 				type: 'last-admission'
 			}
 		]);
 		expect(text).toContain('Opening · 10:00 am–12:00 pm');
 		expect(text).toContain('Opening · 1:00 pm–4:00 pm');
-		expect(text).toContain('Last admission · 04-12-2026, 3:30 pm (America/Los_Angeles)');
+		expect(text).toContain('Last admission · Until 04-12-2026, 3:30 pm (America/Los_Angeles)');
 	});
 });

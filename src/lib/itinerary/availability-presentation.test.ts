@@ -38,10 +38,10 @@ describe('availability presentation', () => {
 		expect(presentation).toMatchObject({ label: 'Opening', timeZone: 'Asia/Tokyo', timing: '10:00 am–4:00 pm' });
 	});
 
-	it('includes a date for a different local day and formats deadline times in their stored zone', () => {
+	it('includes a date for a different local day and formats Until times in their stored zone', () => {
 		const timing = {
 			at: Date.UTC(2026, 3, 12, 22, 30),
-			kind: 'deadline' as const,
+			kind: 'until' as const,
 			timeZone: 'America/Los_Angeles'
 		};
 
@@ -54,7 +54,32 @@ describe('availability presentation', () => {
 					contextTimestamps: [Date.UTC(2026, 3, 12, 0)]
 				}
 			)
-		).toMatchObject({ label: 'Last admission', timeZone: 'America/Los_Angeles', timing: '12-04-2026, 3:30 pm' });
+		).toMatchObject({
+			label: 'Last admission',
+			timeZone: 'America/Los_Angeles',
+			timing: 'Until 12-04-2026, 3:30 pm'
+		});
+	});
+
+	it('prefixes one-sided property rules with their truthful semantics', () => {
+		expect(
+			availabilityConstraintPresentation(
+				{
+					timing: { at: Date.UTC(2026, 3, 12, 6), kind: 'from', timeZone: 'Asia/Tokyo' },
+					type: 'check-in'
+				},
+				{ contextTimeZone: 'Asia/Tokyo', contextTimestamps: [Date.UTC(2026, 3, 12)] }
+			)
+		).toMatchObject({ label: 'Check-in', timing: 'From 15:00' });
+		expect(
+			availabilityConstraintPresentation(
+				{
+					timing: { at: Date.UTC(2026, 3, 12, 1), kind: 'until', timeZone: 'Asia/Tokyo' },
+					type: 'check-out'
+				},
+				{ contextTimeZone: 'Asia/Tokyo', contextTimestamps: [Date.UTC(2026, 3, 12)] }
+			)
+		).toMatchObject({ label: 'Check-out', timing: 'Until 10:00' });
 	});
 
 	it('keeps multiple periods as separate split-hour entries', () => {
@@ -86,7 +111,7 @@ describe('availability presentation', () => {
 			formatAvailabilityConstraintTiming(
 				{
 					at: Date.UTC(2026, 3, 12, 1),
-					kind: 'deadline',
+					kind: 'until',
 					timeZone: 'America/Los_Angeles'
 				},
 				{
@@ -95,6 +120,6 @@ describe('availability presentation', () => {
 					contextTimestamps: [Date.UTC(2026, 3, 12, 0)]
 				}
 			)
-		).toBe('11-04-2026, 6:00 pm');
+		).toBe('Until 11-04-2026, 6:00 pm');
 	});
 });

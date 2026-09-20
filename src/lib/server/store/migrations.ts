@@ -7,11 +7,12 @@ import {
 	unixTimestampSchema,
 	type Expense
 } from '$lib/itinerary/schema';
-import { migrateLegacyItemAvailability } from '$lib/itinerary/availability';
+import { migrateLegacyConstraintTiming, migrateLegacyItemAvailability } from '$lib/itinerary/availability';
 import { migrateLegacyDayNotes } from '$lib/itinerary/note-anchor';
 import {
 	dailyExpenseStoredDataVersion,
 	preAvailabilityStoredDataVersion,
+	preConstraintTimingStoredDataVersion,
 	preDayPlacementStoredDataVersion,
 	preAppearanceStoredDataVersion,
 	preFormatPreferencesStoredDataVersion,
@@ -86,7 +87,8 @@ const migratableStoredDataVersionSchema = z.union([
 	z.literal(preSudoOwnedTripsStoredDataVersion),
 	z.literal(preNoteAnchorStoredDataVersion),
 	z.literal(preAvailabilityStoredDataVersion),
-	z.literal(preDayPlacementStoredDataVersion)
+	z.literal(preDayPlacementStoredDataVersion),
+	z.literal(preConstraintTimingStoredDataVersion)
 ]);
 const migratableStoredTripFileEnvelopeSchema = z
 	.object({
@@ -142,7 +144,8 @@ export function migrateStoredUsersFile(file: unknown): { file: unknown; migratio
 		parsedFile.data.version === preSudoOwnedTripsStoredDataVersion ||
 		parsedFile.data.version === preNoteAnchorStoredDataVersion ||
 		parsedFile.data.version === preAvailabilityStoredDataVersion ||
-		parsedFile.data.version === preDayPlacementStoredDataVersion;
+		parsedFile.data.version === preDayPlacementStoredDataVersion ||
+		parsedFile.data.version === preConstraintTimingStoredDataVersion;
 	return {
 		file: {
 			version: storedDataVersion,
@@ -307,7 +310,9 @@ export function migrateStoredTripFile(file: unknown): { file: unknown; migration
 		parsedFile.data.version === dailyExpenseStoredDataVersion
 			? migrateLegacyDailyExpenses(sourceItinerary)
 			: sourceItinerary;
-	const itinerary = migrateLegacyItemAvailability(migrateLegacyDayNotes(itineraryBeforeNoteMigration));
+	const itinerary = migrateLegacyConstraintTiming(
+		migrateLegacyItemAvailability(migrateLegacyDayNotes(itineraryBeforeNoteMigration))
+	);
 	return {
 		file: {
 			...parsedFile.data,

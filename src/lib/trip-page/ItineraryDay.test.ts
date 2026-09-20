@@ -51,7 +51,7 @@ describe('itinerary day', () => {
 				},
 				{
 					id: 'last-admission',
-					timing: { at: Date.UTC(2026, 3, 13, 15, 30), kind: 'deadline', timeZone: 'UTC' },
+					timing: { at: Date.UTC(2026, 3, 13, 15, 30), kind: 'until', timeZone: 'UTC' },
 					type: 'last-admission'
 				}
 			],

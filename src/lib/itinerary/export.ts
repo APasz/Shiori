@@ -6,6 +6,7 @@ import {
 	formatAvailabilityConstraintTiming,
 	type AvailabilityPresentationConstraint
 } from './availability-presentation';
+import { availabilityTimingKindLabels } from './availability';
 import type {
 	Cost,
 	Constraint,
@@ -27,7 +28,7 @@ import { resolveItemTimeZone, resolveTimingTimeZone, resolveTransportStopTimeZon
 
 export const itineraryExportFormats = ['json', 'yaml', 'txt'] as const;
 /** Bumped whenever the portable itinerary export shape changes. */
-export const itineraryExportVersion = 4;
+export const itineraryExportVersion = 5;
 
 export type ItineraryExportFormat = (typeof itineraryExportFormats)[number];
 
@@ -118,7 +119,7 @@ type ExportedConstraintTiming =
 	  }>
 	| Readonly<{
 			at: ExportedTimestamp;
-			kind: 'deadline';
+			kind: 'from' | 'until';
 	  }>;
 
 type ExportedConstraint = Readonly<{
@@ -302,10 +303,11 @@ function exportConstraintTiming(timing: Constraint['timing'], useEpochTimestamps
 				start: exportTimestamp(timing.startAt, timing.timeZone, useEpochTimestamps),
 				end: exportTimestamp(timing.endAt, timing.timeZone, useEpochTimestamps)
 			};
-		case 'deadline':
+		case 'from':
+		case 'until':
 			return {
 				at: exportTimestamp(timing.at, timing.timeZone, useEpochTimestamps),
-				kind: 'deadline'
+				kind: timing.kind
 			};
 	}
 }
@@ -562,9 +564,13 @@ function placementText(placement: ExportedPlacement, textFormat: ItineraryTextFo
 }
 
 function constraintTimingText(timing: ExportedConstraintTiming, textFormat: ItineraryTextFormatOptions): string {
-	return timing.kind === 'period'
-		? `${timestampText(timing.start, textFormat)} – ${timestampText(timing.end, textFormat)}`
-		: `By ${timestampText(timing.at, textFormat)}`;
+	switch (timing.kind) {
+		case 'period':
+			return `${timestampText(timing.start, textFormat)} – ${timestampText(timing.end, textFormat)}`;
+		case 'from':
+		case 'until':
+			return `${availabilityTimingKindLabels[timing.kind]} ${timestampText(timing.at, textFormat)}`;
+	}
 }
 
 function timestampValue(timestamp: ExportedTimestamp): number | null {
@@ -602,7 +608,11 @@ function constraintForPresentation(constraint: ExportedConstraint): Availability
 	if (at === null) {
 		return null;
 	}
-	return { ...label, timing: { at, kind: 'deadline', timeZone: constraint.timing.at.timeZone }, type: constraint.type };
+	return {
+		...label,
+		timing: { at, kind: constraint.timing.kind, timeZone: constraint.timing.at.timeZone },
+		type: constraint.type
+	};
 }
 
 function itemTimingTimestamps(timing: ExportedTiming): readonly ExportedTimestamp[] {

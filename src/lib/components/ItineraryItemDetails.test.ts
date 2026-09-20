@@ -113,12 +113,12 @@ describe('itinerary item details', () => {
 			availability: [
 				{
 					id: 'property-check-in',
-					timing: { at: Date.UTC(2026, 9, 29, 6), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+					timing: { at: Date.UTC(2026, 9, 29, 6), kind: 'from', timeZone: 'Asia/Tokyo' },
 					type: 'check-in'
 				},
 				{
 					id: 'property-check-out',
-					timing: { at: Date.UTC(2026, 10, 1, 1), kind: 'deadline', timeZone: 'Asia/Tokyo' },
+					timing: { at: Date.UTC(2026, 10, 1, 1), kind: 'until', timeZone: 'Asia/Tokyo' },
 					type: 'check-out'
 				}
 			],
@@ -139,8 +139,8 @@ describe('itinerary item details', () => {
 		expect(html).toContain('Check-in');
 		expect(html).toContain('Check-out');
 		expect(html).toContain('Availability');
-		expect(html).toContain('3:00 pm');
-		expect(html).toContain('10:00 am');
+		expect(html).toContain('From 3:00 pm');
+		expect(html).toContain('Until 10:00 am');
 	});
 
 	it('keeps activity start and end labels with its location time', () => {
@@ -312,7 +312,7 @@ describe('itinerary item details', () => {
 					id: 'last-admission',
 					timing: {
 						at: Date.UTC(2026, 3, 12, 22, 30),
-						kind: 'deadline',
+						kind: 'until',
 						timeZone: 'America/Los_Angeles'
 					},
 					type: 'last-admission'
@@ -331,7 +331,7 @@ describe('itinerary item details', () => {
 		expect(html).toContain('10:00 am–12:00 pm');
 		expect(html).toContain('1:00 pm–4:00 pm');
 		expect(html).toContain('Last admission');
-		expect(html).toContain('12-04-2026, 3:30 pm');
+		expect(html).toContain('Until 12-04-2026, 3:30 pm');
 		expect(html).toContain('PDT');
 	});
 });

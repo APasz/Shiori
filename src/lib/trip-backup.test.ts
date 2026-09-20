@@ -3,6 +3,7 @@ import {
 	createTripBackup,
 	legacyTripBackupVersion,
 	preAvailabilityTripBackupVersion,
+	preConstraintTimingTripBackupVersion,
 	preDayPlacementTripBackupVersion,
 	serializeTripBackup,
 	tripBackupFileExtension,
@@ -189,5 +190,56 @@ describe('trip backups', () => {
 			kind: 'exact',
 			startAt: Date.UTC(2026, 3, 12, 10)
 		});
+	});
+
+	it('migrates version-four availability deadlines without changing their instants or zones', () => {
+		const checkInAt = Date.UTC(2026, 10, 2, 6);
+		const checkOutAt = Date.UTC(2026, 10, 4, 1);
+		const validation = validateTripBackup({
+			exportedAt: Date.UTC(2026, 3, 1),
+			format: tripBackupFormat,
+			itinerary: {
+				items: [
+					{
+						availability: [
+							{
+								id: 'property-check-in',
+								timing: { at: checkInAt, kind: 'deadline', timeZone: 'Asia/Tokyo' },
+								type: 'check-in'
+							},
+							{
+								id: 'property-check-out',
+								timing: { at: checkOutAt, kind: 'deadline', timeZone: 'Asia/Tokyo' },
+								type: 'check-out'
+							}
+						],
+						id: 'hotel',
+						timing: { kind: 'exact', startAt: checkInAt },
+						title: 'Hotel',
+						type: 'accommodation'
+					}
+				],
+				timeZone: 'Asia/Tokyo',
+				title: 'Japan 2026'
+			},
+			version: preConstraintTimingTripBackupVersion
+		});
+
+		if (!validation.valid) {
+			throw new Error(validation.message);
+		}
+		expect(validation.backup.version).toBe(tripBackupVersion);
+		expect(validation.backup.itinerary.items[0]?.availability).toEqual([
+			{
+				id: 'property-check-in',
+				timing: { at: checkInAt, kind: 'from', timeZone: 'Asia/Tokyo' },
+				type: 'check-in'
+			},
+			{
+				id: 'property-check-out',
+				timing: { at: checkOutAt, kind: 'until', timeZone: 'Asia/Tokyo' },
+				type: 'check-out'
+			}
+		]);
 	});
 });
