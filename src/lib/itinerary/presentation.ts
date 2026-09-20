@@ -6,10 +6,14 @@ import {
 	type CalendarLocale
 } from './calendar';
 import { defaultFormatPreferences, type DateFormat } from '$lib/format-preferences';
-import { hasItemTiming } from './item-placement';
+import {
+	resolveItemCalendarDayMembership,
+	resolveItemDayChronologicalPosition,
+	resolveItemPlanTemporalSource,
+	resolvePlanStartDate
+} from './item-temporal';
 import type { ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
-import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
-import { timingEarliestTimestamp, timingEndTimestamp, timingStartTimestamp } from './timing';
+import { timingEndTimestamp, timingStartTimestamp } from './timing';
 import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export { timingStartTimestamp as timingAnchor } from './timing';
@@ -112,27 +116,32 @@ export function partitionDayItems<Item extends PlacedItemWithType>(
 	const bounds = dayBounds(date, timeZone);
 
 	for (const item of items) {
-		if (item.type === 'accommodation' && hasItemTiming(item)) {
-			const checkInAt = timingStartTimestamp(item.timing);
-			if (isOngoingAccommodation(item.timing, bounds)) {
+		const plan = resolveItemPlanTemporalSource(item);
+		if (item.type === 'accommodation' && plan) {
+			const checkInAt = timingStartTimestamp(plan.timing);
+			if (isOngoingAccommodation(plan.timing, bounds)) {
 				ongoingStays.push(item);
 			} else if (isTimestampOnDay(checkInAt, bounds)) {
 				arrivingStays.push(item);
 			}
 
-			if (item.timing.kind === 'exact' && item.timing.timePrecision !== 'date') {
-				if (isTimestampOnDay(item.timing.startAt, bounds)) {
-					timelineEntries.push({ boundary: 'check-in', item, kind: 'stay-boundary', timestamp: item.timing.startAt });
+			if (plan.timing.kind === 'exact' && plan.timing.timePrecision !== 'date') {
+				if (isTimestampOnDay(plan.timing.startAt, bounds)) {
+					timelineEntries.push({ boundary: 'check-in', item, kind: 'stay-boundary', timestamp: plan.timing.startAt });
 				}
-				if (item.timing.endAt !== undefined && isTimestampOnDay(item.timing.endAt, bounds)) {
-					timelineEntries.push({ boundary: 'check-out', item, kind: 'stay-boundary', timestamp: item.timing.endAt });
+				if (plan.timing.endAt !== undefined && isTimestampOnDay(plan.timing.endAt, bounds)) {
+					timelineEntries.push({ boundary: 'check-out', item, kind: 'stay-boundary', timestamp: plan.timing.endAt });
 				}
 			}
-		} else if (hasItemTiming(item)) {
+		} else if (plan) {
+			const chronologicalPosition = resolveItemDayChronologicalPosition(item, date, timeZone);
+			if (!chronologicalPosition) {
+				throw new Error(`Scheduled item ${item.id} has no chronological day position.`);
+			}
 			timelineEntries.push({
 				item,
 				kind: 'item',
-				timestamp: timingTimestampOnLocalDay(item.timing, date, timeZone)
+				timestamp: chronologicalPosition.at
 			});
 		} else {
 			timelineEntries.push({ item, kind: 'item' });
@@ -142,33 +151,8 @@ export function partitionDayItems<Item extends PlacedItemWithType>(
 	timelineEntries.sort(timelineEntryOrder);
 	return { arrivingStays, ongoingStays, timelineEntries };
 }
-
-function timestampForViewer(timestamp: number, timeZone: string | undefined) {
-	return timeZone ? formatTimestampInTimeZone(timestamp, timeZone) : formatLocalTimestamp(timestamp);
-}
-
-function localDateForTimestamp(timestamp: number, timeZone: string | undefined): string {
-	const formatted = timestampForViewer(timestamp, timeZone);
-	if (!formatted) {
-		throw new Error(`Item timestamp ${timestamp} cannot be localized.`);
-	}
-	return formatted.date;
-}
-
 export function timingStartDate(timing: ItineraryTiming, timeZone?: string): string {
-	return localDateForTimestamp(timingStartTimestamp(timing), timeZone);
-}
-
-function timingDateBounds(timing: ItineraryTiming, timeZone: string | undefined): [string, string] {
-	return [
-		localDateForTimestamp(timingEarliestTimestamp(timing), timeZone),
-		localDateForTimestamp(timingEndTimestamp(timing), timeZone)
-	];
-}
-
-function timingTimestampOnLocalDay(timing: ItineraryTiming, date: string, timeZone: string | undefined): number {
-	const [startDate, endDate] = timingDateBounds(timing, timeZone);
-	return date === endDate && startDate !== endDate ? timingEndTimestamp(timing) : timingStartTimestamp(timing);
+	return resolvePlanStartDate(timing, timeZone);
 }
 
 function comparePlacedItemsOnLocalDay<Item extends PlacedItem>(
@@ -177,33 +161,23 @@ function comparePlacedItemsOnLocalDay<Item extends PlacedItem>(
 	left: Item,
 	right: Item
 ): number {
-	const leftIsTimed = hasItemTiming(left);
-	const rightIsTimed = hasItemTiming(right);
-	if (!leftIsTimed || !rightIsTimed) {
-		if (leftIsTimed !== rightIsTimed) {
-			return leftIsTimed ? -1 : 1;
+	const leftPosition = resolveItemDayChronologicalPosition(left, date, timeZone);
+	const rightPosition = resolveItemDayChronologicalPosition(right, date, timeZone);
+	if (!leftPosition || !rightPosition) {
+		if (leftPosition !== rightPosition) {
+			return leftPosition ? -1 : 1;
 		}
 		return left.id.localeCompare(right.id);
 	}
-	return (
-		timingTimestampOnLocalDay(left.timing, date, timeZone) - timingTimestampOnLocalDay(right.timing, date, timeZone) ||
-		left.id.localeCompare(right.id)
-	);
-}
-
-function placementDateBounds(placement: ItineraryItemPlacement, timeZone: string | undefined): [string, string] {
-	const date = localDateForTimestamp(placement.anchorAt, timeZone);
-	return [date, date];
+	return leftPosition.at - rightPosition.at || left.id.localeCompare(right.id);
 }
 
 function itemDateBounds<Item extends PlacedItem>(item: Item, timeZone: string | undefined): [string, string] {
-	if (hasItemTiming(item)) {
-		return timingDateBounds(item.timing, timeZone);
-	}
-	if (item.placement === undefined) {
+	const membership = resolveItemCalendarDayMembership(item, timeZone);
+	if (!membership) {
 		throw new Error(`Item ${item.id} has neither a schedule nor a day placement.`);
 	}
-	return placementDateBounds(item.placement, timeZone);
+	return [membership.startDate, membership.endDate];
 }
 
 function itemsByLocalDay<Item extends PlacedItem>(items: Item[], timeZone?: string): Map<string, Item[]> {

@@ -1,4 +1,5 @@
 import type { ItineraryItem, ItineraryLocation, ItineraryTiming } from './schema';
+import { resolveItemPlanTemporalSource } from './item-temporal';
 import { timingStartTimestamp } from './timing';
 import { resolveTransportStopSchedule, type TransportStopSchedule } from './transport-stop-schedule';
 import { resolveItemTimeZone } from './time-zone';
@@ -34,9 +35,10 @@ export function itemLocationFlow(item: ItineraryItem, tripTimeZone: string): rea
 		return item.locations.map((location) => ({ kind: 'location', location }));
 	}
 
+	const plan = resolveItemPlanTemporalSource(item);
 	return item.transport.stops.map((stop, stopIndex) => {
 		const schedule = resolveTransportStopSchedule(
-			item.timing,
+			plan?.timing,
 			stop,
 			stopIndex,
 			resolveItemTimeZone(item, tripTimeZone)
@@ -51,11 +53,11 @@ export function itemLocationFlow(item: ItineraryItem, tripTimeZone: string): rea
 	});
 }
 
-/** Hides a first-stop time only when the item's start already conveys the same information. */
+/** Hides a first-stop time only when the item's Plan start already conveys the same information. */
 export function shouldShowTransportStopSchedule(
 	entry: TransportStopLocationFlowEntry,
 	stopIndex: number,
-	timing: ItineraryTiming | undefined
+	planTiming: ItineraryTiming | undefined
 ): boolean {
 	if (!entry.schedule) {
 		return false;
@@ -63,16 +65,16 @@ export function shouldShowTransportStopSchedule(
 	if (stopIndex !== 0) {
 		return true;
 	}
-	if (!timing) {
+	if (!planTiming) {
 		return true;
 	}
 	if (!entry.hasScheduledTime) {
 		return false;
 	}
 	return (
-		timing.kind !== 'exact' ||
-		timing.timePrecision === 'date' ||
-		entry.schedule.scheduledAt !== timingStartTimestamp(timing)
+		planTiming.kind !== 'exact' ||
+		planTiming.timePrecision === 'date' ||
+		entry.schedule.scheduledAt !== timingStartTimestamp(planTiming)
 	);
 }
 

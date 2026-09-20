@@ -9,13 +9,17 @@
 	import { formatCalendarDate, formatCalendarDateTime } from '$lib/itinerary/calendar';
 	import { resolveLinkedExpenses } from '$lib/itinerary/expenses';
 	import {
+		resolveItemAvailabilityTemporalSources,
+		resolveItemDetailTemporalPresentation,
+		type ItemDetailTemporalPresentation
+	} from '$lib/itinerary/item-temporal';
+	import {
 		itemLocationFlow,
 		shouldShowTransportStopSchedule,
 		transportTravelDuration
 	} from '$lib/itinerary/item-location-flow';
 	import { itemPlacementDate } from '$lib/itinerary/item-placement';
 	import type { Cost, CurrencyCode, Expense, ItineraryItem, ItineraryLocation } from '$lib/itinerary/schema';
-	import { timingEndTimestamp, timingStartTimestamp } from '$lib/itinerary/timing';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
@@ -54,12 +58,17 @@
 	let dialogElement: HTMLDialogElement;
 	type AvailabilityEntry = AvailabilityPresentation & Readonly<{ id: string }>;
 
+	const detailTemporalPresentation = $derived(resolveItemDetailTemporalPresentation(item));
 	const itemTimeZone = $derived(resolveItemTimeZone(item, tripTimeZone));
 	const linkedExpenses = $derived(resolveLinkedExpenses(expenses, item.linkedExpenseIds));
 	const locationFlow = $derived(itemLocationFlow(item, tripTimeZone));
-	const availabilityEntries = $derived(availabilityEntriesFor(item));
-	const hasEndTime = $derived(item.timing?.kind === 'exact' && item.timing.endAt !== undefined);
-	const placementLabel = $derived(dayPlacementLabel());
+	const availabilityEntries = $derived(availabilityEntriesFor(item, detailTemporalPresentation));
+	const hasEndTime = $derived(
+		detailTemporalPresentation.kind === 'plan' &&
+			detailTemporalPresentation.source.timing.kind === 'exact' &&
+			detailTemporalPresentation.source.timing.endAt !== undefined
+	);
+	const placementLabel = $derived(dayPlacementLabel(detailTemporalPresentation));
 	const startLabel = $derived(item.type === 'accommodation' ? 'Check-in' : 'Start');
 	const endLabel = $derived(item.type === 'accommodation' ? 'Check-out' : 'End');
 
@@ -80,32 +89,30 @@
 		return location.googleMapsUrl ?? location.openRailwayMapUrl;
 	}
 
-	function availabilityEntriesFor(item: ItineraryItem): AvailabilityEntry[] {
-		const contextTimestamps = item.timing
-			? [timingStartTimestamp(item.timing), timingEndTimestamp(item.timing)]
-			: item.placement
-				? [item.placement.anchorAt]
-				: [];
+	function availabilityEntriesFor(
+		item: ItineraryItem,
+		temporalPresentation: ItemDetailTemporalPresentation
+	): AvailabilityEntry[] {
 		const entries: AvailabilityEntry[] = [];
-		for (const constraint of item.availability) {
-			const presentation = availabilityConstraintPresentation(constraint, {
+		for (const source of resolveItemAvailabilityTemporalSources(item)) {
+			const presentation = availabilityConstraintPresentation(source.constraint, {
 				contextTimeZone: itemTimeZone,
-				contextTimestamps,
+				contextTimestamps: temporalPresentation.availabilityContextTimestamps,
 				formatPreferences: viewerContext.formatPreferences,
 				locale: viewerContext.locale
 			});
 			if (presentation) {
-				entries.push({ ...presentation, id: constraint.id });
+				entries.push({ ...presentation, id: source.constraint.id });
 			}
 		}
 		return entries;
 	}
 
-	function dayPlacementLabel(): string | null {
-		if (!item.placement) {
+	function dayPlacementLabel(temporalPresentation: ItemDetailTemporalPresentation): string | null {
+		if (temporalPresentation.kind !== 'placement') {
 			return null;
 		}
-		const date = itemPlacementDate(item.placement);
+		const date = itemPlacementDate(temporalPresentation.source.placement);
 		return date
 			? formatCalendarDate(date, 'date-with-weekday', viewerContext.locale, viewerContext.formatPreferences.dateFormat)
 			: null;
@@ -166,15 +173,15 @@
 			{#if item.type !== 'transport'}<h3>Schedule</h3>{/if}
 			<div class="item-flow">
 				<div class="timing-boundary">
-					{#if item.type !== 'transport' || !item.timing}
-						<span class="timing-boundary-label">{item.timing ? startLabel : 'Day'}</span>
+					{#if item.type !== 'transport' || detailTemporalPresentation.kind !== 'plan'}
+						<span class="timing-boundary-label">{detailTemporalPresentation.kind === 'plan' ? startLabel : 'Day'}</span>
 					{/if}
-					{#if item.timing}
+					{#if detailTemporalPresentation.kind === 'plan'}
 						<ItineraryTiming
 							calendarDateFormat="date-with-weekday"
 							display="start"
 							includeDate
-							timing={item.timing}
+							timing={detailTemporalPresentation.source.timing}
 							timeZone={itemTimeZone}
 						/>
 					{:else}
@@ -203,7 +210,7 @@
 								{/if}
 
 								{#if entry.kind === 'transport-stop'}
-									{#if entry.schedule && shouldShowTransportStopSchedule(entry, locationIndex, item.timing)}
+									{#if entry.schedule && shouldShowTransportStopSchedule(entry, locationIndex, detailTemporalPresentation.kind === 'plan' ? detailTemporalPresentation.source.timing : undefined)}
 										<span class="location-time">
 											<ItineraryTime
 												calendarDateFormat="date-with-weekday"
@@ -214,14 +221,14 @@
 										</span>
 									{/if}
 									{#if entry.platform}<span>Platform {entry.platform}</span>{/if}
-								{:else if item.type !== 'accommodation' && item.timing}
+								{:else if item.type !== 'accommodation' && detailTemporalPresentation.kind === 'plan'}
 									<span class="location-time">
 										<span class="location-time-label">At</span>
 										<ItineraryTiming
 											calendarDateFormat="date-with-weekday"
 											display="start"
 											includeDate
-											timing={item.timing}
+											timing={detailTemporalPresentation.source.timing}
 											timeZone={itemTimeZone}
 										/>
 									</span>
@@ -243,14 +250,14 @@
 					</ol>
 				{/if}
 
-				{#if item.timing && hasEndTime}
+				{#if detailTemporalPresentation.kind === 'plan' && hasEndTime}
 					<div class="timing-boundary">
 						{#if item.type !== 'transport'}<span class="timing-boundary-label">{endLabel}</span>{/if}
 						<ItineraryTiming
 							calendarDateFormat="date-with-weekday"
 							display="end"
 							includeDate
-							timing={item.timing}
+							timing={detailTemporalPresentation.source.timing}
 							timeZone={itemTimeZone}
 						/>
 					</div>

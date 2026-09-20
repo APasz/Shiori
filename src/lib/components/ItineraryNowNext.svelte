@@ -5,6 +5,7 @@
 		availabilityConstraintPresentation,
 		type AvailabilityPresentation
 	} from '$lib/itinerary/availability-presentation';
+	import { resolveItemPlanTemporalSource } from '$lib/itinerary/item-temporal';
 	import { getNowNextState, type AccommodationBoundary } from '$lib/itinerary/now-next';
 	import type { AvailabilityConstraint } from '$lib/itinerary/schema';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
@@ -181,15 +182,16 @@
 	availability: AvailabilityConstraint | undefined
 )}
 	{@const displayedAvailability = availability ? formatAvailability(availability) : null}
+	{@const plan = resolveItemPlanTemporalSource(item)}
 	<p class="item-label">{itemLabel(label, boundary, displayedAvailability?.label)}</p>
 	{#if displayedAvailability}
 		<span class="availability-timing">{displayedAvailability.timing}</span>
-	{:else if item.timing}
+	{:else if plan}
 		<ItineraryTiming
 			display={timingDisplay(boundary)}
 			includeDate={true}
 			itemType={item.type}
-			timing={item.timing}
+			timing={plan.timing}
 			timeZone={resolveItemTimeZone(item, tripTimeZone)}
 		/>
 	{/if}

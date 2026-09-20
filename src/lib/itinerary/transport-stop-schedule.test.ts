@@ -40,6 +40,17 @@ describe('transport stop schedule resolution', () => {
 		).toEqual({ scheduledAt: Date.UTC(2026, 9, 27, 10), timeZone: 'Asia/Seoul' });
 	});
 
+	it('uses the item Plan zone for an explicit stop without its own zone', () => {
+		expect(
+			resolveTransportStopSchedule(
+				{ kind: 'exact', startAt: Date.UTC(2026, 9, 27, 9), timeZone: 'Asia/Tokyo' },
+				{ locationId: 'departure', scheduledAt: Date.UTC(2026, 9, 27, 10) },
+				0,
+				'Australia/Melbourne'
+			)
+		).toEqual({ scheduledAt: Date.UTC(2026, 9, 27, 10), timeZone: 'Asia/Tokyo' });
+	});
+
 	it('does not infer a time for later untimed stops', () => {
 		expect(
 			resolveTransportStopSchedule(

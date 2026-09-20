@@ -1,11 +1,20 @@
 import type { ItineraryTiming, TransportDetails } from './schema';
-import { timingStartTimestamp } from './timing';
-import { resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
+import {
+	resolveTransportStopServiceTemporalSource,
+	resolveTransportStopTemporalPresentation,
+	type TransportStopTemporalPresentation
+} from './item-temporal';
 
 export type TransportStopSchedule = Readonly<{
 	scheduledAt: number;
 	timeZone: string;
 }>;
+
+function scheduleForTemporalPresentation(
+	presentation: TransportStopTemporalPresentation | undefined
+): TransportStopSchedule | undefined {
+	return presentation ? { scheduledAt: presentation.at, timeZone: presentation.timeZone } : undefined;
+}
 
 /** Uses a first-stop time only when the journey schedule is absent. */
 export function resolveTransportScheduleStart(
@@ -21,7 +30,9 @@ export function resolveFirstTransportStopSchedule(
 	defaultTimeZone: string
 ): TransportStopSchedule | undefined {
 	const firstStop = transport.stops[0];
-	return firstStop ? resolveTransportStopSchedule(undefined, firstStop, 0, defaultTimeZone) : undefined;
+	return firstStop
+		? scheduleForTemporalPresentation(resolveTransportStopServiceTemporalSource(firstStop, 0, defaultTimeZone))
+		: undefined;
 }
 
 /**
@@ -34,17 +45,7 @@ export function resolveTransportStopSchedule(
 	stopIndex: number,
 	defaultTimeZone: string
 ): TransportStopSchedule | undefined {
-	const itemTimeZone = timing ? resolveTimingTimeZone(timing, defaultTimeZone) : defaultTimeZone;
-	if (stop.scheduledAt !== undefined) {
-		return {
-			scheduledAt: stop.scheduledAt,
-			timeZone: resolveTransportStopTimeZone(stop, itemTimeZone)
-		};
-	}
-
-	if (stopIndex !== 0) {
-		return undefined;
-	}
-
-	return timing ? { scheduledAt: timingStartTimestamp(timing), timeZone: itemTimeZone } : undefined;
+	return scheduleForTemporalPresentation(
+		resolveTransportStopTemporalPresentation(timing, stop, stopIndex, defaultTimeZone)
+	);
 }

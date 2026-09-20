@@ -1,4 +1,5 @@
 import type { ItineraryItem, ItineraryTiming, TransportDetails } from './schema';
+import { resolveItemPlacementTemporalSource, resolveItemPlanTemporalSource } from './item-temporal';
 
 type TimeZoneOverride = Readonly<{
 	timeZone?: string;
@@ -14,7 +15,11 @@ export function resolveTimingTimeZone(timing: ItineraryTiming, tripTimeZone: str
 
 /** Resolves the zone for either a scheduled item or its day-only placement. */
 export function resolveItemTimeZone(item: Pick<ItineraryItem, 'placement' | 'timing'>, tripTimeZone: string): string {
-	return item.timing ? resolveTimingTimeZone(item.timing, tripTimeZone) : (item.placement?.timeZone ?? tripTimeZone);
+	const plan = resolveItemPlanTemporalSource(item);
+	if (plan) {
+		return resolveTimingTimeZone(plan.timing, tripTimeZone);
+	}
+	return resolveItemPlacementTemporalSource(item)?.placement.timeZone ?? tripTimeZone;
 }
 
 export function resolveTransportStopTimeZone(stop: TransportDetails['stops'][number], defaultTimeZone: string): string {

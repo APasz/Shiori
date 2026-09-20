@@ -1,4 +1,5 @@
 import { defaultDayAnchorAt } from './note-anchor';
+import { resolveItemPlanTemporalSource } from './item-temporal';
 import type { ItineraryItemPlacement, ItineraryTiming } from './schema';
 import { formatTimestampForTimeZoneInput } from './zoned-time';
 
@@ -11,7 +12,7 @@ export type TimedItem<Item extends ItemWithOptionalTiming> = Item & Readonly<{ t
 
 /** Narrows an item to one with an actual Schedule, excluding day-only placement anchors. */
 export function hasItemTiming<Item extends ItemWithOptionalTiming>(item: Item): item is TimedItem<Item> {
-	return item.timing !== undefined;
+	return resolveItemPlanTemporalSource(item) !== undefined;
 }
 
 /** Creates the neutral anchor used to place an unscheduled item on a local calendar day. */

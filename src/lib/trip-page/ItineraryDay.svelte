@@ -7,16 +7,12 @@
 		type AvailabilityPresentation
 	} from '$lib/itinerary/availability-presentation';
 	import {
-		currentOrNextAvailabilityConstraint,
-		isOpeningHoursPeriodConstraint,
-		latestAvailabilityConstraint
-	} from '$lib/itinerary/availability';
+		resolveDayCardAvailabilityContextTimestamps,
+		resolveDayCardTemporalCandidates,
+		type DayCardPrimaryTemporalSource,
+		type ItemAvailabilityTemporalSource
+	} from '$lib/itinerary/item-temporal';
 	import { formatLocalDay, partitionDayItems, type DayTimelineEntry } from '$lib/itinerary/presentation';
-	import {
-		resolveFirstTransportStopSchedule,
-		type TransportStopSchedule
-	} from '$lib/itinerary/transport-stop-schedule';
-	import type { ItineraryItem } from '$lib/itinerary/schema';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
@@ -62,7 +58,9 @@
 		accommodation: 'Accommodation'
 	};
 	const dayItems = $derived(partitionDayItems(items, date, viewerContext.timeZone));
-	type DetailedTransportItem = Extract<ItineraryItem, { type: 'transport' }>;
+	type DayCardTemporalPresentation =
+		| Exclude<DayCardPrimaryTemporalSource, ItemAvailabilityTemporalSource>
+		| Readonly<{ availability: AvailabilityPresentation; source: 'availability' }>;
 
 	function selectItem(itemId: string): void {
 		if (canSelectItems) {
@@ -70,60 +68,51 @@
 		}
 	}
 
-	function openingHoursPresentation(item: DayItem): AvailabilityPresentation | null {
-		if (item.timing) {
-			return null;
-		}
-
-		const openingHours = item.availability.filter(isOpeningHoursPeriodConstraint);
-		const constraint =
-			currentOrNextAvailabilityConstraint(openingHours, availabilityTimestamp)?.constraint ??
-			latestAvailabilityConstraint(openingHours);
-		if (!constraint) {
-			return null;
-		}
-
-		return availabilityConstraintPresentation(constraint, {
+	function dayCardAvailabilityPresentation(
+		item: DayItem,
+		source: ItemAvailabilityTemporalSource
+	): AvailabilityPresentation | null {
+		return availabilityConstraintPresentation(source.constraint, {
 			contextTimeZone: resolveItemTimeZone(item, tripTimeZone),
-			contextTimestamps: item.placement ? [item.placement.anchorAt] : [],
+			contextTimestamps: resolveDayCardAvailabilityContextTimestamps(item),
 			formatPreferences: viewerContext.formatPreferences,
 			locale: viewerContext.locale
 		});
 	}
 
-	function isDetailedTransportItem(item: DayItem): item is DetailedTransportItem {
-		return item.type === 'transport' && 'transport' in item;
-	}
+	function dayCardTemporalPresentation(item: DayItem): DayCardTemporalPresentation | undefined {
+		for (const source of resolveDayCardTemporalCandidates(item, { availabilityTimestamp, tripTimeZone })) {
+			if (source.source !== 'availability') {
+				return source;
+			}
 
-	function firstTransportStopSchedule(item: DayItem): TransportStopSchedule | undefined {
-		if (!isDetailedTransportItem(item)) {
-			return undefined;
+			const availability = dayCardAvailabilityPresentation(item, source);
+			if (availability) {
+				return { availability, source: 'availability' };
+			}
 		}
-		return resolveFirstTransportStopSchedule(item.transport, resolveItemTimeZone(item, tripTimeZone));
+		return undefined;
 	}
 </script>
 
 {#snippet itemTime(item: DayItem)}
-	{#if item.timing}
+	{@const temporalPresentation = dayCardTemporalPresentation(item)}
+	{#if temporalPresentation?.source === 'plan'}
 		<ItineraryTiming
 			day={date}
 			itemType={item.type}
-			timing={item.timing}
+			timing={temporalPresentation.timing}
 			timeZone={resolveItemTimeZone(item, tripTimeZone)}
 		/>
+	{:else if temporalPresentation?.source === 'availability'}
+		<span class="availability-timing">
+			<span class="availability-label">{temporalPresentation.availability.label}</span>
+			<span>{temporalPresentation.availability.timing}</span>
+		</span>
+	{:else if temporalPresentation?.source === 'service'}
+		<ItineraryTime startAt={temporalPresentation.at} timeZone={temporalPresentation.timeZone} />
 	{:else}
-		{@const availability = openingHoursPresentation(item)}
-		{@const firstStopSchedule = firstTransportStopSchedule(item)}
-		{#if availability}
-			<span class="availability-timing">
-				<span class="availability-label">{availability.label}</span>
-				<span>{availability.timing}</span>
-			</span>
-		{:else if firstStopSchedule}
-			<ItineraryTime startAt={firstStopSchedule.scheduledAt} timeZone={firstStopSchedule.timeZone} />
-		{:else}
-			<span class="unscheduled-timing">Time not set</span>
-		{/if}
+		<span class="unscheduled-timing">Time not set</span>
 	{/if}
 {/snippet}
 

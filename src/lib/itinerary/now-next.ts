@@ -1,6 +1,9 @@
-import { isOpeningHoursPeriodConstraint } from './availability';
 import { addCalendarDays } from './calendar';
-import { hasItemTiming, type TimedItem as ItemWithTiming } from './item-placement';
+import {
+	resolveNowNextCandidateTemporalSources,
+	type ItemAvailabilityTemporalSource,
+	type ItemPlanTemporalSource
+} from './item-temporal';
 import type { AvailabilityConstraint, ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
 import { formatTimestampInTimeZone } from './time';
 import { resolveTimingTimeZone } from './time-zone';
@@ -14,31 +17,31 @@ type NowNextItem = Readonly<{
 	timing?: ItineraryTiming;
 	type: ItineraryItem['type'];
 }>;
-type TimedItem<Item extends NowNextItem = NowNextItem> = ItemWithTiming<Item>;
 
 export type AccommodationBoundary = 'check-in' | 'check-out';
 
-type TimingNowNextEntry<Item extends NowNextItem> = Readonly<{
+type PlanNowNextEntry<Item extends NowNextItem> = Readonly<{
 	boundary?: AccommodationBoundary;
 	endTimestamp: number;
 	isHiddenBeforeStart: boolean;
-	item: TimedItem<Item>;
+	item: Item;
 	possiblyActiveStartTimestamp?: number;
-	source: 'timing';
+	source: 'plan';
 	startTimestamp: number;
+	temporalSource: ItemPlanTemporalSource;
 	timingKind: ItineraryTiming['kind'];
 }>;
 
 type AvailabilityNowNextEntry<Item extends NowNextItem> = Readonly<{
-	constraint: AvailabilityConstraint;
 	endTimestamp: number;
 	isHiddenBeforeStart: false;
 	item: Item;
 	source: 'availability';
 	startTimestamp: number;
+	temporalSource: ItemAvailabilityTemporalSource;
 }>;
 
-type NowNextEntry<Item extends NowNextItem> = TimingNowNextEntry<Item> | AvailabilityNowNextEntry<Item>;
+type NowNextEntry<Item extends NowNextItem> = PlanNowNextEntry<Item> | AvailabilityNowNextEntry<Item>;
 
 type CurrentEntryProperties<Item extends NowNextItem> = Readonly<{
 	currentAvailability?: AvailabilityConstraint;
@@ -102,17 +105,18 @@ function followingLocalMidnight(timestamp: number, timeZone: string): number {
 }
 
 function accommodationEntries<Item extends NowNextItem>(
-	item: TimedItem<Item>,
+	item: Item,
+	plan: ItemPlanTemporalSource,
 	tripTimeZone: string
-): TimingNowNextEntry<Item>[] {
-	const { timing } = item;
+): PlanNowNextEntry<Item>[] {
+	const { timing } = plan;
 	if (timing.kind !== 'exact') {
-		return [timingEntry(item, 'check-in')];
+		return [planEntry(item, plan, 'check-in')];
 	}
 
 	const timeZone = resolveTimingTimeZone(timing, tripTimeZone);
 	const checkInDate = localDateForTimestamp(timing.startAt, timeZone);
-	const checkInEntry: TimingNowNextEntry<Item> = {
+	const checkInEntry: PlanNowNextEntry<Item> = {
 		boundary: 'check-in',
 		endTimestamp:
 			timing.endAt !== undefined && localDateForTimestamp(timing.endAt, timeZone) === checkInDate
@@ -120,8 +124,9 @@ function accommodationEntries<Item extends NowNextItem>(
 				: followingLocalMidnight(timing.startAt, timeZone),
 		isHiddenBeforeStart: false,
 		item,
-		source: 'timing',
+		source: 'plan',
 		startTimestamp: timing.startAt,
+		temporalSource: plan,
 		timingKind: 'exact'
 	};
 
@@ -130,23 +135,25 @@ function accommodationEntries<Item extends NowNextItem>(
 	}
 
 	const checkOutDate = localDateForTimestamp(timing.endAt, timeZone);
-	const checkOutEntry: TimingNowNextEntry<Item> = {
+	const checkOutEntry: PlanNowNextEntry<Item> = {
 		boundary: 'check-out',
 		endTimestamp: timing.timePrecision === 'date' ? followingLocalMidnight(timing.endAt, timeZone) : timing.endAt,
 		isHiddenBeforeStart: checkInDate !== checkOutDate,
 		item,
-		source: 'timing',
+		source: 'plan',
 		startTimestamp: checkInDate === checkOutDate ? timing.endAt : localMidnight(checkOutDate, timeZone),
+		temporalSource: plan,
 		timingKind: 'exact'
 	};
 	return [checkInEntry, checkOutEntry];
 }
 
-function timingEntry<Item extends NowNextItem>(
-	item: TimedItem<Item>,
+function planEntry<Item extends NowNextItem>(
+	item: Item,
+	plan: ItemPlanTemporalSource,
 	boundary?: AccommodationBoundary
-): TimingNowNextEntry<Item> {
-	const { timing } = item;
+): PlanNowNextEntry<Item> {
+	const { timing } = plan;
 	return {
 		...(boundary ? { boundary } : {}),
 		endTimestamp: timingEndTimestamp(timing),
@@ -155,28 +162,40 @@ function timingEntry<Item extends NowNextItem>(
 		...(timing.kind === 'approximate'
 			? { possiblyActiveStartTimestamp: timing.nominalAt - timing.toleranceMinutes * 60_000 }
 			: {}),
-		source: 'timing',
+		source: 'plan',
 		startTimestamp: timingStartTimestamp(timing),
+		temporalSource: plan,
 		timingKind: timing.kind
 	};
 }
 
-function availabilityEntriesForItem<Item extends NowNextItem>(item: Item): AvailabilityNowNextEntry<Item>[] {
-	const entries: AvailabilityNowNextEntry<Item>[] = [];
-	for (const constraint of item.availability ?? []) {
-		if (!isOpeningHoursPeriodConstraint(constraint)) {
-			continue;
-		}
-		entries.push({
-			constraint,
-			endTimestamp: constraint.timing.endAt,
-			isHiddenBeforeStart: false,
-			item,
-			source: 'availability',
-			startTimestamp: constraint.timing.startAt
-		});
+function availabilityEntry<Item extends NowNextItem>(
+	item: Item,
+	availability: ItemAvailabilityTemporalSource
+): AvailabilityNowNextEntry<Item> {
+	const { constraint } = availability;
+	if (constraint.timing.kind !== 'period') {
+		throw new Error('Only availability periods can be Now / Next candidates.');
 	}
-	return entries;
+	return {
+		endTimestamp: constraint.timing.endAt,
+		isHiddenBeforeStart: false,
+		item,
+		source: 'availability',
+		startTimestamp: constraint.timing.startAt,
+		temporalSource: availability
+	};
+}
+
+function nowNextEntriesForItem<Item extends NowNextItem>(item: Item, tripTimeZone: string): NowNextEntry<Item>[] {
+	return resolveNowNextCandidateTemporalSources(item).flatMap<NowNextEntry<Item>>((source) => {
+		if (source.source === 'plan') {
+			return item.type === 'accommodation'
+				? accommodationEntries(item, source, tripTimeZone)
+				: [planEntry(item, source)];
+		}
+		return [availabilityEntry(item, source)];
+	});
 }
 
 function accommodationBoundaryOrder(boundary: AccommodationBoundary | undefined): number {
@@ -191,15 +210,15 @@ function accommodationBoundaryOrder(boundary: AccommodationBoundary | undefined)
 }
 
 function entryBoundaryOrder<Item extends NowNextItem>(entry: NowNextEntry<Item>): number {
-	return entry.source === 'timing' ? accommodationBoundaryOrder(entry.boundary) : 1;
+	return entry.source === 'plan' ? accommodationBoundaryOrder(entry.boundary) : 1;
 }
 
 function entrySourceOrder<Item extends NowNextItem>(entry: NowNextEntry<Item>): number {
-	return entry.source === 'timing' ? 0 : 1;
+	return entry.source === 'plan' ? 0 : 1;
 }
 
 function entryTieBreakId<Item extends NowNextItem>(entry: NowNextEntry<Item>): string {
-	return entry.source === 'availability' ? entry.constraint.id : '';
+	return entry.source === 'availability' ? entry.temporalSource.constraint.id : '';
 }
 
 function compareNowNextEntries<Item extends NowNextItem>(left: NowNextEntry<Item>, right: NowNextEntry<Item>): number {
@@ -214,7 +233,7 @@ function compareNowNextEntries<Item extends NowNextItem>(left: NowNextEntry<Item
 
 function entryIsActive<Item extends NowNextItem>(entry: NowNextEntry<Item>, currentTimestamp: number): boolean {
 	return (
-		(entry.source !== 'timing' || entry.timingKind !== 'approximate') &&
+		(entry.source !== 'plan' || entry.timingKind !== 'approximate') &&
 		entry.startTimestamp <= currentTimestamp &&
 		currentTimestamp <= entry.endTimestamp
 	);
@@ -222,7 +241,7 @@ function entryIsActive<Item extends NowNextItem>(entry: NowNextEntry<Item>, curr
 
 function entryIsPossiblyActive<Item extends NowNextItem>(entry: NowNextEntry<Item>, currentTimestamp: number): boolean {
 	return (
-		entry.source === 'timing' &&
+		entry.source === 'plan' &&
 		entry.possiblyActiveStartTimestamp !== undefined &&
 		entry.possiblyActiveStartTimestamp <= currentTimestamp &&
 		currentTimestamp <= entry.endTimestamp
@@ -266,7 +285,7 @@ function nextUpcomingEntry<Item extends NowNextItem>(
 
 function currentEntryProperties<Item extends NowNextItem>(entry: NowNextEntry<Item>): CurrentEntryProperties<Item> {
 	if (entry.source === 'availability') {
-		return { currentAvailability: entry.constraint, currentItem: entry.item };
+		return { currentAvailability: entry.temporalSource.constraint, currentItem: entry.item };
 	}
 	return {
 		...(entry.boundary ? { currentBoundary: entry.boundary } : {}),
@@ -276,7 +295,7 @@ function currentEntryProperties<Item extends NowNextItem>(entry: NowNextEntry<It
 
 function nextEntryProperties<Item extends NowNextItem>(entry: NowNextEntry<Item>): NextEntryProperties<Item> {
 	if (entry.source === 'availability') {
-		return { nextAvailability: entry.constraint, nextItem: entry.item };
+		return { nextAvailability: entry.temporalSource.constraint, nextItem: entry.item };
 	}
 	return {
 		...(entry.boundary ? { nextBoundary: entry.boundary } : {}),
@@ -285,33 +304,26 @@ function nextEntryProperties<Item extends NowNextItem>(entry: NowNextEntry<Item>
 }
 
 /**
- * Selects an honest Now / Next presentation state from Schedule and usable day-placement availability candidates.
- * A current Schedule wins over availability; availability never becomes itinerary timing.
+ * Selects an honest Now / Next presentation state from Plan and usable day-placement availability candidates.
+ * A current Plan wins over availability; availability never becomes itinerary timing.
  */
 export function getNowNextState<Item extends NowNextItem>(
 	items: Item[],
 	currentTimestamp: number,
 	tripTimeZone: string
 ): NowNextState<Item> {
-	const timingEntries = items
-		.filter(hasItemTiming)
-		.flatMap((item) =>
-			item.type === 'accommodation' ? accommodationEntries(item, tripTimeZone) : [timingEntry(item)]
-		);
-	const availabilityEntries = items
-		.filter((item) => !hasItemTiming(item) && item.placement !== undefined)
-		.flatMap(availabilityEntriesForItem);
-	const entries = [...timingEntries, ...availabilityEntries].sort(compareNowNextEntries);
+	const entries = items.flatMap((item) => nowNextEntriesForItem(item, tripTimeZone)).sort(compareNowNextEntries);
+	const planEntries = entries.filter((entry): entry is PlanNowNextEntry<Item> => entry.source === 'plan');
 	if (entries.length === 0) {
 		return { kind: 'empty' };
 	}
 
 	const activeEntry =
-		latestActiveEntry(entries, currentTimestamp, 'timing') ??
+		latestActiveEntry(entries, currentTimestamp, 'plan') ??
 		latestActiveEntry(entries, currentTimestamp, 'availability');
 	if (activeEntry) {
 		const nextEntry = nextUpcomingEntry(entries, currentTimestamp, activeEntry);
-		const isExact = activeEntry.source === 'timing' ? activeEntry.timingKind === 'exact' : false;
+		const isExact = activeEntry.source === 'plan' ? activeEntry.timingKind === 'exact' : false;
 		return {
 			kind: isExact ? 'exact-current' : 'window-active',
 			...currentEntryProperties(activeEntry),
@@ -325,17 +337,17 @@ export function getNowNextState<Item extends NowNextItem>(
 		return {
 			kind: 'approximate-now',
 			approximateItem: possiblyActiveEntry.item,
-			...(possiblyActiveEntry.source === 'timing' && possiblyActiveEntry.boundary
+			...(possiblyActiveEntry.source === 'plan' && possiblyActiveEntry.boundary
 				? { approximateBoundary: possiblyActiveEntry.boundary }
 				: {}),
 			...(nextEntry ? nextEntryProperties(nextEntry) : {})
 		};
 	}
 
-	const hasPastTimingEntry = timingEntries.some((entry) => entryIsPast(entry, currentTimestamp));
-	const hasTimingEntries = timingEntries.length > 0;
+	const hasPastPlanEntry = planEntries.some((entry) => entryIsPast(entry, currentTimestamp));
+	const hasPlanEntries = planEntries.length > 0;
 	const nextEntry = entries.find((entry) => !entryIsPast(entry, currentTimestamp) && !entry.isHiddenBeforeStart);
-	if (!hasPastTimingEntry && nextEntry?.source === 'timing') {
+	if (!hasPastPlanEntry && nextEntry?.source === 'plan') {
 		return {
 			kind: 'before-trip',
 			hoursUntilStart: Math.ceil((nextEntry.startTimestamp - currentTimestamp) / millisecondsPerHour),
@@ -345,7 +357,7 @@ export function getNowNextState<Item extends NowNextItem>(
 	if (nextEntry) {
 		return { kind: 'next-only', ...nextEntryProperties(nextEntry) };
 	}
-	if (!hasTimingEntries) {
+	if (!hasPlanEntries) {
 		return { kind: 'availability-complete' };
 	}
 	if (entries.some((entry) => entry.isHiddenBeforeStart && entry.startTimestamp > currentTimestamp)) {
