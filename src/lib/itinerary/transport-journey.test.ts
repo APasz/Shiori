@@ -94,7 +94,7 @@ describe('transport journey drafts', () => {
 		expect(transportJourneyTitle(journey)).toBe('JQ13 from SYD to KIX');
 	});
 
-	it('preserves an externally confirmed departure and arrival schedule', () => {
+	it('preserves externally confirmed departure and arrival service times', () => {
 		const item = createTransportJourneyItem(
 			{
 				departure: { name: 'Kansai International Airport' },

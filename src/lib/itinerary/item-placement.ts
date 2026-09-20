@@ -10,17 +10,17 @@ type ItemWithOptionalTiming = Readonly<{
 
 export type TimedItem<Item extends ItemWithOptionalTiming> = Item & Readonly<{ timing: ItineraryTiming }>;
 
-/** Narrows an item to one with an actual Schedule, excluding day-only placement anchors. */
+/** Narrows an item to one with an actual Plan, excluding day-only placement anchors. */
 export function hasItemTiming<Item extends ItemWithOptionalTiming>(item: Item): item is TimedItem<Item> {
 	return resolveItemPlanTemporalSource(item) !== undefined;
 }
 
-/** Creates the neutral anchor used to place an unscheduled item on a local calendar day. */
+/** Creates the neutral anchor used to place an unplanned item on a local calendar day. */
 export function itemPlacementAnchorAt(date: string, timeZone: string): number | null {
 	return defaultDayAnchorAt(date, timeZone);
 }
 
-/** Returns the local calendar day represented by an unscheduled item's anchor. */
+/** Returns the local calendar day represented by an unplanned item's anchor. */
 export function itemPlacementDate(placement: ItineraryItemPlacement): string | null {
 	return formatTimestampForTimeZoneInput(placement.anchorAt, placement.timeZone)?.slice(0, 10) ?? null;
 }

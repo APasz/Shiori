@@ -36,7 +36,7 @@ describe('itinerary day', () => {
 		expect(renderDay('Notes 日')).toContain('Notes 日');
 	});
 
-	it('shows the next availability entry instead of an unscheduled time', () => {
+	it('shows the next availability entry instead of an unplanned time', () => {
 		const item = itineraryItemSchema.parse({
 			availability: [
 				{
@@ -113,6 +113,37 @@ describe('itinerary day', () => {
 
 		expect(html).toContain('datetime="2026-04-13T10:00:00.000Z"');
 		expect(html).not.toContain('Time not set');
+	});
+
+	it('uses a first transport service time before opening-hours availability', () => {
+		const item = itineraryItemSchema.parse({
+			availability: [
+				{
+					id: 'station-hours',
+					timing: {
+						endAt: Date.UTC(2026, 3, 13, 18),
+						kind: 'period',
+						startAt: Date.UTC(2026, 3, 13, 8),
+						timeZone: 'UTC'
+					},
+					type: 'opening-hours'
+				}
+			],
+			id: 'airport-train-with-hours',
+			locations: [{ id: 'departure', name: 'Central Station', role: 'departure' }],
+			placement: { anchorAt: Date.UTC(2026, 3, 13, 12), timeZone: 'UTC' },
+			title: 'Airport train',
+			transport: {
+				mode: 'rail',
+				stops: [{ locationId: 'departure', scheduledAt: Date.UTC(2026, 3, 13, 10) }]
+			},
+			type: 'transport'
+		});
+
+		const html = renderDay('Notes', [item]);
+
+		expect(html).toContain('datetime="2026-04-13T10:00:00.000Z"');
+		expect(html).not.toContain('Opening');
 	});
 
 	it('uses the current or next chronological availability entry on a day card', () => {

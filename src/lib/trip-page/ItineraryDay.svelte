@@ -8,7 +8,7 @@
 	} from '$lib/itinerary/availability-presentation';
 	import {
 		resolveDayCardAvailabilityContextTimestamps,
-		resolveDayCardTemporalCandidates,
+		resolveDayCardPrimaryTemporalSource,
 		type DayCardPrimaryTemporalSource,
 		type ItemAvailabilityTemporalSource
 	} from '$lib/itinerary/item-temporal';
@@ -81,17 +81,12 @@
 	}
 
 	function dayCardTemporalPresentation(item: DayItem): DayCardTemporalPresentation | undefined {
-		for (const source of resolveDayCardTemporalCandidates(item, { availabilityTimestamp, tripTimeZone })) {
-			if (source.source !== 'availability') {
-				return source;
-			}
-
-			const availability = dayCardAvailabilityPresentation(item, source);
-			if (availability) {
-				return { availability, source: 'availability' };
-			}
+		const source = resolveDayCardPrimaryTemporalSource(item, { availabilityTimestamp, tripTimeZone });
+		if (!source || source.source !== 'availability') {
+			return source;
 		}
-		return undefined;
+		const availability = dayCardAvailabilityPresentation(item, source);
+		return availability ? { availability, source: 'availability' } : undefined;
 	}
 </script>
 

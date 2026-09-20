@@ -75,7 +75,7 @@ describe('stored trip migrations', () => {
 		]);
 	});
 
-	it('upgrades pre-day-placement scheduled items without inventing a day anchor', () => {
+	it('upgrades pre-day-placement planned items without inventing a day anchor', () => {
 		const migrated = migrateStoredTripFile({
 			trip: {
 				createdAt: Date.UTC(2026, 3, 1),

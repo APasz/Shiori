@@ -1,15 +1,11 @@
-import type { ItineraryItem, ItineraryLocation, ItineraryTiming } from './schema';
-import { resolveItemPlanTemporalSource } from './item-temporal';
-import { timingStartTimestamp } from './timing';
-import { resolveTransportStopSchedule, type TransportStopSchedule } from './transport-stop-schedule';
-import { resolveItemTimeZone } from './time-zone';
+import type { ItineraryItem, ItineraryLocation } from './schema';
+import { resolveItemServiceTemporalSources, type ItemServiceTemporalSource } from './item-temporal';
 
 export type TransportStopLocationFlowEntry = Readonly<{
 	kind: 'transport-stop';
 	location: ItineraryLocation;
 	platform?: string;
-	schedule?: TransportStopSchedule;
-	hasScheduledTime: boolean;
+	service?: ItemServiceTemporalSource;
 }>;
 
 export type ItemLocationFlowEntry =
@@ -30,62 +26,39 @@ function requireItemLocation(item: ItineraryItem, locationId: string): Itinerary
 }
 
 /** Returns each item location once, in its chronological transport-stop order when applicable. */
-export function itemLocationFlow(item: ItineraryItem, tripTimeZone: string): readonly ItemLocationFlowEntry[] {
+export function itemLocationFlow(
+	item: ItineraryItem,
+	tripTimeZone: string,
+	serviceSources?: readonly ItemServiceTemporalSource[]
+): readonly ItemLocationFlowEntry[] {
 	if (item.type !== 'transport') {
 		return item.locations.map((location) => ({ kind: 'location', location }));
 	}
 
-	const plan = resolveItemPlanTemporalSource(item);
+	const services = serviceSources ?? resolveItemServiceTemporalSources(item, tripTimeZone);
+	const serviceByStopIndex = new Map<number, ItemServiceTemporalSource>();
+	for (const service of services) {
+		serviceByStopIndex.set(service.stopIndex, service);
+	}
 	return item.transport.stops.map((stop, stopIndex) => {
-		const schedule = resolveTransportStopSchedule(
-			plan?.timing,
-			stop,
-			stopIndex,
-			resolveItemTimeZone(item, tripTimeZone)
-		);
+		const service = serviceByStopIndex.get(stopIndex);
 		return {
 			kind: 'transport-stop',
 			location: requireItemLocation(item, stop.locationId),
-			hasScheduledTime: stop.scheduledAt !== undefined,
 			...(stop.platform ? { platform: stop.platform } : {}),
-			...(schedule ? { schedule } : {})
+			...(service ? { service } : {})
 		};
 	});
 }
 
-/** Hides a first-stop time only when the item's Plan start already conveys the same information. */
-export function shouldShowTransportStopSchedule(
-	entry: TransportStopLocationFlowEntry,
-	stopIndex: number,
-	planTiming: ItineraryTiming | undefined
-): boolean {
-	if (!entry.schedule) {
-		return false;
-	}
-	if (stopIndex !== 0) {
-		return true;
-	}
-	if (!planTiming) {
-		return true;
-	}
-	if (!entry.hasScheduledTime) {
-		return false;
-	}
-	return (
-		planTiming.kind !== 'exact' ||
-		planTiming.timePrecision === 'date' ||
-		entry.schedule.scheduledAt !== timingStartTimestamp(planTiming)
-	);
-}
-
 function scheduledTimestamp(entry: ItemLocationFlowEntry | undefined): number | undefined {
-	if (entry?.kind !== 'transport-stop' || !entry.hasScheduledTime || !entry.schedule) {
+	if (entry?.kind !== 'transport-stop') {
 		return undefined;
 	}
-	return entry.schedule.scheduledAt;
+	return entry.service?.at;
 }
 
-/** Returns the elapsed travel time only for two consecutive, explicitly scheduled stops. */
+/** Returns elapsed travel time only for consecutive stops with explicit service times. */
 export function transportTravelDuration(
 	previousEntry: ItemLocationFlowEntry | undefined,
 	nextEntry: ItemLocationFlowEntry

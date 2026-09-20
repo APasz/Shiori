@@ -29,7 +29,7 @@ function occurrences(value: string, search: string): number {
 }
 
 describe('itinerary item details', () => {
-	it('shows a day-anchored availability-only item without presenting an invented schedule time', () => {
+	it('shows a day-anchored availability-only item without presenting an invented Plan time', () => {
 		const item = itineraryItemSchema.parse({
 			availability: [
 				{
@@ -51,14 +51,14 @@ describe('itinerary item details', () => {
 
 		const html = renderDetails(item);
 
-		expect(html).toContain('Schedule');
+		expect(html).toContain('Plan');
 		expect(html).toContain('>Day<');
-		expect(html).toContain('Time not set');
+		expect(html).toContain('Time is not planned');
 		expect(html).toContain('Availability');
 		expect(html).toContain('Opening');
 	});
 
-	it('keeps non-opening availability in item details without turning it into a schedule', () => {
+	it('keeps non-opening availability in item details without turning it into a Plan', () => {
 		const item = itineraryItemSchema.parse({
 			availability: [
 				{
@@ -80,7 +80,7 @@ describe('itinerary item details', () => {
 
 		const html = renderDetails(item);
 
-		expect(html).toContain('Time not set');
+		expect(html).toContain('Time is not planned');
 		expect(html).toContain('Availability');
 		expect(html).toContain('Reception');
 	});
@@ -101,7 +101,7 @@ describe('itinerary item details', () => {
 
 		const html = renderDetails(item);
 
-		expect(html).toContain('Schedule');
+		expect(html).toContain('Plan');
 		expect(html).toContain('Check-in');
 		expect(html).toContain('Check-out');
 		expect(html).not.toContain('>At');
@@ -159,13 +159,13 @@ describe('itinerary item details', () => {
 
 		const html = renderDetails(item);
 
-		expect(html).toContain('Schedule');
+		expect(html).toContain('Plan');
 		expect(html).toContain('Start');
 		expect(html).toContain('End');
 		expect(html).toContain('>At');
 	});
 
-	it('suppresses transport labels and the duplicate first-stop time while retaining travel duration', () => {
+	it('shows planned journey times and scheduled stop times as independent details', () => {
 		const item = itineraryItemSchema.parse({
 			id: 'journey',
 			locations: [
@@ -199,12 +199,13 @@ describe('itinerary item details', () => {
 
 		const html = renderDetails(item);
 
-		expect(html).not.toContain('>Schedule');
-		expect(html).not.toContain('>Start');
-		expect(html).not.toContain('>End');
-		expect(html).not.toContain('>Scheduled');
+		expect(html).not.toContain('>Plan<');
+		expect(html).toContain('Planned departure');
+		expect(html).toContain('Planned arrival');
+		expect(html).toContain('Scheduled departure');
+		expect(html).toContain('Scheduled arrival');
 		expect(html).toContain('Travel time: 2h 30m');
-		expect(occurrences(html, 'Localizing…')).toBe(3);
+		expect(occurrences(html, 'Localizing…')).toBe(4);
 	});
 
 	it('condenses paid costs and shows conversion details only when the currencies differ', () => {

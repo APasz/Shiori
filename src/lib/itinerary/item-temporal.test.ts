@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-	resolveDayCardTemporalCandidates,
 	resolveDayCardPrimaryTemporalSource,
 	resolveItemCalendarDayMembership,
 	resolveItemDayChronologicalPosition,
-	resolveItemDetailTemporalPresentation,
+	resolveItemDetailTemporalSources,
 	resolveItemTemporalSources,
 	resolveNowNextCandidateTemporalSources,
-	resolveTransportStopTemporalPresentation,
 	type ItemWithTemporalSources
 } from './item-temporal';
 import type { AvailabilityConstraint, ItineraryItemPlacement, ItineraryTiming } from './schema';
@@ -86,26 +84,29 @@ describe('item temporal sources', () => {
 			stopIndex: 0,
 			timeZone: 'Asia/Tokyo'
 		});
-		expect(resolveDayCardTemporalCandidates(availableTransport, context)).toEqual([
-			{ constraint: openingHours, source: 'availability' },
-			{
-				at: serviceAt,
-				role: 'transport-stop',
-				source: 'service',
-				stopIndex: 0,
-				timeZone: 'Asia/Tokyo'
-			}
-		]);
+		expect(resolveDayCardPrimaryTemporalSource(availableTransport, context)).toEqual({
+			at: serviceAt,
+			role: 'transport-stop',
+			source: 'service',
+			stopIndex: 0,
+			timeZone: 'Asia/Tokyo'
+		});
 		expect(resolveDayCardPrimaryTemporalSource({ placement, type: 'activity' }, context)).toBeUndefined();
 	});
 
-	it('uses Plan alone for intra-day chronology while placement determines only day membership', () => {
+	it('uses Plan first, then a first transport service time, for intra-day chronology', () => {
 		expect(resolveItemDayChronologicalPosition(scheduledTransport, '2026-04-13', tripTimeZone)).toEqual({
 			at: planStartAt,
 			source: 'plan',
 			timing: plan
 		});
-		expect(resolveItemDayChronologicalPosition(dayPlacedTransport, '2026-04-13', tripTimeZone)).toBeUndefined();
+		expect(resolveItemDayChronologicalPosition(dayPlacedTransport, '2026-04-13', tripTimeZone)).toEqual({
+			at: serviceAt,
+			role: 'transport-stop',
+			source: 'service',
+			stopIndex: 0,
+			timeZone: 'Asia/Tokyo'
+		});
 		expect(resolveItemCalendarDayMembership(dayPlacedTransport, tripTimeZone)).toEqual({
 			endDate: '2026-04-13',
 			placement,
@@ -122,32 +123,36 @@ describe('item temporal sources', () => {
 		expect(resolveNowNextCandidateTemporalSources(dayPlacedTransport)).toEqual([]);
 	});
 
-	it('keeps item-detail Schedule/Day presentation separate from service-stop presentation', () => {
-		expect(resolveItemDetailTemporalPresentation(scheduledTransport)).toEqual({
+	it('keeps every applicable temporal source independent in item details', () => {
+		expect(resolveItemDetailTemporalSources(scheduledTransport, tripTimeZone)).toEqual({
+			availability: [{ constraint: openingHours, source: 'availability' }],
 			availabilityContextTimestamps: [planStartAt, planStartAt],
-			kind: 'plan',
-			source: { source: 'plan', timing: plan }
+			placement: undefined,
+			plan: { source: 'plan', timing: plan },
+			service: [
+				{
+					at: serviceAt,
+					role: 'transport-stop',
+					source: 'service',
+					stopIndex: 0,
+					timeZone: 'Asia/Tokyo'
+				}
+			]
 		});
-		expect(resolveItemDetailTemporalPresentation(dayPlacedTransport)).toEqual({
+		expect(resolveItemDetailTemporalSources(dayPlacedTransport, tripTimeZone)).toEqual({
+			availability: [],
 			availabilityContextTimestamps: [placement.anchorAt],
-			kind: 'placement',
-			source: { placement, source: 'placement' }
-		});
-	});
-
-	it('prefers an explicit service stop over Plan only in the transport-stop display context', () => {
-		const explicitStop = { locationId: 'departure', scheduledAt: serviceAt, timeZone: 'Asia/Tokyo' };
-		const untimedStop = { locationId: 'departure' };
-
-		expect(resolveTransportStopTemporalPresentation(plan, explicitStop, 0, tripTimeZone)).toMatchObject({
-			at: serviceAt,
-			source: 'service',
-			timeZone: 'Asia/Tokyo'
-		});
-		expect(resolveTransportStopTemporalPresentation(plan, untimedStop, 0, tripTimeZone)).toMatchObject({
-			at: planStartAt,
-			source: 'plan',
-			timeZone: tripTimeZone
+			placement: { placement, source: 'placement' },
+			plan: undefined,
+			service: [
+				{
+					at: serviceAt,
+					role: 'transport-stop',
+					source: 'service',
+					stopIndex: 0,
+					timeZone: 'Asia/Tokyo'
+				}
+			]
 		});
 	});
 });

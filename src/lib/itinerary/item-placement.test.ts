@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { hasItemTiming, itemPlacementAnchorAt, itemPlacementAnchorForDate, itemPlacementDate } from './item-placement';
 
 describe('item day placement', () => {
-	it('anchors an unscheduled item at local noon while retaining only its date semantics', () => {
+	it('anchors an unplanned item at local noon while retaining only its date semantics', () => {
 		const anchorAt = itemPlacementAnchorAt('2026-04-12', 'Asia/Tokyo');
 		expect(anchorAt).toBe(Date.UTC(2026, 3, 12, 3));
 		if (anchorAt === null) {
@@ -11,16 +11,16 @@ describe('item day placement', () => {
 		expect(itemPlacementDate({ anchorAt, timeZone: 'Asia/Tokyo' })).toBe('2026-04-12');
 	});
 
-	it('distinguishes real schedules from a day-only placement regardless of availability', () => {
-		const unscheduled = {
+	it('distinguishes real Plans from a day-only placement regardless of availability', () => {
+		const unplanned = {
 			availability: [] as const,
 			id: 'museum',
 			placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' }
 		};
-		const scheduled = { id: 'train', timing: { kind: 'exact' as const, startAt: Date.UTC(2026, 3, 12, 4) } };
+		const planned = { id: 'train', timing: { kind: 'exact' as const, startAt: Date.UTC(2026, 3, 12, 4) } };
 
-		expect(hasItemTiming(unscheduled)).toBe(false);
-		expect(hasItemTiming(scheduled)).toBe(true);
+		expect(hasItemTiming(unplanned)).toBe(false);
+		expect(hasItemTiming(planned)).toBe(true);
 	});
 
 	it('preserves an existing anchor until its represented day or time zone changes', () => {

@@ -22,7 +22,11 @@ import type {
 	TransportDetails
 } from './schema';
 import { formatCalendarDate, formatCalendarDateTime, type CalendarLocale } from './calendar';
-import { timingStartTimestamp } from './timing';
+import {
+	resolveItemCalendarDayMembership,
+	resolveItemDayChronologicalPosition,
+	type ItemWithTemporalSources
+} from './item-temporal';
 import { formatTimestampInTimeZone } from './time';
 import { resolveItemTimeZone, resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
 
@@ -75,7 +79,7 @@ export const defaultItineraryExportOptions: ItineraryExportOptions = {
 	useEpochTimestamps: false
 };
 
-type BasicItineraryItem = Pick<ItineraryItem, 'availability' | 'id' | 'placement' | 'timing' | 'title' | 'type'>;
+type BasicItineraryItem = ItemWithTemporalSources & Readonly<Pick<ItineraryItem, 'availability' | 'id' | 'title'>>;
 
 export type ItineraryExportSource = Readonly<{
 	title: string;
@@ -423,11 +427,10 @@ function isNormalizedCost(cost: ExportedCost): cost is Extract<ExportedCost, { a
 }
 
 function itemLocalDate(item: BasicItineraryItem, timeZone: string): string | undefined {
-	const timestamp = item.timing ? timingStartTimestamp(item.timing) : item.placement?.anchorAt;
-	return timestamp === undefined ? undefined : formatTimestampInTimeZone(timestamp, timeZone)?.date;
+	return resolveItemCalendarDayMembership(item, timeZone)?.startDate;
 }
 
-/** Keeps day-only items in calendar order without treating their neutral anchor as a scheduled time. */
+/** Applies the itinerary's day-ordering policy without treating a placement anchor as a time. */
 function compareItems(left: BasicItineraryItem, right: BasicItineraryItem, timeZone: string): number {
 	const leftDate = itemLocalDate(left, timeZone);
 	const rightDate = itemLocalDate(right, timeZone);
@@ -440,13 +443,15 @@ function compareItems(left: BasicItineraryItem, right: BasicItineraryItem, timeZ
 	if (leftDate !== rightDate) {
 		return leftDate.localeCompare(rightDate);
 	}
-	if (left.timing === undefined || right.timing === undefined) {
-		if (left.timing !== right.timing) {
-			return left.timing === undefined ? 1 : -1;
+	const leftPosition = resolveItemDayChronologicalPosition(left, leftDate, timeZone);
+	const rightPosition = resolveItemDayChronologicalPosition(right, rightDate, timeZone);
+	if (!leftPosition || !rightPosition) {
+		if (leftPosition !== rightPosition) {
+			return leftPosition ? -1 : 1;
 		}
 		return left.id.localeCompare(right.id);
 	}
-	return timingStartTimestamp(left.timing) - timingStartTimestamp(right.timing) || left.id.localeCompare(right.id);
+	return leftPosition.at - rightPosition.at || left.id.localeCompare(right.id);
 }
 
 function exportItem(
@@ -685,7 +690,7 @@ function reservationText(reservation: Reservation): string {
 function textLinesForItem(item: ExportedItem, index: number, textFormat: ItineraryTextFormatOptions): string[] {
 	const lines = [
 		`${index + 1}. ${item.title} (${item.type})`,
-		`   When: ${item.timing ? timingText(item.timing, textFormat) : 'Time not scheduled'}`
+		`   Plan: ${item.timing ? timingText(item.timing, textFormat) : 'Time is not planned'}`
 	];
 	if (item.placement) {
 		lines.push(`   Day: ${placementText(item.placement, textFormat)}`);
@@ -715,9 +720,10 @@ function textLinesForItem(item: ExportedItem, index: number, textFormat: Itinera
 		lines.push(`   Transport: ${item.transport.mode}${details.length === 0 ? '' : ` · ${details.join(' · ')}`}`);
 		for (const stop of item.transport.stops) {
 			const code = stop.code === undefined ? '' : ` · ${stop.code}`;
-			const schedule = stop.scheduledAt === undefined ? '' : ` — ${timestampText(stop.scheduledAt, textFormat)}`;
+			const scheduledTime =
+				stop.scheduledAt === undefined ? '' : ` — Scheduled stop time: ${timestampText(stop.scheduledAt, textFormat)}`;
 			const platform = stop.platform === undefined ? '' : ` · Platform ${stop.platform}`;
-			lines.push(`     - ${stop.location}${code}${schedule}${platform}`);
+			lines.push(`     - ${stop.location}${code}${scheduledTime}${platform}`);
 		}
 	}
 	if (item.reservation) {

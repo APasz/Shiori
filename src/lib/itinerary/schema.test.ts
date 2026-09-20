@@ -36,7 +36,7 @@ describe('itinerary timing schema', () => {
 		}
 	});
 
-	it('requires exactly one Schedule or day placement independently of availability', () => {
+	it('requires exactly one Plan or day placement independently of availability', () => {
 		const placement = { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' };
 		const availability = [
 			{

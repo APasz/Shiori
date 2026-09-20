@@ -10,19 +10,16 @@ import {
 	resolveItemCalendarDayMembership,
 	resolveItemDayChronologicalPosition,
 	resolveItemPlanTemporalSource,
-	resolvePlanStartDate
+	resolvePlanStartDate,
+	type ItemWithDayOrderingTemporalSources
 } from './item-temporal';
-import type { ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
+import type { ItineraryItem, ItineraryTiming } from './schema';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
 import { formatTimestampForTimeZoneInput, zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 export { timingStartTimestamp as timingAnchor } from './timing';
 
-type PlacedItem = Readonly<{
-	id: string;
-	placement?: ItineraryItemPlacement;
-	timing?: ItineraryTiming;
-}>;
+type PlacedItem = ItemWithDayOrderingTemporalSources & Readonly<{ id: string }>;
 type ItemWithType = Readonly<{
 	type: ItineraryItem['type'];
 }>;
@@ -37,7 +34,7 @@ export type DayTimelineEntry<Item extends PlacedItemWithType> =
 	| Readonly<{
 			item: Item;
 			kind: 'item';
-			/** Undefined means a day-anchored item with no Schedule. */
+			/** Undefined means no policy-approved chronological source for this day's item. */
 			timestamp?: number;
 	  }>
 	| Readonly<{
@@ -136,7 +133,7 @@ export function partitionDayItems<Item extends PlacedItemWithType>(
 		} else if (plan) {
 			const chronologicalPosition = resolveItemDayChronologicalPosition(item, date, timeZone);
 			if (!chronologicalPosition) {
-				throw new Error(`Scheduled item ${item.id} has no chronological day position.`);
+				throw new Error(`Planned item ${item.id} has no chronological day position.`);
 			}
 			timelineEntries.push({
 				item,
@@ -144,7 +141,12 @@ export function partitionDayItems<Item extends PlacedItemWithType>(
 				timestamp: chronologicalPosition.at
 			});
 		} else {
-			timelineEntries.push({ item, kind: 'item' });
+			const chronologicalPosition = resolveItemDayChronologicalPosition(item, date, timeZone);
+			timelineEntries.push({
+				item,
+				kind: 'item',
+				...(chronologicalPosition ? { timestamp: chronologicalPosition.at } : {})
+			});
 		}
 	}
 
@@ -175,7 +177,7 @@ function comparePlacedItemsOnLocalDay<Item extends PlacedItem>(
 function itemDateBounds<Item extends PlacedItem>(item: Item, timeZone: string | undefined): [string, string] {
 	const membership = resolveItemCalendarDayMembership(item, timeZone);
 	if (!membership) {
-		throw new Error(`Item ${item.id} has neither a schedule nor a day placement.`);
+		throw new Error(`Item ${item.id} has neither a plan nor a day placement.`);
 	}
 	return [membership.startDate, membership.endDate];
 }

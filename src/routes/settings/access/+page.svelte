@@ -68,7 +68,7 @@
 	</header>
 
 	{#if form?.visibilityUpdated}
-		<p class="success page-status" role="status">Schedule visibility updated.</p>
+		<p class="success page-status" role="status">Plan visibility updated.</p>
 	{:else if form?.userGranted}
 		<p class="success page-status" role="status">Person added to this trip.</p>
 	{:else if form?.memberRoleUpdated}
@@ -80,16 +80,16 @@
 	{/if}
 
 	<section aria-labelledby="visibility-heading" class="access-section">
-		<h2 id="visibility-heading">Schedule visibility</h2>
+		<h2 id="visibility-heading">Plan visibility</h2>
 		<form class="visibility-form" action={`?trip=${encodeURIComponent(data.trip.slug)}&/visitorAccess`} method="POST">
 			<label class="visibility-control">
 				<span>
-					<strong>Public schedule</strong>
-					<small>Anyone with the link can see the schedule</small>
+					<strong>Public plan</strong>
+					<small>Anyone with the link can see the plan</small>
 				</span>
 				<span class="visibility-toggle">
 					<input
-						aria-label="Allow public visitors to see the trip schedule"
+						aria-label="Allow public visitors to see the trip plan"
 						checked={data.trip.isPublic}
 						name="isPublic"
 						onchange={autoSubmit}
@@ -189,7 +189,7 @@
 			<dl>
 				<div>
 					<dt>No access</dt>
-					<dd>Their signed-in account remains attached but cannot view the trip, including its public schedule</dd>
+					<dd>Their signed-in account remains attached but cannot view the trip, including its public plan</dd>
 				</div>
 				<div>
 					<dt>Standard</dt>

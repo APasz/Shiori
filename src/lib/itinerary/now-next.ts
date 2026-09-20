@@ -2,21 +2,16 @@ import { addCalendarDays } from './calendar';
 import {
 	resolveNowNextCandidateTemporalSources,
 	type ItemAvailabilityTemporalSource,
+	type ItemWithTemporalSources,
 	type ItemPlanTemporalSource
 } from './item-temporal';
-import type { AvailabilityConstraint, ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
+import type { AvailabilityConstraint, ItineraryTiming } from './schema';
 import { formatTimestampInTimeZone } from './time';
 import { resolveTimingTimeZone } from './time-zone';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
-type NowNextItem = Readonly<{
-	availability?: readonly AvailabilityConstraint[];
-	id: string;
-	placement?: ItineraryItemPlacement;
-	timing?: ItineraryTiming;
-	type: ItineraryItem['type'];
-}>;
+type NowNextItem = ItemWithTemporalSources & Readonly<{ id: string }>;
 
 export type AccommodationBoundary = 'check-in' | 'check-out';
 

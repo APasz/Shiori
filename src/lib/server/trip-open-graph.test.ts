@@ -48,13 +48,13 @@ const itinerary = itinerarySchema.parse({
 });
 
 describe('tripOpenGraphDescription', () => {
-	it('includes the public schedule duration and its first and last local dates', () => {
+	it('includes the public plan duration and its first and last local dates', () => {
 		expect(tripOpenGraphDescription({ isPublic: true, itinerary })).toBe(
 			'Public trip: 12 days\n25th Oct 2026 AEDT >>> 5th Nov 2026 AEDT'
 		);
 	});
 
-	it('includes the full uncertainty range of an approximate schedule', () => {
+	it('includes the full uncertainty range of an approximate Plan', () => {
 		const approximateItinerary = itinerarySchema.parse({
 			items: [
 				{
@@ -73,7 +73,7 @@ describe('tripOpenGraphDescription', () => {
 		);
 	});
 
-	it('does not present a day placement as a public schedule boundary', () => {
+	it('does not present a day placement as a public Plan boundary', () => {
 		const availabilityOnlyItinerary = itinerarySchema.parse({
 			items: [
 				{

@@ -1423,7 +1423,7 @@ describe('JSON store', () => {
 		});
 	});
 
-	it('marks a scheduled item cost paid without opening the item editor', async () => {
+	it('marks a cost with a scheduled payment paid without opening the item editor', async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-01-02T12:00:00.000Z'));
 		vi.stubGlobal(

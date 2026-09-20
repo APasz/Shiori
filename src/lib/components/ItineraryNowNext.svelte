@@ -92,11 +92,11 @@
 <section aria-labelledby="now-next-heading" class="now-next">
 	<h2 id="now-next-heading">Now / Next</h2>
 	{#if !nowNextState}
-		<p class="status">Localizing your schedule…</p>
+		<p class="status">Localizing your plan…</p>
 	{:else if nowNextState.kind === 'empty'}
-		<p class="status">Nothing scheduled yet</p>
+		<p class="status">Nothing planned yet</p>
 	{:else if nowNextState.kind === 'idle'}
-		<p class="status">Nothing scheduled right now</p>
+		<p class="status">Nothing planned right now</p>
 	{:else if nowNextState.kind === 'availability-complete'}
 		<p class="status">No upcoming availability</p>
 	{:else if nowNextState.kind === 'complete'}

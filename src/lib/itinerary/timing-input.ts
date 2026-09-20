@@ -1,9 +1,9 @@
 import { formatTimestampForTimeZoneInput, isCompleteLocalDateTime } from './zoned-time';
 
-/** Returns a usable start date or derives one from a fallback schedule in the selected time zone. */
+/** Returns an entered start date or formats a caller-provided contextual start timestamp. */
 export function defaultEndDateForTimingInput(
 	startAt: string,
-	fallbackStartAt: number | undefined,
+	contextStartAt: number | undefined,
 	timeZone: string
 ): string | undefined {
 	const startDate = startAt.slice(0, 10);
@@ -11,7 +11,7 @@ export function defaultEndDateForTimingInput(
 		return startDate;
 	}
 
-	return fallbackStartAt === undefined
+	return contextStartAt === undefined
 		? undefined
-		: formatTimestampForTimeZoneInput(fallbackStartAt, timeZone)?.slice(0, 10);
+		: formatTimestampForTimeZoneInput(contextStartAt, timeZone)?.slice(0, 10);
 }

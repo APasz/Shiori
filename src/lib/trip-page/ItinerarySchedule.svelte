@@ -159,7 +159,7 @@
 
 	<section aria-labelledby="itinerary-heading">
 		{#if !localScheduleReady || !dayDisclosureReady}
-			<p class="detail-prompt">Localizing your schedule…</p>
+			<p class="detail-prompt">Localizing your plan…</p>
 		{:else if itinerary.items.length === 0}
 			<p class="empty-day">No items planned yet</p>
 			{#if canModifyItinerary}

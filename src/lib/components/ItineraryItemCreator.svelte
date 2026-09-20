@@ -23,6 +23,7 @@
 		type TransportJourneyDraft
 	} from '$lib/itinerary/transport-journey';
 	import type { TransportJourneySchedule } from '$lib/itinerary/transport-schedule';
+	import { transportStopScheduledTimeLabel } from '$lib/itinerary/transport-stop-presentation';
 	import { formatTimestampForTimeZoneInput } from '$lib/itinerary/zoned-time';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -798,7 +799,7 @@
 		return candidate.success ? transportJourneyTitle(candidate.data) : 'Your transport journey';
 	}
 
-	function scheduleTimeLabel(point: TransportJourneySchedule['departure']): string {
+	function serviceTimeLabel(point: TransportJourneySchedule['departure']): string {
 		const dateTime = formatTimestampForTimeZoneInput(point.scheduledAt, point.timeZone);
 		if (!dateTime) {
 			return 'Unavailable';
@@ -864,7 +865,7 @@
 							{:else if item.suggestedStartDate}
 								<small>Suggested date: {item.suggestedStartDate}; confirm the time</small>
 							{:else}
-								<small>Confirm the schedule before saving</small>
+								<small>Confirm the plan before saving</small>
 							{/if}
 						</div>
 						<button onclick={() => selectImportedItem(item)} type="button">Review</button>
@@ -966,7 +967,7 @@
 			</form>
 		{:else if creatorState === 'transport-details'}
 			<p class="wizard-progress">Step 3 of 4 · Journey details</p>
-			<p class="intro">Add only the details that help identify this trip. You’ll set its precise schedule next</p>
+			<p class="intro">Add only the details that help identify this trip. You’ll set its planned time next</p>
 			<form class="shiori-form" onsubmit={moveToTransportReview}>
 				<label class="shiori-form-label">
 					Transport mode
@@ -987,7 +988,7 @@
 					</label>
 				</div>
 				{#if transportSchedule}
-					<p class="schedule-found">The imported scheduled times will be kept for the final review</p>
+					<p class="schedule-found">Imported service times will be kept for the final review</p>
 				{:else}
 					<DateTimeInput
 						dateTime={`${suggestedStartDate}T`}
@@ -998,7 +999,7 @@
 						pickerMode="date"
 						showTimeZonePicker={false}
 					/>
-					<p class="field-hint">Optional; used to prefill the schedule</p>
+					<p class="field-hint">Optional; prefills the plan</p>
 				{/if}
 				<label class="shiori-form-label">
 					Journey title <span class="field-hint">Optional; a route title is generated otherwise</span>
@@ -1014,8 +1015,8 @@
 			<p class="wizard-progress">Step 4 of 4 · Review</p>
 			<p class="intro">
 				{transportSchedule
-					? 'The imported source found a scheduled journey. Confirm it before saving'
-					: 'Confirm the journey. The next screen will ask for the departure time before you save it'}
+					? 'The imported source found service times. Confirm the plan before saving'
+					: 'Confirm the journey. The next screen will ask for a planned departure time before you save it'}
 			</p>
 			<section class="journey-summary" aria-label="Transport journey summary">
 				<strong>{journeyPreview()}</strong>
@@ -1035,12 +1036,12 @@
 						</div>{/if}
 					{#if transportSchedule}
 						<div>
-							<dt>Departs</dt>
-							<dd>{scheduleTimeLabel(transportSchedule.departure)} · {transportSchedule.departure.timeZone}</dd>
+							<dt>{transportStopScheduledTimeLabel('departure')}</dt>
+							<dd>{serviceTimeLabel(transportSchedule.departure)} · {transportSchedule.departure.timeZone}</dd>
 						</div>
 						<div>
-							<dt>Arrives</dt>
-							<dd>{scheduleTimeLabel(transportSchedule.arrival)} · {transportSchedule.arrival.timeZone}</dd>
+							<dt>{transportStopScheduledTimeLabel('arrival')}</dt>
+							<dd>{serviceTimeLabel(transportSchedule.arrival)} · {transportSchedule.arrival.timeZone}</dd>
 						</div>
 					{/if}
 					{#if optionalText(suggestedStartDate)}<div>
@@ -1053,7 +1054,7 @@
 			<div class="wizard-actions">
 				<button class="text-button" onclick={goBackFromTransportStep} type="button">Back</button>
 				<button class="shiori-form-button" onclick={completeTransportJourney} type="button">
-					{transportSchedule ? 'Continue to final review' : 'Continue to schedule'}
+					{transportSchedule ? 'Continue to final review' : 'Continue to plan'}
 				</button>
 			</div>
 		{:else if creatorState === 'accommodation-details'}

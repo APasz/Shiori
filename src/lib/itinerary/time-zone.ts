@@ -13,7 +13,7 @@ export function resolveTimingTimeZone(timing: ItineraryTiming, tripTimeZone: str
 	return resolveTimeZone(tripTimeZone, timing);
 }
 
-/** Resolves the zone for either a scheduled item or its day-only placement. */
+/** Resolves the zone for either a planned item or its day-only placement. */
 export function resolveItemTimeZone(item: Pick<ItineraryItem, 'placement' | 'timing'>, tripTimeZone: string): string {
 	const plan = resolveItemPlanTemporalSource(item);
 	if (plan) {

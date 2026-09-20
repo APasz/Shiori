@@ -58,7 +58,12 @@
 	import { timingStartTimestamp } from '$lib/itinerary/timing';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
-	import { resolveTransportScheduleStart, type TransportStopSchedule } from '$lib/itinerary/transport-stop-schedule';
+	import {
+		resolveTransportPlanStartForEditor,
+		type TransportPlanStart,
+		type TransportStopSchedule
+	} from '$lib/itinerary/transport-stop-schedule';
+	import { transportStopScheduledTimeLabel } from '$lib/itinerary/transport-stop-presentation';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import { formatValidationIssues } from '$lib/validation';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
@@ -70,9 +75,9 @@
 		| 'editor-cost'
 		| 'editor-links'
 		| 'editor-overview'
+		| 'editor-plan'
 		| 'editor-places'
 		| 'editor-private'
-		| 'editor-schedule'
 		| 'editor-transport';
 
 	type LocationDraft = {
@@ -148,7 +153,7 @@
 	let itemType = $state<ItineraryItemType>('activity');
 	let title = $state('');
 	let availability = $state<AvailabilityConstraintDraft[]>([]);
-	let scheduleEnabled = $state(true);
+	let planEnabled = $state(true);
 	let placementDateTime = $state('');
 	let placementTimeZone = $state('UTC');
 	let persistedPlacement = $state<ItineraryItemPlacement | undefined>(undefined);
@@ -251,7 +256,7 @@
 			: source.timing
 				? placementDateTimeFor(timingStartTimestamp(source.timing), timeZone)
 				: '';
-		scheduleEnabled = source.timing !== undefined;
+		planEnabled = source.timing !== undefined;
 		itemType = source.type;
 		title = source.title;
 		availability = source.availability.map(availabilityConstraintDraftFromConstraint);
@@ -350,23 +355,23 @@
 		return date === null ? '' : `${date}T00:00`;
 	}
 
-	function availabilityScheduleStart(): TransportStopSchedule | undefined {
-		return usesFirstTransportStopForSchedule() ? firstTransportStopSchedule() : undefined;
+	function firstTransportServiceTimeForBlankPlan(): TransportStopSchedule | undefined {
+		return usesFirstTransportStopForPlan() ? firstTransportStopServiceTime() : undefined;
 	}
 
 	function defaultAvailabilityTimeZone(): string {
-		return scheduleEnabled ? (availabilityScheduleStart()?.timeZone ?? startAtTimeZone) : placementTimeZone;
+		return planEnabled ? (firstTransportServiceTimeForBlankPlan()?.timeZone ?? startAtTimeZone) : placementTimeZone;
 	}
 
 	function defaultAvailabilityDate(): string | undefined {
-		if (!scheduleEnabled) {
+		if (!planEnabled) {
 			return dateFromDateTimeInput(placementDateTime);
 		}
-		const scheduleStart = availabilityScheduleStart();
-		const scheduleDateTime = scheduleStart
-			? (formatTimestampForTimeZoneInput(scheduleStart.scheduledAt, scheduleStart.timeZone) ?? '')
+		const serviceTime = firstTransportServiceTimeForBlankPlan();
+		const serviceDateTime = serviceTime
+			? (formatTimestampForTimeZoneInput(serviceTime.scheduledAt, serviceTime.timeZone) ?? '')
 			: initialDateTimeForTiming();
-		return dateFromDateTimeInput(scheduleDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
+		return dateFromDateTimeInput(serviceDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
 	}
 
 	function periodEndDefaultDate(constraint: AvailabilityConstraintDraft): string | undefined {
@@ -610,14 +615,14 @@
 	}
 
 	function itemDefaultTimeZone(): string {
-		return scheduleEnabled ? startAtTimeZone : placementTimeZone;
+		return planEnabled ? startAtTimeZone : placementTimeZone;
 	}
 
 	function timestampValue(value: string, timeZone: string): number {
 		return zonedDateTimeToUnixMilliseconds(value, timeZone) ?? Number.NaN;
 	}
 
-	function firstTransportStopSchedule(): TransportStopSchedule | undefined {
+	function firstTransportStopServiceTime(): TransportStopSchedule | undefined {
 		const firstStop = transportStops[0];
 		const scheduledAt = firstStop ? optionalText(firstStop.scheduledAt) : undefined;
 		if (!firstStop || !scheduledAt) {
@@ -631,7 +636,7 @@
 	function defaultEndDate(): string | undefined {
 		return defaultEndDateForTimingInput(
 			startAt,
-			itemType === 'transport' ? firstTransportStopSchedule()?.scheduledAt : undefined,
+			itemType === 'transport' ? firstTransportStopServiceTime()?.scheduledAt : undefined,
 			startAtTimeZone
 		);
 	}
@@ -645,9 +650,9 @@
 		return optionalText(transportStops[0]?.scheduledAt ?? '') !== undefined;
 	}
 
-	function usesFirstTransportStopForSchedule(): boolean {
+	function usesFirstTransportStopForPlan(): boolean {
 		return (
-			scheduleEnabled &&
+			planEnabled &&
 			itemType === 'transport' &&
 			timingKind === 'exact' &&
 			completeDateTimeValue(startAt) === undefined &&
@@ -745,20 +750,20 @@
 		timingKind = nextKind.data;
 	}
 
-	function changeScheduleEnabled(enabled: boolean): void {
-		if (scheduleEnabled === enabled) {
+	function changePlanEnabled(enabled: boolean): void {
+		if (planEnabled === enabled) {
 			return;
 		}
 
 		const previousDefaultTimeZone = itemDefaultTimeZone();
 		if (!enabled) {
-			const scheduleStart = availabilityScheduleStart();
-			const scheduleDateTime = scheduleStart
-				? (formatTimestampForTimeZoneInput(scheduleStart.scheduledAt, scheduleStart.timeZone) ?? '')
+			const serviceTime = firstTransportServiceTimeForBlankPlan();
+			const serviceDateTime = serviceTime
+				? (formatTimestampForTimeZoneInput(serviceTime.scheduledAt, serviceTime.timeZone) ?? '')
 				: initialDateTimeForTiming();
-			const date = dateFromDateTimeInput(scheduleDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
+			const date = dateFromDateTimeInput(serviceDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
 			placementDateTime = date ? `${date}T00:00` : placementDateTime;
-			placementTimeZone = scheduleStart?.timeZone ?? startAtTimeZone;
+			placementTimeZone = serviceTime?.timeZone ?? startAtTimeZone;
 		} else {
 			const date = dateFromDateTimeInput(placementDateTime);
 			if (date) {
@@ -777,14 +782,14 @@
 			}
 		}
 
-		scheduleEnabled = enabled;
+		planEnabled = enabled;
 		reformatInheritedStopTimes(previousDefaultTimeZone, itemDefaultTimeZone());
 	}
 
 	function changePlacementTimeZone(timeZone: string): void {
 		const previousTimeZone = placementTimeZone;
 		placementTimeZone = timeZone;
-		if (!scheduleEnabled) {
+		if (!planEnabled) {
 			reformatInheritedStopTimes(previousTimeZone, timeZone);
 		}
 	}
@@ -827,23 +832,26 @@
 	}
 
 	function timingCandidate(): unknown | undefined {
-		if (!scheduleEnabled) {
+		if (!planEnabled) {
 			return undefined;
 		}
 		switch (timingKind) {
 			case 'exact': {
 				const end = optionalText(endAt);
-				const scheduledStartAt = completeDateTimeValue(startAt);
-				const scheduleStart = resolveTransportScheduleStart(
-					scheduledStartAt
-						? { scheduledAt: timestampValue(scheduledStartAt, startAtTimeZone), timeZone: startAtTimeZone }
+				const plannedStartAt = completeDateTimeValue(startAt);
+				const planStart = resolveTransportPlanStartForEditor(
+					plannedStartAt
+						? ({
+								at: timestampValue(plannedStartAt, startAtTimeZone),
+								timeZone: startAtTimeZone
+							} satisfies TransportPlanStart)
 						: undefined,
-					itemType === 'transport' ? firstTransportStopSchedule() : undefined
+					itemType === 'transport' ? firstTransportStopServiceTime() : undefined
 				);
 				return {
 					kind: 'exact',
-					startAt: scheduleStart?.scheduledAt ?? Number.NaN,
-					...timeZoneOverride(scheduleStart?.timeZone ?? startAtTimeZone, tripTimeZone),
+					startAt: planStart?.at ?? Number.NaN,
+					...timeZoneOverride(planStart?.timeZone ?? startAtTimeZone, tripTimeZone),
 					...(endAtEnabled && end ? { endAt: timestampValue(end, startAtTimeZone) } : {}),
 					...(exactTimingDateOnly ? { timePrecision: 'date' as const } : {})
 				};
@@ -866,7 +874,7 @@
 	}
 
 	function placementCandidate(): unknown | undefined {
-		if (scheduleEnabled) {
+		if (planEnabled) {
 			return undefined;
 		}
 		const date = dateFromDateTimeInput(placementDateTime);
@@ -937,7 +945,7 @@
 	}
 
 	function validateDateTimes(): string | null {
-		if (!scheduleEnabled) {
+		if (!planEnabled) {
 			if (!isValidIanaTimeZone(placementTimeZone)) {
 				return 'Itinerary date time zone: use a valid IANA time zone such as Asia/Tokyo.';
 			}
@@ -953,7 +961,7 @@
 			const timingInputs =
 				timingKind === 'exact'
 					? [
-							...(usesFirstTransportStopForSchedule() ? [] : [{ label: 'Start date and time', value: startAt }]),
+							...(usesFirstTransportStopForPlan() ? [] : [{ label: 'Start date and time', value: startAt }]),
 							...(endAtEnabled ? [{ label: 'End date and time', value: endAt }] : [])
 						]
 					: timingKind === 'approximate'
@@ -983,7 +991,7 @@
 				return `Stop ${index + 1} time zone: use a valid IANA time zone such as Asia/Tokyo.`;
 			}
 			if (zonedDateTimeToUnixMilliseconds(scheduledAt, stop.timeZone) === null) {
-				return `Stop ${index + 1} scheduled date and time is not a valid local time.`;
+				return `Stop ${index + 1} scheduled time is not a valid local time.`;
 			}
 		}
 
@@ -1312,7 +1320,7 @@
 			<div class="editor-layout">
 				<nav aria-label="Edit sections" class="section-nav">
 					<button onclick={() => scrollToSection('editor-overview')} type="button">Overview</button>
-					<button onclick={() => scrollToSection('editor-schedule')} type="button">Schedule</button>
+					<button onclick={() => scrollToSection('editor-plan')} type="button">Plan</button>
 					<button onclick={() => scrollToSection('editor-availability')} type="button">Availability</button>
 					<button onclick={() => scrollToSection('editor-places')} type="button">Places</button>
 					{#if itemType === 'transport'}
@@ -1349,17 +1357,17 @@
 						</label>
 					</fieldset>
 
-					<fieldset id="editor-schedule">
-						<legend>Schedule</legend>
+					<fieldset id="editor-plan">
+						<legend>Plan</legend>
 						<label class="toggle-label">
 							<input
-								checked={!scheduleEnabled}
-								onchange={(event) => changeScheduleEnabled(!event.currentTarget.checked)}
+								checked={!planEnabled}
+								onchange={(event) => changePlanEnabled(!event.currentTarget.checked)}
 								type="checkbox"
 							/>
-							Time is not scheduled
+							Time is not planned
 						</label>
-						{#if !scheduleEnabled}
+						{#if !planEnabled}
 							<p class="field-hint">Place this item on a day without assigning a time.</p>
 							<DateTimeInput
 								dateTime={placementDateTime}
@@ -1379,11 +1387,11 @@
 										? `The imported link confirms ${suggestedStartDate} to ${suggestedEndDate}. Add the check-in and check-out times before saving`
 										: suggestedStartDate
 											? `The imported link confirms ${suggestedStartDate}. Add the time before saving`
-											: 'The imported link did not include a reliable time. Confirm the schedule before saving'}
+											: 'The imported link did not include a reliable time. Confirm the plan before saving'}
 								</p>
 							{/if}
 							<label class="shiori-form-label">
-								Timing
+								Planned time
 								<select
 									class="shiori-form-control"
 									value={timingKind}
@@ -1456,7 +1464,7 @@
 									/>
 								{/if}
 								{#if itemType === 'transport'}
-									<p class="field-hint">Uses the first stop until set</p>
+									<p class="field-hint">Uses first service time until set</p>
 								{/if}
 							{:else if timingKind === 'approximate'}
 								<DateTimeInput
@@ -1723,7 +1731,7 @@
 													<DateTimeInput
 														dateTime={stop.scheduledAt}
 														id={`stop-${locationIndex}-scheduled`}
-														label="Scheduled"
+														label={transportStopScheduledTimeLabel(location.role)}
 														onDateTimeChange={(value) => (stop.scheduledAt = value)}
 														onTimeZoneChange={(timeZone) => changeStopTimeZone(stop, timeZone)}
 														portalTarget={dialogElement}
@@ -1731,7 +1739,7 @@
 														{timeZoneOptions}
 													/>
 													{#if locationIndex === 0 && !optionalText(stop.scheduledAt)}
-														<p class="field-hint">Uses the Schedule time until you set a different stop time</p>
+														<p class="field-hint">Service time not set</p>
 													{/if}
 													<label class="shiori-form-label">
 														Platform <span class="field-hint">Admin and sudo only</span>

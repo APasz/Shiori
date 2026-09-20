@@ -28,7 +28,7 @@ describe('itinerary time-zone resolution', () => {
 		).toBe('Asia/Tokyo');
 	});
 
-	it('uses a day placement zone only when an item has no schedule', () => {
+	it('uses a day placement zone only when an item has no Plan', () => {
 		const tripTimeZone = 'Asia/Tokyo';
 
 		expect(

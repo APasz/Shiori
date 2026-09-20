@@ -320,7 +320,7 @@ export const itineraryNoteTargetSchema = z.discriminatedUnion('kind', [
 	z.strictObject({ id: itineraryIdentifierSchema, kind: z.literal('day') })
 ]);
 
-/** A local-day anchor used only when an item has no scheduled timing. */
+/** A local-day anchor used only when an item has no planned time. */
 export const itineraryItemPlacementSchema = z.strictObject({
 	anchorAt: dayAnchorTimestampSchema,
 	timeZone: ianaTimeZoneSchema
@@ -496,7 +496,7 @@ export const availabilityTimingSchema = z
 		}
 	});
 
-/** A named availability bound associated with an item, without changing its itinerary schedule. */
+/** A named availability bound associated with an item, without changing its itinerary Plan. */
 export const availabilityConstraintSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
 	type: availabilityConstraintTypeSchema,
@@ -507,9 +507,9 @@ export const availabilityConstraintSchema = z.strictObject({
 const itineraryItemBaseShape = {
 	availability: z.array(availabilityConstraintSchema).default([]),
 	id: itineraryIdentifierSchema,
-	/** A day-only placement for an item whose schedule has not been decided. */
+	/** A day-only placement for an item whose Plan has not been decided. */
 	placement: itineraryItemPlacementSchema.optional(),
-	/** Schedule data remains independent from availability and may be absent for day-anchored items. */
+	/** Plan data remains independent from availability and may be absent for day-anchored items. */
 	timing: itineraryTimingSchema.optional(),
 	title: nonEmptyTextSchema,
 	locations: z.array(locationSchema).default([]),
@@ -548,7 +548,7 @@ function validateItemPlacement(item: { placement?: unknown; timing?: unknown }, 
 		context.addIssue({
 			code: 'custom',
 			path: ['placement'],
-			message: 'Use either a schedule or a day placement, not both.'
+			message: 'Use either a planned time or a day placement, not both.'
 		});
 		return;
 	}
@@ -557,7 +557,7 @@ function validateItemPlacement(item: { placement?: unknown; timing?: unknown }, 
 		context.addIssue({
 			code: 'custom',
 			path: ['placement'],
-			message: 'Choose a scheduled time or a day placement.'
+			message: 'Choose a planned time or a day placement.'
 		});
 		return;
 	}

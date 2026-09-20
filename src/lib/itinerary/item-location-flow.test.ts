@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { itineraryItemSchema } from './schema';
-import { itemLocationFlow, shouldShowTransportStopSchedule, transportTravelDuration } from './item-location-flow';
+import { itemLocationFlow, transportTravelDuration } from './item-location-flow';
 
 describe('item location flow', () => {
-	it('uses each transport location once in stop order with its schedule', () => {
+	it('uses each transport location once in stop order with its service time', () => {
 		const item = itineraryItemSchema.parse({
 			id: 'journey',
 			locations: [
@@ -26,15 +26,25 @@ describe('item location flow', () => {
 			{
 				kind: 'transport-stop',
 				location: item.locations[1],
-				hasScheduledTime: true,
-				schedule: { scheduledAt: Date.UTC(2026, 9, 27, 10), timeZone: 'Asia/Tokyo' }
+				service: {
+					at: Date.UTC(2026, 9, 27, 10),
+					role: 'transport-stop',
+					source: 'service',
+					stopIndex: 0,
+					timeZone: 'Asia/Tokyo'
+				}
 			},
 			{
 				kind: 'transport-stop',
 				location: item.locations[0],
 				platform: '4',
-				hasScheduledTime: true,
-				schedule: { scheduledAt: Date.UTC(2026, 9, 27, 12), timeZone: 'Asia/Seoul' }
+				service: {
+					at: Date.UTC(2026, 9, 27, 12),
+					role: 'transport-stop',
+					source: 'service',
+					stopIndex: 1,
+					timeZone: 'Asia/Seoul'
+				}
 			}
 		]);
 	});
@@ -57,7 +67,7 @@ describe('item location flow', () => {
 		]);
 	});
 
-	it('hides a first-stop time that repeats the item start', () => {
+	it('shows an explicit first-stop service time even when it matches the Plan start', () => {
 		const item = itineraryItemSchema.parse({
 			id: 'journey',
 			locations: [
@@ -84,11 +94,29 @@ describe('item location flow', () => {
 		if (departure?.kind !== 'transport-stop' || arrival?.kind !== 'transport-stop') {
 			throw new Error('A transport journey must expose transport-stop location flow entries.');
 		}
-		expect(shouldShowTransportStopSchedule(departure, 0, item.timing)).toBe(false);
-		expect(shouldShowTransportStopSchedule(arrival, 1, item.timing)).toBe(true);
+		expect(departure.service).toMatchObject({ at: Date.UTC(2026, 9, 27, 10), source: 'service' });
+		expect(arrival.service).toMatchObject({ at: Date.UTC(2026, 9, 27, 12), source: 'service' });
 	});
 
-	it('uses a day placement zone for explicit transport-stop times without inventing a journey schedule', () => {
+	it('does not turn an untimed first stop into a service source from the Plan', () => {
+		const item = itineraryItemSchema.parse({
+			id: 'journey',
+			locations: [{ id: 'departure', name: 'Departure', role: 'departure' }],
+			timing: { kind: 'exact', startAt: Date.UTC(2026, 9, 27, 10), timeZone: 'Asia/Tokyo' },
+			title: 'Journey',
+			transport: { mode: 'rail', stops: [{ locationId: 'departure' }] },
+			type: 'transport'
+		});
+
+		const [departure] = itemLocationFlow(item, 'Australia/Melbourne');
+
+		if (departure?.kind !== 'transport-stop') {
+			throw new Error('A transport journey must expose its departure stop.');
+		}
+		expect(departure.service).toBeUndefined();
+	});
+
+	it('uses a day placement zone for explicit transport-stop times without inventing a journey Plan', () => {
 		const item = itineraryItemSchema.parse({
 			availability: [
 				{
@@ -111,30 +139,43 @@ describe('item location flow', () => {
 		const [departure] = itemLocationFlow(item, 'Australia/Melbourne');
 
 		expect(departure).toMatchObject({
-			hasScheduledTime: true,
-			schedule: { scheduledAt: Date.UTC(2026, 9, 27, 8), timeZone: 'Asia/Tokyo' }
+			service: {
+				at: Date.UTC(2026, 9, 27, 8),
+				source: 'service',
+				timeZone: 'Asia/Tokyo'
+			}
 		});
 		if (departure?.kind !== 'transport-stop') {
 			throw new Error('A transport journey must expose its departure stop.');
 		}
-		expect(shouldShowTransportStopSchedule(departure, 0, item.timing)).toBe(true);
+		expect(departure.service?.source).toBe('service');
 	});
 
-	it('calculates travel time only between consecutive scheduled stops', () => {
+	it('calculates travel time only between consecutive stops with service times', () => {
 		const departure = {
 			kind: 'transport-stop' as const,
 			location: { id: 'departure', name: 'Departure', role: 'departure' as const },
-			hasScheduledTime: true,
-			schedule: { scheduledAt: Date.UTC(2026, 9, 27, 10), timeZone: 'Asia/Tokyo' }
+			service: {
+				at: Date.UTC(2026, 9, 27, 10),
+				role: 'transport-stop' as const,
+				source: 'service' as const,
+				stopIndex: 0,
+				timeZone: 'Asia/Tokyo'
+			}
 		};
 		const arrival = {
 			kind: 'transport-stop' as const,
 			location: { id: 'arrival', name: 'Arrival', role: 'arrival' as const },
-			hasScheduledTime: true,
-			schedule: { scheduledAt: Date.UTC(2026, 9, 27, 12, 30), timeZone: 'Asia/Tokyo' }
+			service: {
+				at: Date.UTC(2026, 9, 27, 12, 30),
+				role: 'transport-stop' as const,
+				source: 'service' as const,
+				stopIndex: 1,
+				timeZone: 'Asia/Tokyo'
+			}
 		};
 
 		expect(transportTravelDuration(departure, arrival)).toBe('2h 30m');
-		expect(transportTravelDuration({ ...departure, hasScheduledTime: false }, arrival)).toBeUndefined();
+		expect(transportTravelDuration({ ...departure, service: undefined }, arrival)).toBeUndefined();
 	});
 });

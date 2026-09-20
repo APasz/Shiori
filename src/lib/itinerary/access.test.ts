@@ -95,7 +95,7 @@ describe('external itinerary URLs', () => {
 });
 
 describe('itinerary visibility projection', () => {
-	it('returns only the public schedule to visitors', () => {
+	it('returns only the public plan to visitors', () => {
 		const publicItinerary = projectPublicItinerary(testItinerary);
 		const item = publicItinerary.items[0];
 

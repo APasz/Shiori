@@ -7,14 +7,14 @@ const openGraphDateLocale = 'en-AU';
 const openGraphDateRangeSeparator = ' >>> ';
 const openGraphDateFormatters = new Map<string, Intl.DateTimeFormat>();
 
-type ScheduleBoundary = Readonly<{
+type TemporalBoundary = Readonly<{
 	timestamp: number;
 	timeZone: string;
 }>;
 
-type ScheduleDateRange = Readonly<{
-	first: ScheduleBoundary;
-	last: ScheduleBoundary;
+type TemporalDateRange = Readonly<{
+	first: TemporalBoundary;
+	last: TemporalBoundary;
 }>;
 
 export type TripOpenGraphDescriptionSource = Readonly<{
@@ -65,7 +65,7 @@ function ordinalDay(day: number): string {
 	}
 }
 
-function formatScheduleBoundary(boundary: ScheduleBoundary): string {
+function formatTemporalBoundary(boundary: TemporalBoundary): string {
 	const parts = openGraphDateFormatter(boundary.timeZone).formatToParts(boundary.timestamp);
 	const day = Number(datePart(parts, 'day'));
 	if (!Number.isInteger(day) || day < 1 || day > 31) {
@@ -75,10 +75,11 @@ function formatScheduleBoundary(boundary: ScheduleBoundary): string {
 	return `${ordinalDay(day)} ${datePart(parts, 'month')} ${datePart(parts, 'year')} ${datePart(parts, 'timeZoneName')}`;
 }
 
-function scheduleDateRange(itinerary: Itinerary): ScheduleDateRange | null {
-	let first: ScheduleBoundary | null = null;
-	let last: ScheduleBoundary | null = null;
-	const consider = (boundary: ScheduleBoundary): void => {
+/** Collects outer Plan and service bounds for metadata without choosing a primary item time. */
+function temporalDateRange(itinerary: Itinerary): TemporalDateRange | null {
+	let first: TemporalBoundary | null = null;
+	let last: TemporalBoundary | null = null;
+	const consider = (boundary: TemporalBoundary): void => {
 		if (first === null || boundary.timestamp <= first.timestamp) {
 			first = boundary;
 		}
@@ -114,14 +115,14 @@ function scheduleDateRange(itinerary: Itinerary): ScheduleDateRange | null {
 function publicTripDescription(itinerary: Itinerary): string {
 	const dayCount = getLocalItineraryDayCount(itinerary.items, itinerary.timeZone);
 	const dayLabel = dayCount === 1 ? 'day' : 'days';
-	const dateRange = scheduleDateRange(itinerary);
+	const dateRange = temporalDateRange(itinerary);
 	if (!dateRange) {
 		return `Public trip: ${dayCount} ${dayLabel}`;
 	}
 
 	return [
 		`Public trip: ${dayCount} ${dayLabel}`,
-		`${formatScheduleBoundary(dateRange.first)}${openGraphDateRangeSeparator}${formatScheduleBoundary(dateRange.last)}`
+		`${formatTemporalBoundary(dateRange.first)}${openGraphDateRangeSeparator}${formatTemporalBoundary(dateRange.last)}`
 	].join('\n');
 }
 

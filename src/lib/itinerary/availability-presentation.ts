@@ -7,7 +7,7 @@ import { formatTimestampInTimeZone, type FormattedLocalTimestamp } from './time'
 export type AvailabilityPresentationConstraint = Pick<AvailabilityConstraint, 'label' | 'timing' | 'type'>;
 
 export type AvailabilityPresentationOptions = Readonly<{
-	/** The time zone in which the surrounding itinerary timing establishes its dates. */
+	/** The time zone in which the surrounding Plan or day placement establishes dates. */
 	contextTimeZone?: string;
 	calendarDateFormat?: CalendarDateFormat;
 	contextTimestamps?: readonly number[];
@@ -94,7 +94,7 @@ export function availabilityConstraintLabel(
 	return constraint.label ?? availabilityTypePresentationLabel(constraint.type);
 }
 
-/** Formats a timing in its saved availability time zone, using dates only where the surrounding item does not establish them. */
+/** Formats availability in its saved time zone, using dates only where the item's Plan or day does not establish them. */
 export function formatAvailabilityConstraintTiming(
 	timing: AvailabilityTiming,
 	options: AvailabilityPresentationOptions = {}

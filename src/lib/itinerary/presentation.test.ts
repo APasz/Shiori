@@ -156,10 +156,10 @@ describe('browser-local itinerary presentation', () => {
 		]);
 	});
 
-	it('groups an unscheduled item by its day anchor, not by availability or its neutral anchor time', () => {
+	it('groups an unplanned item by its day anchor, not by availability or its neutral anchor time', () => {
 		const date = '2026-04-12';
 		const timeZone = 'Asia/Tokyo';
-		const scheduled = {
+		const planned = {
 			id: 'late-lunch',
 			timing: { kind: 'exact' as const, startAt: requiredZonedTimestamp(`${date}T17:00`, timeZone) },
 			type: 'activity' as const
@@ -182,13 +182,59 @@ describe('browser-local itinerary presentation', () => {
 			type: 'activity' as const
 		};
 
-		expect(groupItemsByLocalDay([availabilityOnly, scheduled], timeZone)).toEqual([
-			{ date, items: [scheduled, availabilityOnly] }
+		expect(groupItemsByLocalDay([availabilityOnly, planned], timeZone)).toEqual([
+			{ date, items: [planned, availabilityOnly] }
 		]);
-		expect(getItineraryDateRange([availabilityOnly, scheduled], timeZone)).toEqual([date, date]);
-		expect(partitionDayItems([availabilityOnly, scheduled], date, timeZone).timelineEntries).toEqual([
-			{ item: scheduled, kind: 'item', timestamp: requiredZonedTimestamp(`${date}T17:00`, timeZone) },
+		expect(getItineraryDateRange([availabilityOnly, planned], timeZone)).toEqual([date, date]);
+		expect(partitionDayItems([availabilityOnly, planned], date, timeZone).timelineEntries).toEqual([
+			{ item: planned, kind: 'item', timestamp: requiredZonedTimestamp(`${date}T17:00`, timeZone) },
 			{ item: availabilityOnly, kind: 'item' }
+		]);
+	});
+
+	it('orders an unplanned transport by its first service time while availability remains non-chronological', () => {
+		const date = '2026-04-12';
+		const timeZone = 'Asia/Tokyo';
+		const at = (time: string): number => requiredZonedTimestamp(`${date}T${time}`, timeZone);
+		const unplannedTransport = {
+			id: 'airport-train',
+			placement: { anchorAt: at('12:00'), timeZone },
+			transport: { stops: [{ locationId: 'departure', scheduledAt: at('09:30') }] },
+			type: 'transport' as const
+		};
+		const planned = {
+			id: 'coffee',
+			timing: { kind: 'exact' as const, startAt: at('10:00') },
+			type: 'activity' as const
+		};
+		const availabilityOnly = {
+			availability: [
+				{
+					id: 'museum-hours',
+					timing: { endAt: at('17:00'), kind: 'period' as const, startAt: at('08:00'), timeZone },
+					type: 'opening-hours' as const
+				}
+			],
+			id: 'museum',
+			placement: { anchorAt: at('12:00'), timeZone },
+			type: 'activity' as const
+		};
+		const dayOnly = {
+			id: 'walk',
+			placement: { anchorAt: at('12:00'), timeZone },
+			type: 'activity' as const
+		};
+
+		expect(
+			partitionDayItems([availabilityOnly, dayOnly, planned, unplannedTransport], date, timeZone).timelineEntries
+		).toEqual([
+			{ item: unplannedTransport, kind: 'item', timestamp: at('09:30') },
+			{ item: planned, kind: 'item', timestamp: at('10:00') },
+			{ item: availabilityOnly, kind: 'item' },
+			{ item: dayOnly, kind: 'item' }
+		]);
+		expect(groupItemsByLocalDay([availabilityOnly, dayOnly, planned, unplannedTransport], timeZone)).toEqual([
+			{ date, items: [unplannedTransport, planned, availabilityOnly, dayOnly] }
 		]);
 	});
 

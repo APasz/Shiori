@@ -6,7 +6,7 @@ describe('defaultEndDateForTimingInput', () => {
 		expect(defaultEndDateForTimingInput('2026-11-01T', undefined, 'UTC')).toBe('2026-11-01');
 	});
 
-	it('uses a fallback schedule in the timing time zone when the start is empty', () => {
+	it('uses a contextual start timestamp in the selected time zone when the start is empty', () => {
 		expect(defaultEndDateForTimingInput('', Date.UTC(2026, 10, 1, 0, 30), 'America/Los_Angeles')).toBe('2026-10-31');
 	});
 

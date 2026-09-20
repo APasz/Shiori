@@ -191,7 +191,7 @@ describe('itinerary exports', () => {
 		expect(exported.notes[0].entries[0].estimatedCosts[0]).not.toHaveProperty('id');
 	});
 
-	it('exports a day-anchored availability-only item without inventing a schedule', () => {
+	it('exports a day-anchored availability-only item without inventing a Plan', () => {
 		const availabilityOnly = itinerarySchema.parse({
 			items: [
 				{
@@ -236,12 +236,12 @@ describe('itinerary exports', () => {
 		});
 		expect(json.items[0]).not.toHaveProperty('timing');
 		expect(yaml).toEqual(json);
-		expect(text).toContain('When: Time not scheduled');
+		expect(text).toContain('Plan: Time is not planned');
 		expect(text).toMatch(/Day: .*\(Asia\/Tokyo\)/);
 		expect(text).toContain('Opening · 10:00–16:00');
 	});
 
-	it('exports published check-in and check-out rules separately from a booking schedule', () => {
+	it('exports published check-in and check-out rules separately from a booking Plan', () => {
 		const source = itinerarySchema.parse({
 			items: [
 				{
@@ -294,7 +294,7 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Check-out · Until 10:00');
 	});
 
-	it('keeps day-anchored items after scheduled items on their shared calendar day', () => {
+	it('uses the day-ordering policy for planned, service-timed, and day-only items', () => {
 		const source = itinerarySchema.parse({
 			items: [
 				{
@@ -315,6 +315,17 @@ describe('itinerary exports', () => {
 					type: 'activity'
 				},
 				{
+					id: 'airport-train',
+					locations: [{ id: 'departure', name: 'Central Station', role: 'departure' }],
+					placement: { anchorAt: Date.UTC(2026, 3, 12, 3), timeZone: 'Asia/Tokyo' },
+					title: 'Airport train',
+					transport: {
+						mode: 'rail',
+						stops: [{ locationId: 'departure', scheduledAt: Date.UTC(2026, 3, 12, 7) }]
+					},
+					type: 'transport'
+				},
+				{
 					id: 'dinner',
 					timing: { kind: 'exact', startAt: Date.UTC(2026, 3, 12, 8), timeZone: 'Asia/Tokyo' },
 					title: 'Dinner',
@@ -327,7 +338,7 @@ describe('itinerary exports', () => {
 
 		const exported = JSON.parse(renderItineraryExport(source, 'json', defaultItineraryExportOptions));
 
-		expect(exported.items.map((item: { title: string }) => item.title)).toEqual(['Dinner', 'Museum']);
+		expect(exported.items.map((item: { title: string }) => item.title)).toEqual(['Airport train', 'Dinner', 'Museum']);
 	});
 
 	it('uses the same data for YAML and omits unchecked details in every format', () => {
@@ -381,7 +392,7 @@ describe('itinerary exports', () => {
 			payment: { localAmount: 150, localCurrency: 'AUD', paidAt: 1_775_952_000_000 }
 		});
 		expect(exported.items[0].locations[0]).not.toHaveProperty('coordinates');
-		expect(text).toContain('When: 1775952000000 (epoch milliseconds; Asia/Tokyo)');
+		expect(text).toContain('Plan: 1775952000000 (epoch milliseconds; Asia/Tokyo)');
 		expect(text).toContain(
 			`Ticket office · ${Date.UTC(2026, 3, 12)} (epoch milliseconds; Asia/Tokyo) – ${Date.UTC(
 				2026,
@@ -417,11 +428,11 @@ describe('itinerary exports', () => {
 		const file = createItineraryExportFile(itinerary, 'yaml', defaultItineraryExportOptions);
 
 		expect(text).toContain('Japan 2026');
-		expect(text).toContain('When: 04-12-2026, 9:00 am (Asia/Tokyo)');
+		expect(text).toContain('Plan: 04-12-2026, 9:00 am (Asia/Tokyo)');
 		expect(text).toContain('Availability:');
 		expect(text).toContain('Ticket office · 9:00 am–6:00 pm');
 		expect(text).toContain('Last admission · Until 4:30 pm');
-		expect(text).toContain('Tokyo Station · TYO — 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
+		expect(text).toContain('Tokyo Station · TYO — Scheduled stop time: 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
 		expect(text).toContain('Scheduled payment: 04-04-2026');

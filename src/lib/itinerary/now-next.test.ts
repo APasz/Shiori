@@ -12,7 +12,8 @@ type TestItem = Readonly<{
 	id: string;
 	placement?: Readonly<{ anchorAt: number; timeZone: string }>;
 	timing?: ItineraryTiming;
-	type: 'accommodation' | 'activity';
+	transport?: Readonly<{ stops: readonly Readonly<{ locationId: string; scheduledAt?: number; timeZone?: string }>[] }>;
+	type: 'accommodation' | 'activity' | 'transport';
 }>;
 
 function exactItem(id: string, startAt: number, endAt?: number): TestItem {
@@ -123,7 +124,7 @@ describe('Now / Next presentation', () => {
 		});
 	});
 
-	it('keeps possibly active approximate Schedules in chronological order', () => {
+	it('keeps possibly active approximate Plans in chronological order', () => {
 		const earlierItem: TestItem = {
 			id: 'earlier-tour',
 			timing: { kind: 'approximate', nominalAt: now - 10 * 60_000, toleranceMinutes: 30 },
@@ -262,7 +263,7 @@ describe('Now / Next presentation', () => {
 		expect(nowNext([availabilityOnly], now + 4 * 60 * 60_000)).toEqual({ kind: 'availability-complete' });
 	});
 
-	it('keeps a current Schedule ahead of active availability', () => {
+	it('keeps a current Plan ahead of active availability', () => {
 		const openingHours = availabilityPeriod('opening-hours', now - 60 * 60_000, now + 60 * 60_000);
 		const availableItem: TestItem = {
 			availability: [openingHours],
@@ -270,15 +271,15 @@ describe('Now / Next presentation', () => {
 			placement: { anchorAt: now, timeZone: tripTimeZone },
 			type: 'activity'
 		};
-		const scheduled = exactItem('museum-visit', now - 30 * 60_000, now + 30 * 60_000);
+		const planned = exactItem('museum-visit', now - 30 * 60_000, now + 30 * 60_000);
 
-		expect(nowNext([availableItem, scheduled])).toEqual({
-			currentItem: scheduled,
+		expect(nowNext([availableItem, planned])).toEqual({
+			currentItem: planned,
 			kind: 'exact-current'
 		});
 	});
 
-	it('uses active availability before a later scheduled item and the nearer opening period as next', () => {
+	it('uses active availability before a later planned item and the nearer opening period as next', () => {
 		const openingHours = availabilityPeriod('morning-hours', now - 60 * 60_000, now + 30 * 60_000);
 		const afternoonHours = availabilityPeriod('afternoon-hours', now + 60 * 60_000, now + 3 * 60 * 60_000);
 		const availableItem: TestItem = {
@@ -287,9 +288,9 @@ describe('Now / Next presentation', () => {
 			placement: { anchorAt: now, timeZone: tripTimeZone },
 			type: 'activity'
 		};
-		const scheduled = exactItem('two-stars', now + day);
+		const planned = exactItem('two-stars', now + day);
 
-		expect(nowNext([scheduled, availableItem])).toEqual({
+		expect(nowNext([planned, availableItem])).toEqual({
 			currentAvailability: openingHours,
 			currentItem: availableItem,
 			kind: 'window-active',
@@ -298,7 +299,7 @@ describe('Now / Next presentation', () => {
 		});
 	});
 
-	it('uses a nearer upcoming opening period as next before a later Schedule', () => {
+	it('uses a nearer upcoming opening period as next before a later Plan', () => {
 		const openingHours = availabilityPeriod('opening-hours', now + 30 * 60_000, now + 2 * 60 * 60_000);
 		const availableItem: TestItem = {
 			availability: [openingHours],
@@ -306,16 +307,16 @@ describe('Now / Next presentation', () => {
 			placement: { anchorAt: now, timeZone: tripTimeZone },
 			type: 'activity'
 		};
-		const scheduled = exactItem('dinner', now + 3 * 60 * 60_000);
+		const planned = exactItem('dinner', now + 3 * 60 * 60_000);
 
-		expect(nowNext([scheduled, availableItem])).toEqual({
+		expect(nowNext([planned, availableItem])).toEqual({
 			kind: 'next-only',
 			nextAvailability: openingHours,
 			nextItem: availableItem
 		});
 	});
 
-	it('uses a later Schedule as next after active availability when it is the next candidate', () => {
+	it('uses a later Plan as next after active availability when it is the next candidate', () => {
 		const openingHours = availabilityPeriod('opening-hours', now - 60 * 60_000, now + 60 * 60_000);
 		const availableItem: TestItem = {
 			availability: [openingHours],
@@ -323,13 +324,13 @@ describe('Now / Next presentation', () => {
 			placement: { anchorAt: now, timeZone: tripTimeZone },
 			type: 'activity'
 		};
-		const scheduled = exactItem('dinner', now + 3 * 60 * 60_000);
+		const planned = exactItem('dinner', now + 3 * 60 * 60_000);
 
-		expect(nowNext([availableItem, scheduled])).toEqual({
+		expect(nowNext([availableItem, planned])).toEqual({
 			currentAvailability: openingHours,
 			currentItem: availableItem,
 			kind: 'window-active',
-			nextItem: scheduled
+			nextItem: planned
 		});
 	});
 
@@ -413,6 +414,19 @@ describe('Now / Next presentation', () => {
 		};
 
 		expect(nowNext([hotel])).toEqual({ kind: 'empty' });
+	});
+
+	it('does not make an unplanned transport service departure a Now / Next event', () => {
+		const airportTrain: TestItem = {
+			id: 'airport-train',
+			placement: { anchorAt: now, timeZone: tripTimeZone },
+			transport: {
+				stops: [{ locationId: 'departure', scheduledAt: now + 30 * 60_000, timeZone: tripTimeZone }]
+			},
+			type: 'transport'
+		};
+
+		expect(nowNext([airportTrain])).toEqual({ kind: 'empty' });
 	});
 
 	it('handles an empty itinerary', () => {

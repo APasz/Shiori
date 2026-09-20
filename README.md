@@ -69,16 +69,18 @@ by the user or, when persistent storage is not granted, under device storage pre
 retains the application files it needs when Shiori is updated, but it should still be opened and
 updated before travelling.
 
-Each item has one canonical `timing` value: `exact`, `approximate`, or `window`. Every timing uses
-Unix-millisecond timestamps; transport stops can use `scheduledAt` in the same format. Each trip
-also has a required default IANA time zone, with optional overrides on individual timings and
-transport stops. The browser presents its viewer-local time as the primary value and the
-source-local time as subdued supporting text. Selecting a time zone in the item editor saves that
-timing or stop’s local-time meaning while the instant itself remains a timestamp.
+When present, an item's persisted `timing` value is `exact`, `approximate`, or `window`. It represents
+the user’s itinerary Plan, not an operator timetable. Plan times use Unix-millisecond timestamps;
+transport stops can use factual `scheduledAt` service times in the same format. Each trip has a
+required default IANA time zone, which an item Plan, day placement, or transport stop can override.
+The browser presents its viewer-local time as the primary value and the source-local time as subdued
+supporting text. Selecting a time zone in the item editor saves the Plan or stop’s local-time meaning
+while the instant itself remains a timestamp.
 
-For an exact transport journey, the first stop and item schedule act as fallbacks rather than
-duplicate requirements. Saving an empty Schedule uses the first timed stop; an untimed first stop
-is shown using the item Schedule. Set both only when the stop’s time is intentionally different.
+An explicit first-stop service time can prefill an otherwise blank exact Plan in the editor. Afterward,
+the Plan and service timing remain separate: transport views show a service time only when it is
+recorded, and a missing service time does not come from the Plan. Record both when both the user’s
+intention and the operator’s timetable matter, even if they happen to match.
 
 ## Server setup
 
@@ -98,7 +100,7 @@ data/
 Set `SHIORI_DATA_DIRECTORY` to use another durable directory. Each managed JSON file is written
 with four-space indentation, atomically replaced, and backed up to a neighbouring `.backup` file;
 back up the entire data directory as part of normal host backups. Version-6 uses Unix-millisecond
-timestamps for schedule and metadata fields alike (including account, session, edit-lock, and trip
+timestamps for Plan fields and metadata alike (including account, session, edit-lock, and trip
 timestamps). A trip's filename is its URL slug: for example, `trips/your-trip.json` is served at
 `/trips/your-trip`.
 
@@ -336,10 +338,10 @@ Cloud quota and billing alert, because a server restart starts a new process-loc
 
 The Routes integration enriches a selected Google Maps transit direction with its returned vehicle legs. Each
 returned train, coach, ferry, or other transit leg is prepared as a separate transport item with its stops,
-operator, line or service label, and schedule when Google returns valid source time zones. For a link that
+operator, line or service label, and service times when Google returns valid source time zones. For a link that
 encodes its selected time as a local clock time, Shiori uses the Time Zone API to resolve the departure or arrival
 endpoint’s IANA zone before requesting Google Routes. If the selected time, coordinates, or time zone cannot be
-established, the importer safely falls back to ordinary directions rather than attach an incorrect schedule. Routes
+established, the importer safely falls back to ordinary directions rather than attach incorrect service times. Routes
 are recomputed rather than extracted from Google Maps’ private page state, so always confirm that the returned
 service matches the intended one. Successful Routes results are kept in a bounded process-local cache for 15
 minutes; duplicate requests are coalesced and a `429` response is retried once after `Retry-After`.
@@ -352,7 +354,7 @@ at `/account`; password changes sign out their other active sessions. A colourwa
 across devices; dark, automatic, and light mode remain a per-device preference and default to dark on a
 new device. The sudo user can use the Administration tab on `/account` to create accounts, then use
 `/settings/access` to grant read-only `user` or `admin` access to a specific trip or enable its public
-visitor schedule. Passwords are hashed with Node's
+visitor plan. Passwords are hashed with Node's
 `scrypt`; sessions are stored server-side and issued in HTTP-only cookies. Sessions expire after
 seven days without a persisted renewal; active sessions renew at most once every nine hours, so
 their effective idle timeout can be up to nine hours shorter than the browser's most recent request.
@@ -406,10 +408,11 @@ Shiori saves the stay as a date-only range rather than inventing an exact time. 
 and manual transport creation use a four-step journey flow: departure,
 arrival, journey details, then review. Each endpoint can be looked up from an optional Google Maps or Google Share link
 or OpenRailwayMap permalink, and the resolved map link is retained. OpenRailwayMap contributes a station
-name and/or its map position only; it does not provide journey schedules, so rail times still need
-confirmation. The final transport schedule and save step remains in the shared editor, so a missing or unreliable
-time must still be confirmed before saving. Advanced changes remain available in the shared editor after any
-item is created. Items are ordered and grouped by their timestamps in each viewer's local calendar.
+name and/or its map position only; it does not provide service times, so rail times still need
+confirmation. The shared editor is the final review for transport service times and the item's Plan, so a missing
+or unreliable time must still be confirmed before saving. Advanced changes remain available in the shared editor after any
+item is created. Items are grouped in each viewer's local calendar by their Plan or day placement. Within a day,
+Plan times lead; an unplanned transport can use its first service departure, while availability does not reorder items.
 Edits use one trip-wide lock, so changes cannot race with an open editor. Persisted edit locks are cleared
 when a server process starts; the sudo user can also force close an active edit session from the Access
 page when a browser session has become stuck.
