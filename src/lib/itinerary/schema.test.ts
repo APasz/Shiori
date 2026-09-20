@@ -118,7 +118,7 @@ describe('item availability schema', () => {
 		}
 	] as const;
 
-	it('defaults to no constraints and accepts period, From, and Until constraints', () => {
+	it('defaults to no availability constraints and accepts period, From, and Until availability constraints', () => {
 		const item = itineraryItemSchema.parse({
 			...itemBase,
 			availability,

@@ -6,7 +6,7 @@
 		type AvailabilityPresentation
 	} from '$lib/itinerary/availability-presentation';
 	import { getNowNextState, type AccommodationBoundary } from '$lib/itinerary/now-next';
-	import type { Constraint } from '$lib/itinerary/schema';
+	import type { AvailabilityConstraint } from '$lib/itinerary/schema';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
@@ -61,7 +61,7 @@
 		return context ? `${label} · ${context}` : label;
 	}
 
-	function nextItemLabel(availability: Constraint | undefined): 'Next' | 'Opens next' {
+	function nextItemLabel(availability: AvailabilityConstraint | undefined): 'Next' | 'Opens next' {
 		return availability ? 'Opens next' : 'Next';
 	}
 
@@ -80,7 +80,7 @@
 		}
 	}
 
-	function formatAvailability(constraint: Constraint): AvailabilityPresentation | null {
+	function formatAvailability(constraint: AvailabilityConstraint): AvailabilityPresentation | null {
 		return availabilityConstraintPresentation(constraint, {
 			formatPreferences: viewerContext.formatPreferences,
 			locale: viewerContext.locale
@@ -155,7 +155,7 @@
 	item: PublicItineraryItem,
 	label: string,
 	boundary: AccommodationBoundary | undefined,
-	availability: Constraint | undefined
+	availability: AvailabilityConstraint | undefined
 )}
 	{#if canSelectItems}
 		<button
@@ -178,7 +178,7 @@
 	item: PublicItineraryItem,
 	label: string,
 	boundary: AccommodationBoundary | undefined,
-	availability: Constraint | undefined
+	availability: AvailabilityConstraint | undefined
 )}
 	{@const displayedAvailability = availability ? formatAvailability(availability) : null}
 	<p class="item-label">{itemLabel(label, boundary, displayedAvailability?.label)}</p>

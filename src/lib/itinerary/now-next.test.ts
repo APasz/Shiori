@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getNowNextState } from './now-next';
-import type { Constraint, ItineraryTiming } from './schema';
+import type { AvailabilityConstraint, ItineraryTiming } from './schema';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 const day = 86_400_000;
@@ -8,7 +8,7 @@ const now = Date.UTC(2026, 3, 12, 12, 0);
 const tripTimeZone = 'UTC';
 
 type TestItem = Readonly<{
-	availability?: readonly Constraint[];
+	availability?: readonly AvailabilityConstraint[];
 	id: string;
 	placement?: Readonly<{ anchorAt: number; timeZone: string }>;
 	timing?: ItineraryTiming;
@@ -36,7 +36,7 @@ function accommodationItem(id: string, startAt: number, endAt?: number, timeZone
 	};
 }
 
-function availabilityPeriod(id: string, startAt: number, endAt: number): Constraint {
+function availabilityPeriod(id: string, startAt: number, endAt: number): AvailabilityConstraint {
 	return {
 		id,
 		timing: { endAt, kind: 'period', startAt, timeZone: tripTimeZone },
@@ -44,7 +44,7 @@ function availabilityPeriod(id: string, startAt: number, endAt: number): Constra
 	};
 }
 
-function availabilityUntil(id: string, at: number): Constraint {
+function availabilityUntil(id: string, at: number): AvailabilityConstraint {
 	return {
 		id,
 		timing: { at, kind: 'until', timeZone: tripTimeZone },
@@ -358,12 +358,12 @@ describe('Now / Next presentation', () => {
 
 	it('does not make one-sided availability constraints into timeline candidates', () => {
 		const cutoff = availabilityUntil('ticket-cutoff', now + 30 * 60_000);
-		const lastAdmission: Constraint = {
+		const lastAdmission: AvailabilityConstraint = {
 			id: 'last-admission',
 			timing: { at: now + 45 * 60_000, kind: 'until', timeZone: tripTimeZone },
 			type: 'last-admission'
 		};
-		const publishedStayTimes: Constraint[] = [
+		const publishedStayTimes: AvailabilityConstraint[] = [
 			{
 				id: 'property-check-in',
 				timing: { at: now + 60 * 60_000, kind: 'from', timeZone: tripTimeZone },
@@ -398,13 +398,13 @@ describe('Now / Next presentation', () => {
 	});
 
 	it('does not make non-opening availability periods into timeline candidates', () => {
-		const nonOpeningPeriods: Constraint[] = (['reception-hours', 'desk-hours', 'storage-hours', 'other'] as const).map(
-			(type) => ({
-				id: type,
-				timing: { endAt: now + 60 * 60_000, kind: 'period', startAt: now - 60 * 60_000, timeZone: tripTimeZone },
-				type
-			})
-		);
+		const nonOpeningPeriods: AvailabilityConstraint[] = (
+			['reception-hours', 'desk-hours', 'storage-hours', 'other'] as const
+		).map((type) => ({
+			id: type,
+			timing: { endAt: now + 60 * 60_000, kind: 'period', startAt: now - 60 * 60_000, timeZone: tripTimeZone },
+			type
+		}));
 		const hotel: TestItem = {
 			availability: nonOpeningPeriods,
 			id: 'hotel',

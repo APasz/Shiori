@@ -1,9 +1,15 @@
-import type { Constraint, ConstraintTiming, ConstraintTimingKind, ConstraintType, ItineraryItemType } from './schema';
+import type {
+	AvailabilityConstraint,
+	AvailabilityConstraintType,
+	AvailabilityTiming,
+	AvailabilityTimingKind,
+	ItineraryItemType
+} from './schema';
 
 type ItineraryRecord = Record<string, unknown>;
-type OpeningHoursPeriodConstraint = Constraint &
+type OpeningHoursPeriodConstraint = AvailabilityConstraint &
 	Readonly<{
-		timing: Extract<ConstraintTiming, { kind: 'period' }>;
+		timing: Extract<AvailabilityTiming, { kind: 'period' }>;
 		type: 'opening-hours';
 	}>;
 
@@ -22,10 +28,10 @@ const availabilityTypeDetails = {
 	cutoff: { editorLabel: 'Cutoff', preferredTimingKind: 'until', presentationLabel: 'Cutoff' },
 	other: { editorLabel: 'Other', preferredTimingKind: undefined, presentationLabel: 'Other' }
 } as const satisfies Record<
-	ConstraintType,
+	AvailabilityConstraintType,
 	Readonly<{
 		editorLabel: string;
-		preferredTimingKind: ConstraintTimingKind | undefined;
+		preferredTimingKind: AvailabilityTimingKind | undefined;
 		presentationLabel: string;
 	}>
 >;
@@ -34,24 +40,24 @@ export const availabilityTimingKindLabels = {
 	period: 'Period',
 	from: 'From',
 	until: 'Until'
-} as const satisfies Record<ConstraintTimingKind, string>;
+} as const satisfies Record<AvailabilityTimingKind, string>;
 
 export const availabilityTypeSuggestions = {
 	activity: ['opening-hours', 'last-admission', 'desk-hours', 'other'],
 	accommodation: ['reception-hours', 'check-in', 'check-out', 'storage-hours', 'desk-hours', 'other'],
 	transport: ['desk-hours', 'cutoff', 'storage-hours', 'other']
-} as const satisfies Record<ItineraryItemType, readonly ConstraintType[]>;
+} as const satisfies Record<ItineraryItemType, readonly AvailabilityConstraintType[]>;
 
-export function availabilityTypeEditorLabel(type: ConstraintType): string {
+export function availabilityTypeEditorLabel(type: AvailabilityConstraintType): string {
 	return availabilityTypeDetails[type].editorLabel;
 }
 
-export function availabilityTypePresentationLabel(type: ConstraintType): string {
+export function availabilityTypePresentationLabel(type: AvailabilityConstraintType): string {
 	return availabilityTypeDetails[type].presentationLabel;
 }
 
 /** Returns the editor's suggested timing mode, without imposing a persisted type-to-timing relationship. */
-export function preferredAvailabilityTimingKind(type: ConstraintType): ConstraintTimingKind | undefined {
+export function preferredAvailabilityTimingKind(type: AvailabilityConstraintType): AvailabilityTimingKind | undefined {
 	return availabilityTypeDetails[type].preferredTimingKind;
 }
 
@@ -60,14 +66,15 @@ export type AvailabilityConstraintBounds = Readonly<{
 	startAt: number;
 }>;
 
-export type AvailabilityConstraintSelection<ConstraintValue extends Pick<Constraint, 'timing'> = Constraint> =
-	Readonly<{
-		constraint: ConstraintValue;
-		kind: 'current' | 'next';
-	}>;
+export type AvailabilityConstraintSelection<
+	AvailabilityConstraintValue extends Pick<AvailabilityConstraint, 'timing'> = AvailabilityConstraint
+> = Readonly<{
+	constraint: AvailabilityConstraintValue;
+	kind: 'current' | 'next';
+}>;
 
 /** Returns inclusive availability bounds, with an unbounded side represented by infinity. */
-export function availabilityConstraintBounds(timing: ConstraintTiming): AvailabilityConstraintBounds {
+export function availabilityConstraintBounds(timing: AvailabilityTiming): AvailabilityConstraintBounds {
 	switch (timing.kind) {
 		case 'period':
 			return { endAt: timing.endAt, startAt: timing.startAt };
@@ -78,19 +85,23 @@ export function availabilityConstraintBounds(timing: ConstraintTiming): Availabi
 	}
 }
 
-/** Returns whether a constraint makes the intended item itself usable for a period. */
-export function isOpeningHoursPeriodConstraint(constraint: Constraint): constraint is OpeningHoursPeriodConstraint {
+/** Returns whether an availability constraint makes the intended item itself usable for a period. */
+export function isOpeningHoursPeriodConstraint(
+	constraint: AvailabilityConstraint
+): constraint is OpeningHoursPeriodConstraint {
 	return constraint.type === 'opening-hours' && constraint.timing.kind === 'period';
 }
 
-/** Selects the active constraint, or the nearest future one, without treating it as itinerary timing. */
-export function currentOrNextAvailabilityConstraint<ConstraintValue extends Pick<Constraint, 'timing'>>(
-	constraints: readonly ConstraintValue[],
+/** Selects the active availability constraint, or the nearest future one, without treating it as itinerary timing. */
+export function currentOrNextAvailabilityConstraint<
+	AvailabilityConstraintValue extends Pick<AvailabilityConstraint, 'timing'>
+>(
+	constraints: readonly AvailabilityConstraintValue[],
 	currentTimestamp: number
-): AvailabilityConstraintSelection<ConstraintValue> | null {
-	let currentConstraint: ConstraintValue | null = null;
+): AvailabilityConstraintSelection<AvailabilityConstraintValue> | null {
+	let currentConstraint: AvailabilityConstraintValue | null = null;
 	let currentStartAt = Number.NEGATIVE_INFINITY;
-	let nextConstraint: ConstraintValue | null = null;
+	let nextConstraint: AvailabilityConstraintValue | null = null;
 	let nextStartAt = Number.POSITIVE_INFINITY;
 
 	for (const constraint of constraints) {
@@ -114,11 +125,11 @@ export function currentOrNextAvailabilityConstraint<ConstraintValue extends Pick
 	return nextConstraint ? { constraint: nextConstraint, kind: 'next' } : null;
 }
 
-/** Returns the chronologically latest constraint, retaining useful availability context after it has ended. */
-export function latestAvailabilityConstraint<ConstraintValue extends Pick<Constraint, 'timing'>>(
-	constraints: readonly ConstraintValue[]
-): ConstraintValue | null {
-	let latestConstraint: ConstraintValue | null = null;
+/** Returns the chronologically latest availability constraint, retaining useful context after it has ended. */
+export function latestAvailabilityConstraint<
+	AvailabilityConstraintValue extends Pick<AvailabilityConstraint, 'timing'>
+>(constraints: readonly AvailabilityConstraintValue[]): AvailabilityConstraintValue | null {
+	let latestConstraint: AvailabilityConstraintValue | null = null;
 	let latestStartAt = Number.NEGATIVE_INFINITY;
 
 	for (const constraint of constraints) {

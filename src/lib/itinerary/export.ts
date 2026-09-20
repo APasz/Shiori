@@ -9,7 +9,7 @@ import {
 import { availabilityTimingKindLabels } from './availability';
 import type {
 	Cost,
-	Constraint,
+	AvailabilityConstraint,
 	CurrencyCode,
 	DocumentReference,
 	ItineraryItem,
@@ -123,7 +123,7 @@ type ExportedConstraintTiming =
 	  }>;
 
 type ExportedConstraint = Readonly<{
-	type: Constraint['type'];
+	type: AvailabilityConstraint['type'];
 	label?: string;
 	timing: ExportedConstraintTiming;
 }>;
@@ -295,7 +295,10 @@ function exportPlacement(placement: ItineraryItemPlacement, useEpochTimestamps: 
 	return { anchor: exportTimestamp(placement.anchorAt, placement.timeZone, useEpochTimestamps) };
 }
 
-function exportConstraintTiming(timing: Constraint['timing'], useEpochTimestamps: boolean): ExportedConstraintTiming {
+function exportConstraintTiming(
+	timing: AvailabilityConstraint['timing'],
+	useEpochTimestamps: boolean
+): ExportedConstraintTiming {
 	switch (timing.kind) {
 		case 'period':
 			return {
@@ -312,7 +315,10 @@ function exportConstraintTiming(timing: Constraint['timing'], useEpochTimestamps
 	}
 }
 
-function exportAvailability(availability: readonly Constraint[], useEpochTimestamps: boolean): ExportedConstraint[] {
+function exportAvailability(
+	availability: readonly AvailabilityConstraint[],
+	useEpochTimestamps: boolean
+): ExportedConstraint[] {
 	return availability.map((constraint) => ({
 		type: constraint.type,
 		...(constraint.label === undefined ? {} : { label: constraint.label }),

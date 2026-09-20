@@ -1,10 +1,10 @@
 import { defaultFormatPreferences, formatTime, type FormatPreferences } from '$lib/format-preferences';
 import { formatCalendarDate, type CalendarDateFormat, type CalendarLocale } from './calendar';
 import { availabilityTimingKindLabels, availabilityTypePresentationLabel } from './availability';
-import type { Constraint, ConstraintTiming } from './schema';
+import type { AvailabilityConstraint, AvailabilityTiming } from './schema';
 import { formatTimestampInTimeZone, type FormattedLocalTimestamp } from './time';
 
-export type AvailabilityPresentationConstraint = Pick<Constraint, 'label' | 'timing' | 'type'>;
+export type AvailabilityPresentationConstraint = Pick<AvailabilityConstraint, 'label' | 'timing' | 'type'>;
 
 export type AvailabilityPresentationOptions = Readonly<{
 	/** The time zone in which the surrounding itinerary timing establishes its dates. */
@@ -64,7 +64,7 @@ function contextDates(timeZone: string, options: AvailabilityPresentationOptions
 }
 
 function formatPeriodTiming(
-	timing: Extract<ConstraintTiming, { kind: 'period' }>,
+	timing: Extract<AvailabilityTiming, { kind: 'period' }>,
 	options: AvailabilityPresentationOptions
 ): string | null {
 	const start = formatTimestampInTimeZone(timing.startAt, timing.timeZone);
@@ -96,7 +96,7 @@ export function availabilityConstraintLabel(
 
 /** Formats a timing in its saved availability time zone, using dates only where the surrounding item does not establish them. */
 export function formatAvailabilityConstraintTiming(
-	timing: ConstraintTiming,
+	timing: AvailabilityTiming,
 	options: AvailabilityPresentationOptions = {}
 ): string | null {
 	if (timing.kind === 'period') {

@@ -22,8 +22,8 @@
 		locationResolveResponseSchema
 	} from '$lib/editing/contracts';
 	import {
-		constraintTimingKindSchema,
-		constraintTypeSchema,
+		availabilityTimingKindSchema,
+		availabilityConstraintTypeSchema,
 		currencyCodeSchema,
 		documentKindSchema,
 		itineraryItemDraftSchema,
@@ -197,7 +197,7 @@
 	const reservationStatusOptions = reservationStatusSchema.options;
 	const transportModeOptions = transportModeSchema.options;
 	const documentKindOptions = documentKindSchema.options;
-	const availabilityTimingKindOptions = constraintTimingKindSchema.options;
+	const availabilityTimingKindOptions = availabilityTimingKindSchema.options;
 	const timingKindOptions = timingKindSchema.options;
 	const currencyOptions = currencyCodeSchema.options;
 	const availabilityTypeOptions = $derived(availabilityTypesForItem(itemType));
@@ -390,7 +390,7 @@
 	}
 
 	function changeAvailabilityTimingKind(index: number, value: string): void {
-		const parsedKind = constraintTimingKindSchema.safeParse(value);
+		const parsedKind = availabilityTimingKindSchema.safeParse(value);
 		const constraint = availability[index];
 		if (!parsedKind.success || !constraint) {
 			return;
@@ -399,7 +399,7 @@
 	}
 
 	function changeAvailabilityType(index: number, value: string): void {
-		const parsedType = constraintTypeSchema.safeParse(value);
+		const parsedType = availabilityConstraintTypeSchema.safeParse(value);
 		const constraint = availability[index];
 		if (!parsedType.success || !constraint) {
 			return;

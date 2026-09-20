@@ -449,7 +449,7 @@ export const itineraryTimingSchema = z
 		}
 	});
 
-export const constraintTypeSchema = z.enum([
+export const availabilityConstraintTypeSchema = z.enum([
 	'opening-hours',
 	'reception-hours',
 	'check-in',
@@ -460,28 +460,32 @@ export const constraintTypeSchema = z.enum([
 	'cutoff',
 	'other'
 ]);
-export const constraintTimingKindSchema = z.enum(['period', 'from', 'until']);
+export const availabilityTimingKindSchema = z.enum(['period', 'from', 'until']);
 
-const constraintPeriodTimingSchema = z.strictObject({
+const availabilityPeriodTimingSchema = z.strictObject({
 	kind: z.literal('period'),
 	startAt: unixTimestampSchema,
 	endAt: unixTimestampSchema,
 	timeZone: ianaTimeZoneSchema
 });
-const constraintFromTimingSchema = z.strictObject({
+const availabilityFromTimingSchema = z.strictObject({
 	at: unixTimestampSchema,
 	kind: z.literal('from'),
 	timeZone: ianaTimeZoneSchema
 });
-const constraintUntilTimingSchema = z.strictObject({
+const availabilityUntilTimingSchema = z.strictObject({
 	at: unixTimestampSchema,
 	kind: z.literal('until'),
 	timeZone: ianaTimeZoneSchema
 });
 
-/** A constraint's timing is independent from the timing that places its item on the itinerary. */
-export const constraintTimingSchema = z
-	.discriminatedUnion('kind', [constraintPeriodTimingSchema, constraintFromTimingSchema, constraintUntilTimingSchema])
+/** An availability constraint's timing is independent from the timing that places its item on the itinerary. */
+export const availabilityTimingSchema = z
+	.discriminatedUnion('kind', [
+		availabilityPeriodTimingSchema,
+		availabilityFromTimingSchema,
+		availabilityUntilTimingSchema
+	])
 	.superRefine((timing, context) => {
 		if (timing.kind === 'period' && timing.endAt <= timing.startAt) {
 			context.addIssue({
@@ -493,15 +497,15 @@ export const constraintTimingSchema = z
 	});
 
 /** A named availability bound associated with an item, without changing its itinerary schedule. */
-export const constraintSchema = z.strictObject({
+export const availabilityConstraintSchema = z.strictObject({
 	id: itineraryIdentifierSchema,
-	type: constraintTypeSchema,
+	type: availabilityConstraintTypeSchema,
 	label: nonEmptyTextSchema.optional(),
-	timing: constraintTimingSchema
+	timing: availabilityTimingSchema
 });
 
 const itineraryItemBaseShape = {
-	availability: z.array(constraintSchema).default([]),
+	availability: z.array(availabilityConstraintSchema).default([]),
 	id: itineraryIdentifierSchema,
 	/** A day-only placement for an item whose schedule has not been decided. */
 	placement: itineraryItemPlacementSchema.optional(),
@@ -756,10 +760,10 @@ export type ItineraryItemDraft = z.infer<typeof itineraryItemDraftSchema>;
 export type ItineraryItemType = z.infer<typeof itineraryItemTypeSchema>;
 export type ItineraryTiming = z.infer<typeof itineraryTimingSchema>;
 export type ItineraryItemPlacement = z.infer<typeof itineraryItemPlacementSchema>;
-export type Constraint = z.infer<typeof constraintSchema>;
-export type ConstraintType = z.infer<typeof constraintTypeSchema>;
-export type ConstraintTiming = z.infer<typeof constraintTimingSchema>;
-export type ConstraintTimingKind = z.infer<typeof constraintTimingKindSchema>;
+export type AvailabilityConstraint = z.infer<typeof availabilityConstraintSchema>;
+export type AvailabilityConstraintType = z.infer<typeof availabilityConstraintTypeSchema>;
+export type AvailabilityTiming = z.infer<typeof availabilityTimingSchema>;
+export type AvailabilityTimingKind = z.infer<typeof availabilityTimingKindSchema>;
 export type IanaTimeZone = z.infer<typeof ianaTimeZoneSchema>;
 export type ItineraryLocation = z.infer<typeof locationSchema>;
 export type ItineraryLink = z.infer<typeof itineraryLinkSchema>;

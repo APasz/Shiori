@@ -1,14 +1,14 @@
 import { isOpeningHoursPeriodConstraint } from './availability';
 import { addCalendarDays } from './calendar';
 import { hasItemTiming, type TimedItem as ItemWithTiming } from './item-placement';
-import type { Constraint, ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
+import type { AvailabilityConstraint, ItineraryItem, ItineraryItemPlacement, ItineraryTiming } from './schema';
 import { formatTimestampInTimeZone } from './time';
 import { resolveTimingTimeZone } from './time-zone';
 import { timingEndTimestamp, timingStartTimestamp } from './timing';
 import { zonedDateTimeToUnixMilliseconds } from './zoned-time';
 
 type NowNextItem = Readonly<{
-	availability?: readonly Constraint[];
+	availability?: readonly AvailabilityConstraint[];
 	id: string;
 	placement?: ItineraryItemPlacement;
 	timing?: ItineraryTiming;
@@ -30,7 +30,7 @@ type TimingNowNextEntry<Item extends NowNextItem> = Readonly<{
 }>;
 
 type AvailabilityNowNextEntry<Item extends NowNextItem> = Readonly<{
-	constraint: Constraint;
+	constraint: AvailabilityConstraint;
 	endTimestamp: number;
 	isHiddenBeforeStart: false;
 	item: Item;
@@ -41,19 +41,19 @@ type AvailabilityNowNextEntry<Item extends NowNextItem> = Readonly<{
 type NowNextEntry<Item extends NowNextItem> = TimingNowNextEntry<Item> | AvailabilityNowNextEntry<Item>;
 
 type CurrentEntryProperties<Item extends NowNextItem> = Readonly<{
-	currentAvailability?: Constraint;
+	currentAvailability?: AvailabilityConstraint;
 	currentBoundary?: AccommodationBoundary;
 	currentItem: Item;
 }>;
 
 type NextEntryProperties<Item extends NowNextItem> = Readonly<{
-	nextAvailability?: Constraint;
+	nextAvailability?: AvailabilityConstraint;
 	nextBoundary?: AccommodationBoundary;
 	nextItem: Item;
 }>;
 
 type OptionalNextEntryProperties<Item extends NowNextItem> = Readonly<{
-	nextAvailability?: Constraint;
+	nextAvailability?: AvailabilityConstraint;
 	nextBoundary?: AccommodationBoundary;
 	nextItem?: Item;
 }>;

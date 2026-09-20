@@ -1,9 +1,9 @@
 import {
-	constraintSchema,
-	constraintTypeSchema,
-	type Constraint,
-	type ConstraintTimingKind,
-	type ConstraintType,
+	availabilityConstraintSchema,
+	availabilityConstraintTypeSchema,
+	type AvailabilityConstraint,
+	type AvailabilityTimingKind,
+	type AvailabilityConstraintType,
 	type ItineraryItemType
 } from './schema';
 import { availabilityTypeSuggestions, preferredAvailabilityTimingKind } from './availability';
@@ -24,9 +24,9 @@ export type AvailabilityConstraintDraft = {
 	originalEndAt?: number;
 	originalStartAt?: number;
 	startAt: string;
-	timingKind: ConstraintTimingKind;
+	timingKind: AvailabilityTimingKind;
 	timeZone: string;
-	type: ConstraintType;
+	type: AvailabilityConstraintType;
 };
 
 function incompleteDateTime(defaultDate: string | undefined): string {
@@ -82,7 +82,7 @@ function dateTimeWithFallbackDate(value: string, fallback: string): string {
 /** Switches timing modes while retaining entered target-mode values and a usable source date. */
 export function availabilityConstraintDraftForTimingKind(
 	draft: AvailabilityConstraintDraft,
-	timingKind: ConstraintTimingKind
+	timingKind: AvailabilityTimingKind
 ): AvailabilityConstraintDraft {
 	if (draft.timingKind === timingKind) {
 		return draft;
@@ -100,12 +100,12 @@ export function availabilityConstraintDraftForTimingKind(
 }
 
 /** Returns item-specific suggestions first while retaining every generic persisted type as an option. */
-export function availabilityTypesForItem(itemType: ItineraryItemType): ConstraintType[] {
-	const suggested = availabilityTypeSuggestions[itemType] as readonly ConstraintType[];
-	return [...suggested, ...constraintTypeSchema.options.filter((type) => !suggested.includes(type))];
+export function availabilityTypesForItem(itemType: ItineraryItemType): AvailabilityConstraintType[] {
+	const suggested = availabilityTypeSuggestions[itemType] as readonly AvailabilityConstraintType[];
+	return [...suggested, ...availabilityConstraintTypeSchema.options.filter((type) => !suggested.includes(type))];
 }
 
-export function defaultAvailabilityType(itemType: ItineraryItemType): ConstraintType {
+export function defaultAvailabilityType(itemType: ItineraryItemType): AvailabilityConstraintType {
 	return availabilityTypeSuggestions[itemType][0];
 }
 
@@ -122,7 +122,7 @@ export function isAvailabilityConstraintDraftIncomplete(draft: AvailabilityConst
  */
 export function availabilityConstraintDraftForType(
 	draft: AvailabilityConstraintDraft,
-	type: ConstraintType
+	type: AvailabilityConstraintType
 ): AvailabilityConstraintDraft {
 	if (draft.type === type) {
 		return draft;
@@ -164,7 +164,9 @@ export function createAvailabilityConstraintDraft(input: {
 }
 
 /** Converts a persisted availability entry into date/time editor state in its own time zone. */
-export function availabilityConstraintDraftFromConstraint(constraint: Constraint): AvailabilityConstraintDraft {
+export function availabilityConstraintDraftFromConstraint(
+	constraint: AvailabilityConstraint
+): AvailabilityConstraintDraft {
 	const common = {
 		id: constraint.id,
 		isExpanded: false,
@@ -238,5 +240,5 @@ export function availabilityConstraintCandidate(draft: AvailabilityConstraintDra
 }
 
 export function validateAvailabilityConstraintDraft(draft: AvailabilityConstraintDraft) {
-	return constraintSchema.safeParse(availabilityConstraintCandidate(draft));
+	return availabilityConstraintSchema.safeParse(availabilityConstraintCandidate(draft));
 }

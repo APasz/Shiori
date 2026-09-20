@@ -1,6 +1,6 @@
 import {
 	itineraryItemDraftSchema,
-	type Constraint,
+	type AvailabilityConstraint,
 	type CurrencyCode,
 	type ItineraryItemDraft,
 	type ItineraryLink,
@@ -39,7 +39,7 @@ type PublishedTimeConstraintInput = Readonly<{
 }>;
 
 type PublishedTimeConstraintValidation =
-	Readonly<{ availability: Constraint[]; valid: true }> | Readonly<{ error: string; valid: false }>;
+	Readonly<{ availability: AvailabilityConstraint[]; valid: true }> | Readonly<{ error: string; valid: false }>;
 
 export type AccommodationStayInput = Readonly<{
 	address?: string;
@@ -77,7 +77,11 @@ function dateOnlyStayTimestamp(date: string, boundary: 'start' | 'end', timeZone
 	return stayTimestamp(date, boundary === 'start' ? '00:00' : '23:59', timeZone);
 }
 
-function publishedTimeConstraint(boundary: AccommodationBoundary, at: number, timeZone: string): Constraint {
+function publishedTimeConstraint(
+	boundary: AccommodationBoundary,
+	at: number,
+	timeZone: string
+): AvailabilityConstraint {
 	return {
 		id: `property-${boundary}`,
 		timing: { at, kind: boundary === 'check-in' ? 'from' : 'until', timeZone },
@@ -90,7 +94,7 @@ function publishedTimeConstraints(input: AccommodationStayInput): PublishedTimeC
 		{ boundary: 'check-in', date: input.checkInDate, time: input.publishedTimes?.checkInTime },
 		{ boundary: 'check-out', date: input.checkOutDate, time: input.publishedTimes?.checkOutTime }
 	];
-	const availability: Constraint[] = [];
+	const availability: AvailabilityConstraint[] = [];
 	for (const { boundary, date, time } of times) {
 		if (time === undefined) {
 			continue;

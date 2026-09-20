@@ -6,17 +6,17 @@ import {
 	latestAvailabilityConstraint,
 	preferredAvailabilityTimingKind
 } from './availability';
-import type { Constraint } from './schema';
+import type { AvailabilityConstraint } from './schema';
 
 const now = Date.UTC(2026, 3, 12, 12);
 
-const morningHours: Constraint = {
+const morningHours: AvailabilityConstraint = {
 	id: 'morning-hours',
 	timing: { endAt: now - 60 * 60_000, kind: 'period', startAt: now - 3 * 60 * 60_000, timeZone: 'UTC' },
 	type: 'opening-hours'
 };
 
-const afternoonHours: Constraint = {
+const afternoonHours: AvailabilityConstraint = {
 	id: 'afternoon-hours',
 	timing: { endAt: now + 4 * 60 * 60_000, kind: 'period', startAt: now + 60 * 60_000, timeZone: 'UTC' },
 	type: 'opening-hours'
@@ -69,7 +69,7 @@ describe('availability constraint selection', () => {
 	});
 
 	it('chooses the active constraint before the nearest future constraint regardless of input order', () => {
-		const currentHours: Constraint = {
+		const currentHours: AvailabilityConstraint = {
 			id: 'current-hours',
 			timing: { endAt: now + 60 * 60_000, kind: 'period', startAt: now - 60 * 60_000, timeZone: 'UTC' },
 			type: 'opening-hours'
@@ -86,12 +86,12 @@ describe('availability constraint selection', () => {
 	});
 
 	it('treats From as valid after its bound and Until as valid through its bound', () => {
-		const checkIn: Constraint = {
+		const checkIn: AvailabilityConstraint = {
 			id: 'check-in',
 			timing: { at: now + 60 * 60_000, kind: 'from', timeZone: 'UTC' },
 			type: 'check-in'
 		};
-		const lastAdmission: Constraint = {
+		const lastAdmission: AvailabilityConstraint = {
 			id: 'last-admission',
 			timing: { at: now + 30 * 60_000, kind: 'until', timeZone: 'UTC' },
 			type: 'last-admission'
@@ -105,7 +105,7 @@ describe('availability constraint selection', () => {
 	});
 
 	it('retains the chronologically latest constraint as a day-card fallback after every entry has passed', () => {
-		const finalHours: Constraint = {
+		const finalHours: AvailabilityConstraint = {
 			id: 'final-hours',
 			timing: { endAt: now - 5 * 60_000, kind: 'period', startAt: now - 30 * 60_000, timeZone: 'UTC' },
 			type: 'opening-hours'
