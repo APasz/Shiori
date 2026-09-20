@@ -96,7 +96,7 @@ describe('itinerary day', () => {
 		expect(html).not.toContain('Reception');
 	});
 
-	it('uses an explicit first transport-stop time for a day-placed journey', () => {
+	it('uses the first scheduled transport service time for a day-placed journey', () => {
 		const item = itineraryItemSchema.parse({
 			id: 'airport-train',
 			locations: [{ id: 'departure', name: 'Central Station', role: 'departure' }],

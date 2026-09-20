@@ -9,6 +9,7 @@ import {
 	type ItemWithTemporalSources
 } from './item-temporal';
 import type { AvailabilityConstraint, ItineraryItemPlacement, ItineraryTiming } from './schema';
+import type { TransportServiceTime } from './transport-service-timing';
 
 const tripTimeZone = 'UTC';
 const planStartAt = Date.UTC(2026, 3, 13, 9);
@@ -55,9 +56,9 @@ describe('item temporal sources', () => {
 			{ source: 'plan', timing: plan },
 			{
 				at: serviceAt,
-				role: 'transport-stop',
+				locationId: 'departure',
+				role: 'departure',
 				source: 'service',
-				stopIndex: 0,
 				timeZone: 'Asia/Tokyo'
 			},
 			{ constraint: openingHours, source: 'availability' }
@@ -79,19 +80,46 @@ describe('item temporal sources', () => {
 		});
 		expect(resolveDayCardPrimaryTemporalSource(dayPlacedTransport, context)).toEqual({
 			at: serviceAt,
-			role: 'transport-stop',
+			locationId: 'departure',
+			role: 'departure',
 			source: 'service',
-			stopIndex: 0,
 			timeZone: 'Asia/Tokyo'
 		});
 		expect(resolveDayCardPrimaryTemporalSource(availableTransport, context)).toEqual({
 			at: serviceAt,
-			role: 'transport-stop',
+			locationId: 'departure',
+			role: 'departure',
 			source: 'service',
-			stopIndex: 0,
 			timeZone: 'Asia/Tokyo'
 		});
 		expect(resolveDayCardPrimaryTemporalSource({ placement, type: 'activity' }, context)).toBeUndefined();
+	});
+
+	it('uses the first scheduled transport fact when the departure stop is untimed', () => {
+		const arrivalServiceTransport: ItemWithTemporalSources = {
+			placement,
+			transport: {
+				stops: [{ locationId: 'departure' }, { locationId: 'arrival', scheduledAt: serviceAt, timeZone: 'Asia/Tokyo' }]
+			},
+			type: 'transport'
+		};
+		const expectedService: TransportServiceTime = {
+			at: serviceAt,
+			locationId: 'arrival',
+			role: 'arrival',
+			source: 'service',
+			timeZone: 'Asia/Tokyo'
+		};
+
+		expect(
+			resolveDayCardPrimaryTemporalSource(arrivalServiceTransport, {
+				availabilityTimestamp: placement.anchorAt,
+				tripTimeZone
+			})
+		).toEqual(expectedService);
+		expect(resolveItemDayChronologicalPosition(arrivalServiceTransport, '2026-04-13', tripTimeZone)).toEqual(
+			expectedService
+		);
 	});
 
 	it('uses Plan first, then a first transport service time, for intra-day chronology', () => {
@@ -102,9 +130,9 @@ describe('item temporal sources', () => {
 		});
 		expect(resolveItemDayChronologicalPosition(dayPlacedTransport, '2026-04-13', tripTimeZone)).toEqual({
 			at: serviceAt,
-			role: 'transport-stop',
+			locationId: 'departure',
+			role: 'departure',
 			source: 'service',
-			stopIndex: 0,
 			timeZone: 'Asia/Tokyo'
 		});
 		expect(resolveItemCalendarDayMembership(dayPlacedTransport, tripTimeZone)).toEqual({
@@ -132,9 +160,9 @@ describe('item temporal sources', () => {
 			service: [
 				{
 					at: serviceAt,
-					role: 'transport-stop',
+					locationId: 'departure',
+					role: 'departure',
 					source: 'service',
-					stopIndex: 0,
 					timeZone: 'Asia/Tokyo'
 				}
 			]
@@ -147,9 +175,9 @@ describe('item temporal sources', () => {
 			service: [
 				{
 					at: serviceAt,
-					role: 'transport-stop',
+					locationId: 'departure',
+					role: 'departure',
 					source: 'service',
-					stopIndex: 0,
 					timeZone: 'Asia/Tokyo'
 				}
 			]

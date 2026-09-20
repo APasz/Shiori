@@ -158,7 +158,7 @@ describe('item temporal policies', () => {
 				expectedAt: serviceAt,
 				expectedSource: 'service',
 				item: temporalItem({ includePlacement: true, includeService: true }),
-				name: 'an unplanned transport uses its first service time on its displayed day'
+				name: 'an unplanned transport uses its first scheduled service time on its displayed day'
 			},
 			{
 				expectedAt: undefined,
@@ -215,7 +215,7 @@ describe('item temporal policies', () => {
 				expectedConstraintIds: [],
 				expectedSources: [],
 				item: temporalItem({ includePlacement: true, includeService: true }),
-				name: 'an unplanned transport service departure is deliberately excluded'
+				name: 'an unplanned transport service time is deliberately excluded'
 			},
 			{
 				expectedConstraintIds: [],

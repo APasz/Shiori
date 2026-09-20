@@ -1,11 +1,12 @@
 import type { ItineraryItem, ItineraryLocation } from './schema';
-import { resolveItemServiceTemporalSources, type ItemServiceTemporalSource } from './item-temporal';
+import { resolveItemServiceTemporalSources } from './item-temporal';
+import type { TransportServiceTime } from './transport-service-timing';
 
 export type TransportStopLocationFlowEntry = Readonly<{
 	kind: 'transport-stop';
 	location: ItineraryLocation;
 	platform?: string;
-	service?: ItemServiceTemporalSource;
+	service?: TransportServiceTime;
 }>;
 
 export type ItemLocationFlowEntry =
@@ -29,19 +30,19 @@ function requireItemLocation(item: ItineraryItem, locationId: string): Itinerary
 export function itemLocationFlow(
 	item: ItineraryItem,
 	tripTimeZone: string,
-	serviceSources?: readonly ItemServiceTemporalSource[]
+	serviceSources?: readonly TransportServiceTime[]
 ): readonly ItemLocationFlowEntry[] {
 	if (item.type !== 'transport') {
 		return item.locations.map((location) => ({ kind: 'location', location }));
 	}
 
 	const services = serviceSources ?? resolveItemServiceTemporalSources(item, tripTimeZone);
-	const serviceByStopIndex = new Map<number, ItemServiceTemporalSource>();
+	const serviceByLocationId = new Map<string, TransportServiceTime>();
 	for (const service of services) {
-		serviceByStopIndex.set(service.stopIndex, service);
+		serviceByLocationId.set(service.locationId, service);
 	}
-	return item.transport.stops.map((stop, stopIndex) => {
-		const service = serviceByStopIndex.get(stopIndex);
+	return item.transport.stops.map((stop) => {
+		const service = serviceByLocationId.get(stop.locationId);
 		return {
 			kind: 'transport-stop',
 			location: requireItemLocation(item, stop.locationId),

@@ -28,7 +28,12 @@ import {
 	type ItemWithTemporalSources
 } from './item-temporal';
 import { formatTimestampInTimeZone } from './time';
-import { resolveItemTimeZone, resolveTimingTimeZone, resolveTransportStopTimeZone } from './time-zone';
+import {
+	resolveTransportServiceTimes,
+	transportServiceTimeLabel,
+	transportServiceTimeRoleForStop
+} from './transport-service-timing';
+import { resolveItemTimeZone, resolveTimingTimeZone } from './time-zone';
 
 export const itineraryExportFormats = ['json', 'yaml', 'txt'] as const;
 /** Bumped whenever the portable itinerary export shape changes. */
@@ -351,6 +356,13 @@ function exportTransport(
 	itemTimeZone: string,
 	useEpochTimestamps: boolean
 ): ExportedTransport {
+	const serviceByLocationId = new Map(
+		resolveTransportServiceTimes(item.transport, itemTimeZone).map((serviceTime) => [
+			serviceTime.locationId,
+			serviceTime
+		])
+	);
+
 	return {
 		mode: item.transport.mode,
 		...(item.transport.operator === undefined ? {} : { operator: item.transport.operator }),
@@ -358,17 +370,14 @@ function exportTransport(
 		...(item.transport.seat === undefined ? {} : { seat: item.transport.seat }),
 		stops: item.transport.stops.map((stop) => {
 			const location = locationForId(item, stop.locationId);
+			const serviceTime = serviceByLocationId.get(stop.locationId);
 			return {
 				location: location?.name ?? stop.locationId,
 				...(location?.code === undefined ? {} : { code: location.code }),
-				...(stop.scheduledAt === undefined
+				...(serviceTime === undefined
 					? {}
 					: {
-							scheduledAt: exportTimestamp(
-								stop.scheduledAt,
-								resolveTransportStopTimeZone(stop, itemTimeZone),
-								useEpochTimestamps
-							)
+							scheduledAt: exportTimestamp(serviceTime.at, serviceTime.timeZone, useEpochTimestamps)
 						}),
 				...(stop.platform === undefined ? {} : { platform: stop.platform })
 			};
@@ -718,10 +727,14 @@ function textLinesForItem(item: ExportedItem, index: number, textFormat: Itinera
 			(detail) => detail !== undefined
 		);
 		lines.push(`   Transport: ${item.transport.mode}${details.length === 0 ? '' : ` · ${details.join(' · ')}`}`);
-		for (const stop of item.transport.stops) {
+		for (const [stopIndex, stop] of item.transport.stops.entries()) {
 			const code = stop.code === undefined ? '' : ` · ${stop.code}`;
 			const scheduledTime =
-				stop.scheduledAt === undefined ? '' : ` — Scheduled stop time: ${timestampText(stop.scheduledAt, textFormat)}`;
+				stop.scheduledAt === undefined
+					? ''
+					: ` — ${transportServiceTimeLabel(
+							transportServiceTimeRoleForStop(stopIndex, item.transport.stops.length)
+						)}: ${timestampText(stop.scheduledAt, textFormat)}`;
 			const platform = stop.platform === undefined ? '' : ` · Platform ${stop.platform}`;
 			lines.push(`     - ${stop.location}${code}${scheduledTime}${platform}`);
 		}

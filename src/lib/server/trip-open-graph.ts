@@ -1,7 +1,8 @@
 import { getLocalItineraryDayCount } from '$lib/itinerary/presentation';
+import { resolveItemServiceTemporalSources } from '$lib/itinerary/item-temporal';
 import type { Itinerary } from '$lib/itinerary/schema';
 import { timingEarliestTimestamp, timingEndTimestamp } from '$lib/itinerary/timing';
-import { resolveItemTimeZone, resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
+import { resolveTimingTimeZone } from '$lib/itinerary/time-zone';
 
 const openGraphDateLocale = 'en-AU';
 const openGraphDateRangeSeparator = ' >>> ';
@@ -89,23 +90,14 @@ function temporalDateRange(itinerary: Itinerary): TemporalDateRange | null {
 	};
 
 	for (const item of itinerary.items) {
-		const itemTimeZone = resolveItemTimeZone(item, itinerary.timeZone);
 		if (item.timing) {
 			const timingTimeZone = resolveTimingTimeZone(item.timing, itinerary.timeZone);
 			consider({ timestamp: timingEarliestTimestamp(item.timing), timeZone: timingTimeZone });
 			consider({ timestamp: timingEndTimestamp(item.timing), timeZone: timingTimeZone });
 		}
 
-		if (item.type !== 'transport') {
-			continue;
-		}
-		for (const stop of item.transport.stops) {
-			if (stop.scheduledAt !== undefined) {
-				consider({
-					timestamp: stop.scheduledAt,
-					timeZone: resolveTransportStopTimeZone(stop, itemTimeZone)
-				});
-			}
+		for (const serviceTime of resolveItemServiceTemporalSources(item, itinerary.timeZone)) {
+			consider({ timestamp: serviceTime.at, timeZone: serviceTime.timeZone });
 		}
 	}
 

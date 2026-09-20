@@ -12,6 +12,13 @@ import type {
 } from './schema';
 import { formatLocalTimestamp, formatTimestampInTimeZone } from './time';
 import { timingEarliestTimestamp, timingEndTimestamp, timingStartTimestamp } from './timing';
+import {
+	firstScheduledTransportServiceTime,
+	resolveTransportServiceTimes,
+	type TransportServiceTime
+} from './transport-service-timing';
+
+export type { TransportServiceTime } from './transport-service-timing';
 
 /** The temporal fields common to persisted and access-projected itinerary items. */
 export type ItemTemporalFields = Readonly<{
@@ -37,7 +44,7 @@ export type ItemWithTemporalSources = ItemWithTransportTemporalFields &
 
 /**
  * Day ordering can receive lightweight item projections. A type is needed only when an
- * unplanned transport item's first service time is considered for chronological placement.
+ * unplanned transport item's first scheduled service time is considered for chronological placement.
  */
 export type ItemWithDayOrderingTemporalSources = ItemWithTransportTemporalFields &
 	Readonly<{
@@ -54,14 +61,6 @@ export type ItemPlacementTemporalSource = Readonly<{
 	source: 'placement';
 }>;
 
-export type ItemServiceTemporalSource = Readonly<{
-	at: number;
-	role: 'transport-stop';
-	source: 'service';
-	stopIndex: number;
-	timeZone: string;
-}>;
-
 export type ItemAvailabilityTemporalSource = Readonly<{
 	constraint: AvailabilityConstraint;
 	source: 'availability';
@@ -72,7 +71,7 @@ export type ItemAvailabilityTemporalSource = Readonly<{
  * every available source; it does not choose one timestamp to stand in for the others.
  */
 export type ItemTemporalSource =
-	ItemPlanTemporalSource | ItemPlacementTemporalSource | ItemServiceTemporalSource | ItemAvailabilityTemporalSource;
+	ItemPlanTemporalSource | ItemPlacementTemporalSource | TransportServiceTime | ItemAvailabilityTemporalSource;
 
 export function resolveItemPlanTemporalSource(item: ItemTemporalFields): ItemPlanTemporalSource | undefined {
 	return item.timing === undefined ? undefined : { source: 'plan', timing: item.timing };
@@ -86,24 +85,6 @@ export function resolveItemAvailabilityTemporalSources(item: ItemTemporalFields)
 	return (item.availability ?? []).map((constraint) => ({ constraint, source: 'availability' }));
 }
 
-/** Returns an explicitly published transport-stop time, never an inferred item Plan. */
-export function resolveTransportStopServiceTemporalSource(
-	stop: TransportDetails['stops'][number],
-	stopIndex: number,
-	defaultTimeZone: string
-): ItemServiceTemporalSource | undefined {
-	if (stop.scheduledAt === undefined) {
-		return undefined;
-	}
-	return {
-		at: stop.scheduledAt,
-		role: 'transport-stop',
-		source: 'service',
-		stopIndex,
-		timeZone: stop.timeZone ?? defaultTimeZone
-	};
-}
-
 function itemSourceTimeZone(item: ItemTemporalFields, tripTimeZone: string): string {
 	const plan = resolveItemPlanTemporalSource(item);
 	if (plan) {
@@ -112,38 +93,30 @@ function itemSourceTimeZone(item: ItemTemporalFields, tripTimeZone: string): str
 	return resolveItemPlacementTemporalSource(item)?.placement.timeZone ?? tripTimeZone;
 }
 
-/** Returns every explicit transport service time, in stop order. */
-export function resolveItemServiceTemporalSources(
-	item: ItemWithTemporalSources,
+function resolveItemTransportServiceTimes(
+	item: ItemWithDayOrderingTemporalSources,
 	tripTimeZone: string
-): ItemServiceTemporalSource[] {
+): TransportServiceTime[] {
 	if (item.type !== 'transport' || item.transport === undefined) {
 		return [];
 	}
-
-	const defaultTimeZone = itemSourceTimeZone(item, tripTimeZone);
-	const sources: ItemServiceTemporalSource[] = [];
-	for (const [stopIndex, stop] of item.transport.stops.entries()) {
-		const source = resolveTransportStopServiceTemporalSource(stop, stopIndex, defaultTimeZone);
-		if (source) {
-			sources.push(source);
-		}
-	}
-	return sources;
+	return resolveTransportServiceTimes(item.transport, itemSourceTimeZone(item, tripTimeZone));
 }
 
-/** Returns the first transport stop's explicit service time, if that domain source exists. */
-function resolveFirstTransportStopServiceTemporalSource(
+/** Returns every explicit transport service time, in journey order. */
+export function resolveItemServiceTemporalSources(
+	item: ItemWithTemporalSources,
+	tripTimeZone: string
+): TransportServiceTime[] {
+	return resolveItemTransportServiceTimes(item, tripTimeZone);
+}
+
+/** Returns the first explicitly scheduled transport service time, if that domain source exists. */
+function resolveFirstScheduledItemTransportServiceTime(
 	item: ItemWithDayOrderingTemporalSources,
 	tripTimeZone: string
-): ItemServiceTemporalSource | undefined {
-	if (item.type !== 'transport') {
-		return undefined;
-	}
-	const stop = item.transport?.stops[0];
-	return stop === undefined
-		? undefined
-		: resolveTransportStopServiceTemporalSource(stop, 0, itemSourceTimeZone(item, tripTimeZone));
+): TransportServiceTime | undefined {
+	return firstScheduledTransportServiceTime(resolveItemTransportServiceTimes(item, tripTimeZone));
 }
 
 /** Returns all temporal sources without assigning cross-source priority. */
@@ -159,7 +132,7 @@ export function resolveItemTemporalSources(item: ItemWithTemporalSources, tripTi
 }
 
 export type DayCardPrimaryTemporalSource =
-	ItemPlanTemporalSource | ItemServiceTemporalSource | ItemAvailabilityTemporalSource;
+	ItemPlanTemporalSource | TransportServiceTime | ItemAvailabilityTemporalSource;
 
 export type DayCardTemporalContext = Readonly<{
 	availabilityTimestamp: number;
@@ -178,7 +151,7 @@ function resolveDayCardOpeningHoursSource(
 }
 
 /**
- * Resolves a day card's primary temporal source in display priority: Plan, first-stop service
+ * Resolves a day card's primary temporal source in display priority: Plan, first scheduled service
  * time, then opening-hours availability. Placement is intentionally absent because its anchor is
  * calendar membership, not a displayed time.
  */
@@ -191,7 +164,7 @@ export function resolveDayCardPrimaryTemporalSource(
 		return plan;
 	}
 
-	const service = resolveFirstTransportStopServiceTemporalSource(item, context.tripTimeZone);
+	const service = resolveFirstScheduledItemTransportServiceTime(item, context.tripTimeZone);
 	if (service) {
 		return service;
 	}
@@ -268,11 +241,11 @@ export type ItemDayChronologicalPosition =
 			Readonly<{
 				at: number;
 			}>)
-	| ItemServiceTemporalSource;
+	| TransportServiceTime;
 
 /**
  * Resolves an item's chronological position for a displayed calendar day. Plan always wins.
- * Without a Plan, only an explicit first transport-stop service time on that displayed day can
+ * Without a Plan, only the first scheduled transport service time on that displayed day can
  * position an item chronologically. Placement establishes membership only, and availability
  * never changes the order.
  */
@@ -291,7 +264,7 @@ export function resolveItemDayChronologicalPosition(
 		};
 	}
 
-	const service = resolveFirstTransportStopServiceTemporalSource(item, timeZone ?? 'UTC');
+	const service = resolveFirstScheduledItemTransportServiceTime(item, timeZone ?? 'UTC');
 	return service && localDateForTimestamp(service.at, timeZone) === date ? service : undefined;
 }
 
@@ -300,7 +273,7 @@ export type NowNextCandidateTemporalSource = ItemPlanTemporalSource | ItemAvaila
 /**
  * Resolves eligible Now / Next sources. Plan wins for an item; opening hours can be candidates
  * only for an item placed on a day without a Plan. This is also the explicit policy that an
- * unplanned transport's service departure remains factual detail, not a Now / Next candidate.
+ * unplanned transport's service time remains factual detail, not a Now / Next candidate.
  */
 export function resolveNowNextCandidateTemporalSources(
 	item: ItemWithTemporalSources
@@ -322,7 +295,7 @@ export type ItemDetailTemporalSources = Readonly<{
 	availabilityContextTimestamps: readonly number[];
 	placement: ItemPlacementTemporalSource | undefined;
 	plan: ItemPlanTemporalSource | undefined;
-	service: readonly ItemServiceTemporalSource[];
+	service: readonly TransportServiceTime[];
 }>;
 
 /**

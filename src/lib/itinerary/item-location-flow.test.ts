@@ -28,9 +28,9 @@ describe('item location flow', () => {
 				location: item.locations[1],
 				service: {
 					at: Date.UTC(2026, 9, 27, 10),
-					role: 'transport-stop',
+					locationId: 'departure',
+					role: 'departure',
 					source: 'service',
-					stopIndex: 0,
 					timeZone: 'Asia/Tokyo'
 				}
 			},
@@ -40,9 +40,9 @@ describe('item location flow', () => {
 				platform: '4',
 				service: {
 					at: Date.UTC(2026, 9, 27, 12),
-					role: 'transport-stop',
+					locationId: 'arrival',
+					role: 'arrival',
 					source: 'service',
-					stopIndex: 1,
 					timeZone: 'Asia/Seoul'
 				}
 			}
@@ -157,9 +157,9 @@ describe('item location flow', () => {
 			location: { id: 'departure', name: 'Departure', role: 'departure' as const },
 			service: {
 				at: Date.UTC(2026, 9, 27, 10),
-				role: 'transport-stop' as const,
+				locationId: 'departure',
+				role: 'departure' as const,
 				source: 'service' as const,
-				stopIndex: 0,
 				timeZone: 'Asia/Tokyo'
 			}
 		};
@@ -168,9 +168,9 @@ describe('item location flow', () => {
 			location: { id: 'arrival', name: 'Arrival', role: 'arrival' as const },
 			service: {
 				at: Date.UTC(2026, 9, 27, 12, 30),
-				role: 'transport-stop' as const,
+				locationId: 'arrival',
+				role: 'arrival' as const,
 				source: 'service' as const,
-				stopIndex: 1,
 				timeZone: 'Asia/Tokyo'
 			}
 		};

@@ -192,7 +192,7 @@ describe('browser-local itinerary presentation', () => {
 		]);
 	});
 
-	it('orders an unplanned transport by its first service time while availability remains non-chronological', () => {
+	it('orders an unplanned transport by its first scheduled service time while availability remains non-chronological', () => {
 		const date = '2026-04-12';
 		const timeZone = 'Asia/Tokyo';
 		const at = (time: string): number => requiredZonedTimestamp(`${date}T${time}`, timeZone);

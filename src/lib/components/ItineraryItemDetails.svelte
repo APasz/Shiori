@@ -19,7 +19,7 @@
 		ItineraryItemPlacement,
 		ItineraryLocation
 	} from '$lib/itinerary/schema';
-	import { transportStopScheduledTimeLabel } from '$lib/itinerary/transport-stop-presentation';
+	import { transportServiceTimeLabel } from '$lib/itinerary/transport-service-timing';
 	import { resolveItemTimeZone } from '$lib/itinerary/time-zone';
 	import { timeZoneOffsetLabel, timeZoneShortLabel } from '$lib/itinerary/time-zone-search';
 	import { formatTimestampInTimeZone } from '$lib/itinerary/time';
@@ -222,7 +222,7 @@
 								{#if entry.kind === 'transport-stop'}
 									{#if entry.service}
 										<span class="location-time">
-											<span class="location-time-label">{transportStopScheduledTimeLabel(entry.location.role)}</span>
+											<span class="location-time-label">{transportServiceTimeLabel(entry.service.role)}</span>
 											<ItineraryTime
 												calendarDateFormat="date-with-weekday"
 												includeDate

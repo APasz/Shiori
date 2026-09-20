@@ -23,7 +23,7 @@
 		type TransportJourneyDraft
 	} from '$lib/itinerary/transport-journey';
 	import type { TransportJourneySchedule } from '$lib/itinerary/transport-schedule';
-	import { transportStopScheduledTimeLabel } from '$lib/itinerary/transport-stop-presentation';
+	import { transportServiceTimeLabel } from '$lib/itinerary/transport-service-timing';
 	import { formatTimestampForTimeZoneInput } from '$lib/itinerary/zoned-time';
 	import { browserTimeZoneOptions, type TimeZoneSearchOption } from '$lib/itinerary/time-zone-search';
 	import { viewerContext } from '$lib/itinerary/viewer-context.svelte';
@@ -1036,11 +1036,11 @@
 						</div>{/if}
 					{#if transportSchedule}
 						<div>
-							<dt>{transportStopScheduledTimeLabel('departure')}</dt>
+							<dt>{transportServiceTimeLabel('departure')}</dt>
 							<dd>{serviceTimeLabel(transportSchedule.departure)} · {transportSchedule.departure.timeZone}</dd>
 						</div>
 						<div>
-							<dt>{transportStopScheduledTimeLabel('arrival')}</dt>
+							<dt>{transportServiceTimeLabel('arrival')}</dt>
 							<dd>{serviceTimeLabel(transportSchedule.arrival)} · {transportSchedule.arrival.timeZone}</dd>
 						</div>
 					{/if}

@@ -77,7 +77,7 @@ The browser presents its viewer-local time as the primary value and the source-l
 supporting text. Selecting a time zone in the item editor saves the Plan or stop’s local-time meaning
 while the instant itself remains a timestamp.
 
-An explicit first-stop service time can prefill an otherwise blank exact Plan in the editor. Afterward,
+An explicit first scheduled service time can prefill an otherwise blank exact Plan in the editor. Afterward,
 the Plan and service timing remain separate: transport views show a service time only when it is
 recorded, and a missing service time does not come from the Plan. Record both when both the user’s
 intention and the operator’s timetable matter, even if they happen to match.
@@ -412,7 +412,7 @@ name and/or its map position only; it does not provide service times, so rail ti
 confirmation. The shared editor is the final review for transport service times and the item's Plan, so a missing
 or unreliable time must still be confirmed before saving. Advanced changes remain available in the shared editor after any
 item is created. Items are grouped in each viewer's local calendar by their Plan or day placement. Within a day,
-Plan times lead; an unplanned transport can use its first service departure, while availability does not reorder items.
+Plan times lead; an unplanned transport can use its first scheduled service time, while availability does not reorder items.
 Edits use one trip-wide lock, so changes cannot race with an open editor. Persisted edit locks are cleared
 when a server process starts; the sudo user can also force close an active edit session from the Access
 page when a browser session has become stuck.

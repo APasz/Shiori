@@ -432,7 +432,7 @@ describe('itinerary exports', () => {
 		expect(text).toContain('Availability:');
 		expect(text).toContain('Ticket office · 9:00 am–6:00 pm');
 		expect(text).toContain('Last admission · Until 4:30 pm');
-		expect(text).toContain('Tokyo Station · TYO — Scheduled stop time: 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
+		expect(text).toContain('Tokyo Station · TYO — Scheduled departure: 04-12-2026, 9:00 am (Asia/Tokyo) · Platform 20');
 		expect(text).toContain('Reservation: confirmed · JR · ABC123');
 		expect(text).toContain('Cost: USD 125.00 (paid)');
 		expect(text).toContain('Scheduled payment: 04-04-2026');

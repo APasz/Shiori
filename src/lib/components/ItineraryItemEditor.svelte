@@ -58,12 +58,14 @@
 	import { timingStartTimestamp } from '$lib/itinerary/timing';
 	import { resolveTimingTimeZone, resolveTransportStopTimeZone } from '$lib/itinerary/time-zone';
 	import { operatorNameForServiceNumber } from '$lib/itinerary/transport-operator';
+	import { resolveTransportPlanStartForEditor, type TransportPlanStart } from '$lib/itinerary/transport-plan-start';
 	import {
-		resolveTransportPlanStartForEditor,
-		type TransportPlanStart,
-		type TransportStopSchedule
-	} from '$lib/itinerary/transport-stop-schedule';
-	import { transportStopScheduledTimeLabel } from '$lib/itinerary/transport-stop-presentation';
+		firstScheduledTransportServiceTime,
+		resolveTransportServiceTimes,
+		transportServiceTimeLabel,
+		transportServiceTimeRoleForStop,
+		type TransportServiceTime
+	} from '$lib/itinerary/transport-service-timing';
 	import { itemTypeAccentStyle } from '$lib/theme/palette';
 	import { formatValidationIssues } from '$lib/validation';
 	import { brandIconFeedback } from '$lib/visuals/brand-feedback.svelte';
@@ -239,7 +241,8 @@
 			inheritsTimingTimeZone: stop.timeZone === undefined,
 			locationId: stop.locationId,
 			platform: stop.platform ?? '',
-			scheduledAt: stop.scheduledAt ? (formatTimestampForTimeZoneInput(stop.scheduledAt, timeZone) ?? '') : '',
+			scheduledAt:
+				stop.scheduledAt === undefined ? '' : (formatTimestampForTimeZoneInput(stop.scheduledAt, timeZone) ?? ''),
 			timeZone
 		};
 	}
@@ -355,8 +358,8 @@
 		return date === null ? '' : `${date}T00:00`;
 	}
 
-	function firstTransportServiceTimeForBlankPlan(): TransportStopSchedule | undefined {
-		return usesFirstTransportStopForPlan() ? firstTransportStopServiceTime() : undefined;
+	function firstTransportServiceTimeForBlankPlan(): TransportServiceTime | undefined {
+		return usesFirstTransportServiceTimeForPlan() ? firstTransportServiceTime() : undefined;
 	}
 
 	function defaultAvailabilityTimeZone(): string {
@@ -369,7 +372,7 @@
 		}
 		const serviceTime = firstTransportServiceTimeForBlankPlan();
 		const serviceDateTime = serviceTime
-			? (formatTimestampForTimeZoneInput(serviceTime.scheduledAt, serviceTime.timeZone) ?? '')
+			? (formatTimestampForTimeZoneInput(serviceTime.at, serviceTime.timeZone) ?? '')
 			: initialDateTimeForTiming();
 		return dateFromDateTimeInput(serviceDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
 	}
@@ -622,21 +625,27 @@
 		return zonedDateTimeToUnixMilliseconds(value, timeZone) ?? Number.NaN;
 	}
 
-	function firstTransportStopServiceTime(): TransportStopSchedule | undefined {
-		const firstStop = transportStops[0];
-		const scheduledAt = firstStop ? optionalText(firstStop.scheduledAt) : undefined;
-		if (!firstStop || !scheduledAt) {
-			return undefined;
-		}
+	function draftTransportServiceTimes(): TransportServiceTime[] {
+		const stops = transportStops.map((stop) => {
+			const scheduledAt = optionalText(stop.scheduledAt);
+			const timestamp = scheduledAt ? zonedDateTimeToUnixMilliseconds(scheduledAt, stop.timeZone) : null;
+			return {
+				locationId: stop.locationId,
+				...(timestamp === null ? {} : { scheduledAt: timestamp }),
+				timeZone: stop.timeZone
+			};
+		});
+		return resolveTransportServiceTimes({ stops }, itemDefaultTimeZone());
+	}
 
-		const timestamp = zonedDateTimeToUnixMilliseconds(scheduledAt, firstStop.timeZone);
-		return timestamp === null ? undefined : { scheduledAt: timestamp, timeZone: firstStop.timeZone };
+	function firstTransportServiceTime(): TransportServiceTime | undefined {
+		return firstScheduledTransportServiceTime(draftTransportServiceTimes());
 	}
 
 	function defaultEndDate(): string | undefined {
 		return defaultEndDateForTimingInput(
 			startAt,
-			itemType === 'transport' ? firstTransportStopServiceTime()?.scheduledAt : undefined,
+			itemType === 'transport' ? firstTransportServiceTime()?.at : undefined,
 			startAtTimeZone
 		);
 	}
@@ -646,18 +655,22 @@
 		return trimmed && isCompleteLocalDateTime(trimmed) ? trimmed : undefined;
 	}
 
-	function firstTransportStopHasScheduledTime(): boolean {
-		return optionalText(transportStops[0]?.scheduledAt ?? '') !== undefined;
-	}
-
-	function usesFirstTransportStopForPlan(): boolean {
+	function usesFirstTransportServiceTimeForPlan(): boolean {
 		return (
 			planEnabled &&
 			itemType === 'transport' &&
 			timingKind === 'exact' &&
 			completeDateTimeValue(startAt) === undefined &&
-			firstTransportStopHasScheduledTime()
+			firstTransportServiceTime() !== undefined
 		);
+	}
+
+	function transportServiceRoleForStop(stop: StopDraft): TransportServiceTime['role'] {
+		const stopIndex = transportStops.findIndex((candidate) => candidate.locationId === stop.locationId);
+		if (stopIndex < 0) {
+			throw new Error(`Transport stop ${stop.locationId} is missing from the editor.`);
+		}
+		return transportServiceTimeRoleForStop(stopIndex, transportStops.length);
 	}
 
 	function reformatInTimeZone(value: string, sourceTimeZone: string, targetTimeZone: string): string {
@@ -759,7 +772,7 @@
 		if (!enabled) {
 			const serviceTime = firstTransportServiceTimeForBlankPlan();
 			const serviceDateTime = serviceTime
-				? (formatTimestampForTimeZoneInput(serviceTime.scheduledAt, serviceTime.timeZone) ?? '')
+				? (formatTimestampForTimeZoneInput(serviceTime.at, serviceTime.timeZone) ?? '')
 				: initialDateTimeForTiming();
 			const date = dateFromDateTimeInput(serviceDateTime) ?? dateFromDateTimeInput(suggestedStartDate);
 			placementDateTime = date ? `${date}T00:00` : placementDateTime;
@@ -846,7 +859,7 @@
 								timeZone: startAtTimeZone
 							} satisfies TransportPlanStart)
 						: undefined,
-					itemType === 'transport' ? firstTransportStopServiceTime() : undefined
+					itemType === 'transport' ? firstTransportServiceTime() : undefined
 				);
 				return {
 					kind: 'exact',
@@ -961,7 +974,7 @@
 			const timingInputs =
 				timingKind === 'exact'
 					? [
-							...(usesFirstTransportStopForPlan() ? [] : [{ label: 'Start date and time', value: startAt }]),
+							...(usesFirstTransportServiceTimeForPlan() ? [] : [{ label: 'Start date and time', value: startAt }]),
 							...(endAtEnabled ? [{ label: 'End date and time', value: endAt }] : [])
 						]
 					: timingKind === 'approximate'
@@ -1464,7 +1477,7 @@
 									/>
 								{/if}
 								{#if itemType === 'transport'}
-									<p class="field-hint">Uses first service time until set</p>
+									<p class="field-hint">Uses first scheduled service time until set</p>
 								{/if}
 							{:else if timingKind === 'approximate'}
 								<DateTimeInput
@@ -1731,14 +1744,14 @@
 													<DateTimeInput
 														dateTime={stop.scheduledAt}
 														id={`stop-${locationIndex}-scheduled`}
-														label={transportStopScheduledTimeLabel(location.role)}
+														label={transportServiceTimeLabel(transportServiceRoleForStop(stop))}
 														onDateTimeChange={(value) => (stop.scheduledAt = value)}
 														onTimeZoneChange={(timeZone) => changeStopTimeZone(stop, timeZone)}
 														portalTarget={dialogElement}
 														timeZone={stop.timeZone}
 														{timeZoneOptions}
 													/>
-													{#if locationIndex === 0 && !optionalText(stop.scheduledAt)}
+													{#if transportServiceRoleForStop(stop) === 'departure' && !optionalText(stop.scheduledAt)}
 														<p class="field-hint">Service time not set</p>
 													{/if}
 													<label class="shiori-form-label">
